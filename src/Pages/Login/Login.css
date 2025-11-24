@@ -1,0 +1,39 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body {
+  background-color: #000;
+}
+
+#root {
+  width: 100vw;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+/* Page layout + background */
+.login__page {
+  min-height: 100vh;
+  width: 100vw;
+
+  background-image: url("../../assets/logo-with-barckroung-large.png");
+  background-size: cover;
+  background-repeat: no-repeat;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-position: center;
+}
+
+/* Card */
+.login__card {
+  background: rgba(0, 0, 0, 1);
+  padding: 2rem 3rem;
+  border-radius: 50px;
+}
