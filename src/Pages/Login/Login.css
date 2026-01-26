@@ -1,39 +1,449 @@
-html,
-body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  height: 100%;
-}
-
-body {
-  background-color: #000;
-}
-
-#root {
-  width: 100vw;
-  min-height: 100vh;
-  margin: 0;
-  padding: 0;
-}
-
-/* Page layout + background */
+/* ===========================
+   PAGE BACKGROUND
+=========================== */
 .login__page {
-  min-height: 100vh;
-  width: 100vw;
+  height: 100vh;
+  width: 100%;
+  box-sizing: border-box;
 
-  background-image: url("../../assets/logo-with-barckroung-large.png");
-  background-size: cover;
-  background-repeat: no-repeat;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-position: center;
+  background:
+    radial-gradient(
+      circle at 70% 40%,
+      rgba(255, 160, 60, 0.12),
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 30% 70%,
+      rgba(255, 220, 120, 0.08),
+      transparent 55%
+    ),
+    #000;
+
+  display: grid;
+  grid-template-columns: 1fr; /* base state */
+  place-items: center;
+
+  padding: 28px;
+  overflow: hidden;
 }
 
-/* Card */
+/* ===========================
+   ACTIVE LAYOUT (3 columns)
+=========================== */
+.login__page--active {
+  grid-template-columns: 1fr minmax(380px, 460px) 1fr;
+  column-gap: 28px;
+  place-items: stretch; /* panels fill the available height */
+}
+
+/* ===========================
+   LEFT PANEL (always exists)
+=========================== */
+.login__left {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+  transition:
+    place-items 600ms ease,
+    padding-top 600ms ease;
+}
+
+/* ✅ INACTIVE: only show left panel */
+.login__center,
+.login__right {
+  display: none;
+}
+
+/* ✅ ACTIVE: show center/right as grid panels */
+.login__page--active .login__center,
+.login__page--active .login__right {
+  display: grid;
+  place-items: center;
+  min-height: 0;
+}
+
+/* ✅ New: keep left content (brand + links + button) aligned together */
+.login__left-stack {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 18px;
+  width: 100%;
+}
+
+/* ===========================
+   BRAND BLOCK
+=========================== */
+.login__brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+
+  width: 100%;
+  max-width: 520px;
+  gap: 2px;
+
+  /* Inactive: slight optical lift */
+  transform: translate3d(0, -8px, 0) scale(1);
+  transform-origin: top center;
+
+  transition: transform 900ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  will-change: transform;
+}
+
+/* Logo sizing */
+.login__logo {
+  width: min(560px, 72vw);
+  height: auto;
+  user-select: none;
+  pointer-events: none;
+  filter: drop-shadow(0 18px 50px rgba(0, 0, 0, 0.6));
+
+  transition: width 900ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  will-change: width;
+}
+
+/* Tagline */
+.login__tagline {
+  margin: 0;
+  margin-top: -40px;
+  width: 100%;
+  text-align: center;
+
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.04em;
+  font-size: 1.02rem;
+
+  opacity: 0;
+  transform: translateY(10px);
+  animation: taglineReveal 5s ease forwards;
+  animation-delay: 0.75s;
+}
+
+@keyframes taglineReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 0.6;
+    transform: translateY(2px);
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* ===========================
+   LINKS
+=========================== */
+.login__links {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  justify-content: center;
+
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+
+  transition:
+    opacity 400ms ease,
+    transform 400ms ease;
+}
+
+.login__link {
+  color: rgba(255, 255, 255, 0.75);
+  text-decoration: none;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.login__link:hover {
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* ===========================
+   ENTER BUTTON
+=========================== */
+.login__enter-button {
+  padding: 1rem 2.5rem;
+  font-size: 1.1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.55);
+  color: #f7f7f7;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.25s ease;
+}
+
+.login__enter-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+}
+
+/* ===========================
+   ACTIVE STATE
+=========================== */
+.login__page--active .login__left {
+  place-items: start center;
+  padding-top: 28px;
+}
+
+/* ✅ IMPORTANT: remove X shift so brand aligns with links */
+.login__page--active .login__brand {
+  transform: translate3d(0, 10px, 0) scale(0.82);
+}
+
+.login__page--active .login__logo {
+  width: min(460px, 28vw);
+}
+
+.login__page--active .login__links {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ===========================
+   CENTER PANEL
+=========================== */
+.login__center {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+
+  transition:
+    opacity 450ms ease 150ms,
+    transform 450ms ease 150ms;
+}
+
+.login__page--active .login__center {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ===========================
+   RIGHT PANEL
+=========================== */
+.login__right {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+
+  transition:
+    opacity 450ms ease 250ms,
+    transform 450ms ease 250ms;
+}
+
+.login__page--active .login__right {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* ===========================
+   LOGIN CARD
+=========================== */
 .login__card {
-  background: rgba(0, 0, 0, 1);
-  padding: 2rem 3rem;
-  border-radius: 50px;
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  box-sizing: border-box;
+
+  background: rgba(0, 0, 0, 0.75);
+  border-radius: 18px;
+  padding: 32px 34px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.login__card * {
+  min-width: 0;
+}
+
+/* Close button */
+.login__close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+  padding: 0;
+  line-height: 1;
+
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.35);
+
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+
+.login__title {
+  margin: 0 0 8px;
+  color: #fff;
+  font-size: 2rem;
+}
+
+.login__subtitle {
+  margin: 0 0 18px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.4;
+}
+
+/* Form */
+.login__form {
+  display: grid;
+  gap: 14px;
+}
+
+.login__label {
+  display: grid;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.95rem;
+}
+
+.login__input {
+  width: 100%;
+  box-sizing: border-box;
+
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+}
+
+.login__button {
+  margin-top: 6px;
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  cursor: pointer;
+}
+
+.login__button:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Already logged in */
+.login__already-text {
+  margin-top: 14px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.login__link-button {
+  border: none;
+  background: transparent;
+  color: rgba(255, 220, 120, 0.9);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* ===========================
+   RIGHT PANEL CONTENT
+=========================== */
+.login__info {
+  width: min(420px, 90%);
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 18px;
+  padding: 22px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.login__info::-webkit-scrollbar {
+  width: 10px;
+}
+.login__info::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+.login__info::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.login__info-title {
+  margin: 0 0 10px;
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.login__info-list {
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.6;
+}
+
+.login__divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 16px 0;
+}
+
+.login__info-text {
+  margin: 0 0 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ===========================
+   RESPONSIVE
+=========================== */
+@media (max-width: 980px) {
+  .login__page--active {
+    grid-template-columns: 1fr;
+    row-gap: 18px;
+  }
+
+  .login__page--active .login__left {
+    place-items: center;
+    padding-top: 0;
+  }
+
+  .login__page--active .login__brand {
+    transform: none;
+  }
+
+  .login__page--active .login__logo {
+    width: min(520px, 84vw);
+  }
+
+  .login__info {
+    max-height: none;
+    overflow: visible;
+  }
 }

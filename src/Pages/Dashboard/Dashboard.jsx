@@ -1,19 +1,11 @@
 import DashboardSectionCard from "./DashboardSelectionCard";
-import { useAuth } from "../../context/AuthContext";
+import "./Dashboard.css";
+import Navbar from "../../components/Navbar/Navbar";
 
-export function Dashboard({ onLogout }) {
-  const { user, logout } = useAuth();
-
+export function Dashboard() {
   return (
     <main className="dashboard-page">
-      <header className="dashboard-header">
-        <h1 className="dashboard-title">
-          Crossworld Creative Dashboard{user ? ` – ${user.email}` : ""}
-        </h1>
-        <button className="dashboard-logout" onClick={logout}>
-          Log Out
-        </button>
-      </header>
+      <Navbar />
 
       <section className="dashboard-grid">
         <DashboardSectionCard
@@ -55,4 +47,5 @@ export function Dashboard({ onLogout }) {
     </main>
   );
 }
+
 export default Dashboard;
