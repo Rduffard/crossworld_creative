@@ -41,13 +41,23 @@ function Login() {
     navigate("/dashboard", { replace: true });
   }
 
+  function handleRequestInvite() {
+    // Swap this later for a proper modal/form if you want.
+    const subject = encodeURIComponent(
+      "Invite Access Request — Crossworld Demo",
+    );
+    const body = encodeURIComponent(
+      `Hey Romain,\n\nI'd like invite access.\n\nName:\nCompany (optional):\nReason / use-case:\n\nThanks!`,
+    );
+    window.location.href = `mailto:youremail@example.com?subject=${subject}&body=${body}`;
+  }
+
   return (
     <main
       className={`login__page ${showLoginModal ? "login__page--active" : ""}`}
     >
       {/* LEFT: brand + links */}
       <aside className="login__left">
-        {/* ✅ WRAPPER that keeps logo/links/button aligned together */}
         <div className="login__left-stack">
           <div className="login__brand">
             <img
@@ -141,6 +151,18 @@ function Login() {
             <button className="login__button" type="submit">
               Log In
             </button>
+
+            {/* ✅ Request invite */}
+            <div className="login__invite">
+              <span className="login__invite-text">Need access?</span>
+              <button
+                type="button"
+                className="login__invite-link"
+                onClick={handleRequestInvite}
+              >
+                Request invite
+              </button>
+            </div>
           </form>
 
           <div className="login__or">
@@ -149,9 +171,10 @@ function Login() {
             <span className="login__or-line" />
           </div>
 
+          {/* ✅ Guest: smaller + lower */}
           <button
             type="button"
-            className="login__button login__button--ghost"
+            className="login__guest-button"
             onClick={() => navigate("/dashboard?demo=true")}
           >
             Continue as Guest (Demo)

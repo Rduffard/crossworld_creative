@@ -1,0 +1,128 @@
+.projects {
+  padding: 36px 48px;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.projects__header {
+  margin-bottom: 22px;
+}
+
+.projects__title {
+  margin: 0 0 10px;
+  font-size: 56px;
+  letter-spacing: -1px;
+}
+
+.projects__subtitle {
+  margin: 0;
+  opacity: 0.8;
+  max-width: 760px;
+  line-height: 1.6;
+}
+
+.projects__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.projects__card {
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
+  padding: 18px;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+.projects__card--featured {
+  border-color: rgba(255, 210, 120, 0.25);
+}
+
+.projects__card-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.projects__card-title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.projects__card-subtitle {
+  margin: 6px 0 0;
+  opacity: 0.75;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.projects__pill {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+
+.projects__pill--gold {
+  border-color: rgba(255, 210, 120, 0.35);
+}
+
+.projects__card-desc {
+  margin: 12px 0 14px;
+  opacity: 0.82;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.projects__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.projects__tag {
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  opacity: 0.9;
+}
+
+.projects__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.projects__button {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.projects__button--ghost {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+@media (max-width: 950px) {
+  .projects__grid {
+    grid-template-columns: 1fr;
+  }
+  .projects {
+    padding: 28px 18px;
+  }
+  .projects__title {
+    font-size: 42px;
+  }
+}
