@@ -1,0 +1,132 @@
+/* ===== Card ===== */
+
+.dashboard-card {
+  --accent: rgba(255, 200, 120, 0.55);
+
+  padding: 22px 22px 18px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.06),
+    rgba(255, 255, 255, 0.02)
+  );
+
+  transition:
+    transform 180ms ease,
+    border-color 180ms ease,
+    background 180ms ease;
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Accent line */
+.dashboard-card::after {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 14px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.35;
+  transform: scaleX(0.6);
+  transform-origin: center;
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-5px);
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.dashboard-card:hover::after {
+  opacity: 0.7;
+  transform: scaleX(1);
+}
+
+.dashboard-card__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.dashboard-card__title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+}
+
+.dashboard-card__pill {
+  font-size: 12px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(255, 255, 255, 0.78);
+}
+
+.dashboard-card__description {
+  margin: 0 0 18px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 44ch;
+}
+
+.dashboard-card__footer {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.dashboard-card__cta {
+  font-size: 14px;
+  font-weight: 700;
+  color: rgba(140, 160, 255, 0.95);
+  transition:
+    transform 180ms ease,
+    opacity 180ms ease;
+  opacity: 0.9;
+}
+
+.dashboard-card:hover .dashboard-card__cta {
+  transform: translateX(3px);
+  opacity: 1;
+}
+
+.dashboard-card--projects {
+  --accent: rgba(255, 210, 130, 0.65);
+}
+.dashboard-card--music {
+  --accent: rgba(255, 170, 90, 0.65);
+}
+.dashboard-card--games {
+  --accent: rgba(120, 210, 255, 0.65);
+}
+.dashboard-card--literature {
+  --accent: rgba(190, 150, 255, 0.65);
+}
+.dashboard-card--community {
+  --accent: rgba(140, 255, 200, 0.55);
+}
+.dashboard-card--profile {
+  --accent: rgba(255, 255, 255, 0.35);
+}
+.dashboard-card--settings {
+  --accent: rgba(255, 255, 255, 0.35);
+}

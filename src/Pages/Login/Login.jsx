@@ -1,48 +1,86 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
-import logo from "../../assets/logo-noBG.png";
+
+import Landing from "./components/Landing/Landing.jsx";
+import LoginShell from "./components/LoginShell/LoginShell.jsx";
+
 import "./Login.css";
 
 function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  // landing | opening | open | closing
+  const [phase, setPhase] = useState("landing");
+
+  // pre-enter shell flag (prevents pop-in)
+  const [shellActive, setShellActive] = useState(false);
+
+  // first-load animation flag
+  const [isBooting, setIsBooting] = useState(true);
 
   const emailInputRef = useRef(null);
 
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  // ESC closes the modal
+  // Keep landing mounted during closing so it can fade back in smoothly
+  const isLandingMounted =
+    phase === "landing" || phase === "opening" || phase === "closing";
+
+  const isShellMounted =
+    phase === "opening" || phase === "open" || phase === "closing";
+
+  // first frame: remove boot class so landing eases in
+  useEffect(() => {
+    requestAnimationFrame(() => setIsBooting(false));
+  }, []);
+
+  const openShell = () => {
+    if (phase !== "landing") return;
+
+    setPhase("opening");
+
+    // mount shell in pre-enter state, then activate it next frame so it transitions in
+    setShellActive(false);
+    requestAnimationFrame(() => setShellActive(true));
+  };
+
+  const closeShell = () => {
+    if (phase !== "open") return;
+
+    setPhase("closing");
+    setShellActive(false);
+  };
+
+  // ESC closes the shell (only when fully open)
   useEffect(() => {
     const handleEsc = (e) => {
-      if (e.key === "Escape") setShowLoginModal(false);
+      if (e.key === "Escape" && phase === "open") closeShell();
     };
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, []);
+  }, [phase]);
 
-  // Focus email when modal opens
+  // Focus email when fully open
   useEffect(() => {
-    if (showLoginModal) {
-      setTimeout(() => emailInputRef.current?.focus(), 0);
+    if (phase === "open") {
+      window.setTimeout(() => emailInputRef.current?.focus(), 0);
     }
-  }, [showLoginModal]);
+  }, [phase]);
 
-  // Clear password when modal closes
-  useEffect(() => {
-    if (!showLoginModal) setPassword("");
-  }, [showLoginModal]);
-
-  async function handleSubmit(e) {
-    e.preventDefault();
+  async function handleSubmit({ email, password }) {
     await login({ email, password });
     navigate("/dashboard", { replace: true });
   }
 
+  function handleGuest() {
+    navigate("/dashboard?demo=true");
+  }
+
+  function handleGoDashboard() {
+    navigate("/dashboard");
+  }
+
   function handleRequestInvite() {
-    // Swap this later for a proper modal/form if you want.
     const subject = encodeURIComponent(
       "Invite Access Request — Crossworld Demo",
     );
@@ -52,212 +90,61 @@ function Login() {
     window.location.href = `mailto:youremail@example.com?subject=${subject}&body=${body}`;
   }
 
+  // Landing finished fading OUT during opening -> shell becomes "open"
+  const handleLandingTransitionEnd = (e) => {
+    // Landing transitions both opacity and transform; we only care about opacity finishing.
+    if (e.propertyName !== "opacity") return;
+    if (phase !== "opening") return;
+
+    setPhase("open");
+  };
+
+  // Shell finished fading OUT during closing -> return to landing
+  const handleShellTransitionEnd = (e) => {
+    if (e.propertyName !== "opacity") return;
+    if (phase !== "closing") return;
+
+    setPhase("landing");
+  };
+
+  const pageClass = useMemo(() => {
+    return [
+      "login__page",
+      phase === "landing" ? "login__page--landing" : "login__page--shell",
+      phase === "opening" ? "login__page--opening" : "",
+      phase === "open" ? "login__page--open" : "",
+      phase === "closing" ? "login__page--closing" : "",
+      shellActive ? "login__page--shell-active" : "",
+      isBooting ? "login__page--boot" : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }, [phase, shellActive, isBooting]);
+
   return (
-    <main
-      className={`login__page ${showLoginModal ? "login__page--active" : ""}`}
-    >
-      {/* LEFT: brand + links */}
-      <aside className="login__left">
-        <div className="login__left-stack">
-          <div className="login__brand">
-            <img
-              className="login__logo"
-              src={logo}
-              alt="Crossworld Creative"
-              draggable="false"
-            />
-            <p className="login__tagline">Reality is just the first draft.</p>
-          </div>
+    <main className={pageClass}>
+      {isLandingMounted && (
+        <Landing
+          phase={phase}
+          onEnter={openShell}
+          onTransitionEnd={handleLandingTransitionEnd}
+        />
+      )}
 
-          <nav className="login__links">
-            <a
-              className="login__link"
-              href="https://github.com/CrossworldCreative"
-              target="_blank"
-              rel="noreferrer"
-            >
-              GitHub
-            </a>
-            <a
-              className="login__link"
-              href="https://www.linkedin.com/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              LinkedIn
-            </a>
-            <a className="login__link" href="mailto:youremail@example.com">
-              Contact
-            </a>
-          </nav>
-
-          {!showLoginModal && (
-            <button
-              type="button"
-              className="login__enter-button"
-              onClick={() => setShowLoginModal(true)}
-            >
-              Enter
-            </button>
-          )}
-        </div>
-      </aside>
-
-      {/* MIDDLE: login + guest */}
-      <section className="login__center" aria-hidden={!showLoginModal}>
-        <div className="login__card">
-          <button
-            type="button"
-            className="login__close"
-            onClick={() => setShowLoginModal(false)}
-            aria-label="Close"
-          >
-            ✕
-          </button>
-
-          <h1 className="login__title">Welcome back</h1>
-          <p className="login__subtitle">
-            Log in for full access, or continue as a guest to explore the demo.
-          </p>
-
-          <form className="login__form" onSubmit={handleSubmit}>
-            <label className="login__label">
-              Email
-              <input
-                ref={emailInputRef}
-                className="login__input"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                placeholder="you@example.com"
-                autoComplete="email"
-              />
-            </label>
-
-            <label className="login__label">
-              Password
-              <input
-                className="login__input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                placeholder="••••••••"
-                autoComplete="current-password"
-              />
-            </label>
-
-            <button className="login__button" type="submit">
-              Log In
-            </button>
-
-            {/* ✅ Request invite */}
-            <div className="login__invite">
-              <span className="login__invite-text">Need access?</span>
-              <button
-                type="button"
-                className="login__invite-link"
-                onClick={handleRequestInvite}
-              >
-                Request invite
-              </button>
-            </div>
-          </form>
-
-          <div className="login__or">
-            <span className="login__or-line" />
-            <span className="login__or-text">or</span>
-            <span className="login__or-line" />
-          </div>
-
-          {/* ✅ Guest: smaller + lower */}
-          <button
-            type="button"
-            className="login__guest-button"
-            onClick={() => navigate("/dashboard?demo=true")}
-          >
-            Continue as Guest (Demo)
-          </button>
-
-          {isAuthenticated && (
-            <p className="login__already-text">
-              You&apos;re already logged in —{" "}
-              <button
-                type="button"
-                className="login__link-button"
-                onClick={() => navigate("/dashboard")}
-              >
-                go to your dashboard
-              </button>
-            </p>
-          )}
-        </div>
-      </section>
-
-      {/* RIGHT: tiers + updates (info only) */}
-      <aside className="login__right" aria-hidden={!showLoginModal}>
-        <div className="login__info">
-          <h2 className="login__info-title">Access tiers</h2>
-
-          <div className="login__tiers">
-            <div className="login__tier">
-              <div className="login__tier-head">
-                <h3 className="login__tier-title">Guest (Demo)</h3>
-                <span className="login__badge">Read-only</span>
-              </div>
-              <ul className="login__tier-list">
-                <li>Explore the UI, routing, and components</li>
-                <li>View curated sample projects and data</li>
-                <li>No uploads, saving, or paid API calls</li>
-              </ul>
-            </div>
-
-            <div className="login__tier">
-              <div className="login__tier-head">
-                <h3 className="login__tier-title">Invite Access</h3>
-                <span className="login__badge login__badge--gold">Full</span>
-              </div>
-              <ul className="login__tier-list">
-                <li>Full app functionality + persistent data</li>
-                <li>Uploads enabled (limited while in early access)</li>
-                <li>Access to in-progress backend features</li>
-              </ul>
-            </div>
-
-            <div className="login__tier">
-              <div className="login__tier-head">
-                <h3 className="login__tier-title">Recruiter Pass</h3>
-                <span className="login__badge login__badge--outline">
-                  Optional
-                </span>
-              </div>
-              <ul className="login__tier-list">
-                <li>Short-term access link (if needed)</li>
-                <li>Stable review dataset + rate limits</li>
-                <li>Designed to avoid cost spikes</li>
-              </ul>
-            </div>
-          </div>
-
-          <div className="login__divider" />
-
-          <h2 className="login__info-title">Current updates</h2>
-          <ul className="login__info-list">
-            <li>Crossworld: demo mode + portfolio polish</li>
-            <li>Squash: Express backend + storage pipeline</li>
-            <li>Sanguine Archipelago: tooling + worldbuilding</li>
-            <li>Taxi Cop: audiobook + print release planning</li>
-          </ul>
-
-          <div className="login__divider" />
-
-          <p className="login__info-text">
-            Invite access is limited while hosting + storage are being
-            finalized.
-          </p>
-        </div>
-      </aside>
+      {isShellMounted && (
+        <LoginShell
+          phase={phase}
+          shellActive={shellActive}
+          isAuthenticated={isAuthenticated}
+          emailInputRef={emailInputRef}
+          onClose={closeShell}
+          onSubmit={handleSubmit}
+          onGuest={handleGuest}
+          onGoDashboard={handleGoDashboard}
+          onRequestInvite={handleRequestInvite}
+          onTransitionEnd={handleShellTransitionEnd}
+        />
+      )}
     </main>
   );
 }

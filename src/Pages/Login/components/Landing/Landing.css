@@ -1,0 +1,40 @@
+/* ===========================
+   LANDING
+=========================== */
+.login__landing {
+  height: calc(100vh - 56px);
+  display: grid;
+  place-items: center;
+
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+/* first page load — gentle ease-in */
+.login__page--boot .login__landing {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* landing exits when opening shell */
+.login__page--opening .login__landing {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+/* landing hidden during shell closing so it can ease back in */
+.login__page--closing .login__landing {
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+.login__landing-stack {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  transform: translate3d(0, -20px, 0);
+}

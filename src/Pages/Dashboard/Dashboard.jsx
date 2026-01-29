@@ -1,49 +1,34 @@
-import DashboardSectionCard from "./DashboardSelectionCard";
 import "./Dashboard.css";
-import Navbar from "../../components/Navbar/Navbar";
+import DashboardCardGrid from "../../components/DashboardCardGrid/DashboardCardGrid.jsx";
+import { useAuth } from "../../context/AuthContext.jsx";
 
-export function Dashboard() {
+function Dashboard() {
+  const { user, loaded } = useAuth();
+
+  // optional: avoids greeting flicker
+  if (!loaded) return null;
+
   return (
     <main className="dashboard-page">
-      <Navbar />
+      <header className="dashboard-hero">
+        <div className="dashboard-hero__text">
+          <h1 className="dashboard-hero__title">
+            Welcome{user?.email ? `, ${user.email}` : ""}
+          </h1>
+          <p className="dashboard-hero__subtitle">
+            Reality is just the first draft.
+          </p>
+        </div>
 
-      <section className="dashboard-grid">
-        <DashboardSectionCard
-          title="Projects"
-          description="Bootcamp work, experiments, and personal dev projects."
-          to="/dashboard/projects"
-        />
-        <DashboardSectionCard
-          title="Music"
-          description="Bands, tracks, albums, and audio projects."
-          to="/dashboard/music"
-        />
-        <DashboardSectionCard
-          title="Games"
-          description="Game dev, QA-related experiments, and interactive ideas."
-          to="/dashboard/games"
-        />
-        <DashboardSectionCard
-          title="Literature"
-          description="Taxi Cop, D&D lore, Antarctic novel, and more writing."
-          to="/dashboard/literature"
-        />
-        <DashboardSectionCard
-          title="Community"
-          description="Future forum / social area for posts and interaction."
-          to="/dashboard/community"
-        />
-        <DashboardSectionCard
-          title="Profile"
-          description="View and tweak your personal info and presence."
-          to="/profile"
-        />
-        <DashboardSectionCard
-          title="Settings"
-          description="Themes, account settings, and app preferences."
-          to="/settings"
-        />
-      </section>
+        <div className="dashboard-hero__meta">
+          <div className="dashboard-hero__chip">Crossworld Creative</div>
+          <div className="dashboard-hero__chip dashboard-hero__chip--muted">
+            Dashboard
+          </div>
+        </div>
+      </header>
+
+      <DashboardCardGrid />
     </main>
   );
 }

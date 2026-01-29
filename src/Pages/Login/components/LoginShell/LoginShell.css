@@ -1,0 +1,93 @@
+/* ===========================
+   SHELL (3 columns)
+=========================== */
+.login__shell {
+  height: calc(100vh - 56px);
+
+  display: grid;
+  grid-template-columns: 1fr minmax(380px, 460px) 1fr;
+  column-gap: 28px;
+  place-items: stretch;
+
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+/* pre-enter state (one frame) */
+.login__page--opening:not(.login__page--shell-active) .login__shell {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* enter / steady */
+.login__page--open .login__shell,
+.login__page--opening.login__page--shell-active .login__shell {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* exit */
+.login__page--closing .login__shell {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* ===========================
+   PANELS
+=========================== */
+.login__left,
+.login__center,
+.login__right {
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* ===========================
+   CENTER / RIGHT PANELS
+=========================== */
+.login__center,
+.login__right {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+/* pre-enter */
+.login__page--opening:not(.login__page--shell-active) .login__center,
+.login__page--opening:not(.login__page--shell-active) .login__right {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* open/enter */
+.login__page--shell-active .login__center {
+  transition-delay: 60ms;
+}
+
+.login__page--shell-active .login__right {
+  transition-delay: 120ms;
+}
+
+/* exit */
+.login__page--closing .login__center,
+.login__page--closing .login__right {
+  opacity: 0;
+  transform: translateY(8px);
+  transition-delay: 0ms;
+}
+
+/* ===========================
+   RESPONSIVE
+=========================== */
+@media (max-width: 980px) {
+  .login__shell {
+    grid-template-columns: 1fr;
+    row-gap: 18px;
+  }
+}

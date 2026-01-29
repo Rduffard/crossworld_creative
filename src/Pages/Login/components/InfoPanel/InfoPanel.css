@@ -1,0 +1,118 @@
+/* src/pages/Login/components/InfoPanel/InfoPanel.css */
+
+/* ===========================
+   RIGHT PANEL CONTENT
+=========================== */
+.login__info {
+  width: min(420px, 90%);
+  max-height: calc(100vh - 56px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  background: rgba(0, 0, 0, 0.45);
+  border-radius: 18px;
+  padding: 22px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+.login__info::-webkit-scrollbar {
+  width: 10px;
+}
+.login__info::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+.login__info::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.login__info-title {
+  margin: 0 0 10px;
+  color: #fff;
+  font-size: 1.15rem;
+}
+
+.login__tiers {
+  display: grid;
+  gap: 14px;
+}
+
+.login__tier {
+  padding: 14px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.login__tier-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.login__tier-title {
+  margin: 0;
+  color: #fff;
+  font-size: 1.02rem;
+}
+
+.login__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.login__badge--gold {
+  border-color: rgba(255, 220, 120, 0.35);
+  color: rgba(255, 220, 120, 0.95);
+  background: rgba(255, 220, 120, 0.08);
+}
+
+.login__badge--outline {
+  background: transparent;
+}
+
+.login__tier-list {
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.6;
+}
+
+.login__info-list {
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.6;
+}
+
+.login__divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 16px 0;
+}
+
+.login__info-text {
+  margin: 0 0 12px;
+  color: rgba(255, 255, 255, 0.75);
+}
+
+/* ===========================
+   RESPONSIVE
+=========================== */
+@media (max-width: 980px) {
+  .login__info {
+    max-height: none;
+    overflow: visible;
+  }
+}

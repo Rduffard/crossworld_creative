@@ -19,56 +19,111 @@
     ),
     #000;
 
-  display: grid;
-  grid-template-columns: 1fr; /* base state */
-  place-items: center;
-
   padding: 28px;
   overflow: hidden;
+  position: relative;
 }
 
 /* ===========================
-   ACTIVE LAYOUT (3 columns)
+   LANDING
 =========================== */
-.login__page--active {
+.login__landing {
+  height: calc(100vh - 56px);
+  display: grid;
+  place-items: center;
+
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 260ms ease,
+    transform 260ms ease;
+}
+
+/* landing exits while opening */
+.login__page--opening .login__landing {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+.login__landing-stack {
+  display: grid;
+  justify-items: center;
+  gap: 22px;
+  transform: translate3d(0, -20px, 0);
+}
+
+/* ===========================
+   SHELL (3 columns)
+=========================== */
+.login__shell {
+  height: calc(100vh - 56px);
+
+  display: grid;
   grid-template-columns: 1fr minmax(380px, 460px) 1fr;
   column-gap: 28px;
-  place-items: stretch; /* panels fill the available height */
+  place-items: stretch;
+
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+/* ✅ pre-enter state (one frame) */
+.login__page--opening:not(.login__page--shell-active) .login__shell {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* ✅ enter/steady state */
+.login__page--open .login__shell,
+.login__page--opening.login__page--shell-active .login__shell {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ✅ exit state */
+.login__page--closing .login__shell {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
 /* ===========================
-   LEFT PANEL (always exists)
+   PANELS
 =========================== */
-.login__left {
-  display: grid;
-  place-items: center;
-  min-height: 0;
-  transition:
-    place-items 600ms ease,
-    padding-top 600ms ease;
-}
-
-/* ✅ INACTIVE: only show left panel */
+.login__left,
 .login__center,
 .login__right {
-  display: none;
-}
-
-/* ✅ ACTIVE: show center/right as grid panels */
-.login__page--active .login__center,
-.login__page--active .login__right {
+  min-height: 0;
   display: grid;
   place-items: center;
-  min-height: 0;
 }
 
-/* ✅ New: keep left content (brand + links + button) aligned together */
+/* left docks upward */
+.login__left {
+  place-items: start center;
+  padding-top: 28px;
+}
+
+/* left stack moves as one unit */
 .login__left-stack {
   display: grid;
   justify-items: center;
-  align-content: center;
   gap: 18px;
   width: 100%;
+  max-width: 520px;
+
+  transform: translate3d(-18px, 10px, 0) scale(0.82);
+  transform-origin: top center;
+
+  transition: transform 900ms cubic-bezier(0.2, 0.9, 0.2, 1);
+  will-change: transform;
+}
+
+/* optional close drift */
+.login__page--closing .login__left-stack {
+  transform: translate3d(-18px, 18px, 0) scale(0.82);
 }
 
 /* ===========================
@@ -83,16 +138,8 @@
   width: 100%;
   max-width: 520px;
   gap: 2px;
-
-  /* Inactive: slight optical lift */
-  transform: translate3d(0, -8px, 0) scale(1);
-  transform-origin: top center;
-
-  transition: transform 900ms cubic-bezier(0.2, 0.9, 0.2, 1);
-  will-change: transform;
 }
 
-/* Logo sizing */
 .login__logo {
   width: min(560px, 72vw);
   height: auto;
@@ -104,10 +151,14 @@
   will-change: width;
 }
 
-/* Tagline */
+/* shell logo smaller */
+.login__brand--shell .login__logo {
+  width: min(460px, 28vw);
+}
+
 .login__tagline {
   margin: 0;
-  margin-top: -40px;
+  margin: -50px 0 30px;
   width: 100%;
   text-align: center;
 
@@ -143,7 +194,9 @@
    LINKS
 =========================== */
 .login__links {
+  width: fit-content;
   display: flex;
+  margin: 14px auto 0;
   gap: 14px;
   flex-wrap: wrap;
   justify-content: center;
@@ -153,8 +206,15 @@
   pointer-events: none;
 
   transition:
-    opacity 400ms ease,
-    transform 400ms ease;
+    opacity 400ms ease 120ms,
+    transform 400ms ease 120ms;
+}
+
+/* fade links in once shell is active */
+.login__page--shell-active .login__links {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 .login__link {
@@ -175,15 +235,20 @@
    ENTER BUTTON
 =========================== */
 .login__enter-button {
+  display: block;
+  margin: 0 auto;
+
   padding: 1rem 2.5rem;
   font-size: 1.1rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.35);
   background: rgba(0, 0, 0, 0.55);
   color: #f7f7f7;
   cursor: pointer;
+
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
 
@@ -198,65 +263,44 @@
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
 }
 
-/* ===========================
-   ACTIVE STATE
-=========================== */
-.login__page--active .login__left {
-  place-items: start center;
-  padding-top: 28px;
-}
-
-/* ✅ IMPORTANT: remove X shift so brand aligns with links */
-.login__page--active .login__brand {
-  transform: translate3d(0, 10px, 0) scale(0.82);
-}
-
-.login__page--active .login__logo {
-  width: min(460px, 28vw);
-}
-
-.login__page--active .login__links {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
+.login__enter-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* ===========================
-   CENTER PANEL
+   CENTER / RIGHT PANELS
 =========================== */
-.login__center {
-  opacity: 0;
-  transform: translateY(10px);
-  pointer-events: none;
-
-  transition:
-    opacity 450ms ease 150ms,
-    transform 450ms ease 150ms;
-}
-
-.login__page--active .login__center {
-  opacity: 1;
-  transform: translateY(0);
-  pointer-events: auto;
-}
-
-/* ===========================
-   RIGHT PANEL
-=========================== */
+.login__center,
 .login__right {
-  opacity: 0;
-  transform: translateY(10px);
-  pointer-events: none;
-
-  transition:
-    opacity 450ms ease 250ms,
-    transform 450ms ease 250ms;
-}
-
-.login__page--active .login__right {
   opacity: 1;
   transform: translateY(0);
-  pointer-events: auto;
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+/* pre-enter */
+.login__page--opening:not(.login__page--shell-active) .login__center,
+.login__page--opening:not(.login__page--shell-active) .login__right {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+/* open/enter */
+.login__page--shell-active .login__center {
+  transition-delay: 60ms;
+}
+.login__page--shell-active .login__right {
+  transition-delay: 120ms;
+}
+
+/* exit */
+.login__page--closing .login__center,
+.login__page--closing .login__right {
+  opacity: 0;
+  transform: translateY(8px);
+  transition-delay: 0ms;
 }
 
 /* ===========================
@@ -281,7 +325,6 @@
   min-width: 0;
 }
 
-/* Close button */
 .login__close {
   position: absolute;
   top: 12px;
@@ -315,7 +358,6 @@
   line-height: 1.4;
 }
 
-/* Form */
 .login__form {
   display: grid;
   gap: 14px;
@@ -354,7 +396,6 @@
   background: rgba(255, 255, 255, 0.16);
 }
 
-/* Already logged in */
 .login__already-text {
   margin-top: 14px;
   color: rgba(255, 255, 255, 0.7);
@@ -424,21 +465,21 @@
    RESPONSIVE
 =========================== */
 @media (max-width: 980px) {
-  .login__page--active {
+  .login__shell {
     grid-template-columns: 1fr;
     row-gap: 18px;
   }
 
-  .login__page--active .login__left {
+  .login__left {
     place-items: center;
     padding-top: 0;
   }
 
-  .login__page--active .login__brand {
+  .login__left-stack {
     transform: none;
   }
 
-  .login__page--active .login__logo {
+  .login__brand--shell .login__logo {
     width: min(520px, 84vw);
   }
 
