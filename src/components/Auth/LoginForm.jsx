@@ -8,7 +8,14 @@ function LoginForm({
   onSubmit,
   onGuest,
   onGoDashboard,
+
+  // NEW: switches modal content between "login" and "signup"
+  onSwitchMode,
+
+  // Keep for later if you want an invite-request flow.
+  // Not used for switching anymore.
   onRequestInvite,
+
   title = "Welcome back",
   subtitle = "Log in for full access, or continue as a guest to explore the demo.",
   submitLabel = "Log In",
@@ -26,7 +33,7 @@ function LoginForm({
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await onSubmit({ email, password });
+    await onSubmit?.({ email, password });
   };
 
   return (
@@ -80,9 +87,9 @@ function LoginForm({
           <button
             type="button"
             className="login__invite-link"
-            onClick={onRequestInvite}
+            onClick={() => onSwitchMode?.("signup")}
           >
-            Request invite
+            Sign up
           </button>
         </div>
       </form>

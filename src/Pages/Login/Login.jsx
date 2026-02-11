@@ -3,13 +3,22 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 import Landing from "./components/Landing/Landing.jsx";
-import LoginShell from "./components/LoginShell/LoginShell.jsx";
+import AuthShell from "./components/AuthShell/AuthShell.jsx";
+
+import LoginForm from "../../components/Auth/LoginForm.jsx";
+import SignupForm from "../../components/Auth/SignupForm.jsx";
 
 import "./Login.css";
 
 function Login() {
   // landing | opening | open | closing
   const [phase, setPhase] = useState("landing");
+
+  // auth view inside the shell
+  const [authMode, setAuthMode] = useState("login"); // "login" | "signup"
+
+  // direction hint for swap animation
+  const [swapDir, setSwapDir] = useState("forward"); // "forward" | "back"
 
   // pre-enter shell flag (prevents pop-in)
   const [shellActive, setShellActive] = useState(false);
@@ -19,7 +28,9 @@ function Login() {
 
   const emailInputRef = useRef(null);
 
-  const { login, isAuthenticated } = useAuth();
+  // ✅ add signup here
+  const { login, signup, isAuthenticated } = useAuth();
+
   const navigate = useNavigate();
 
   // Keep landing mounted during closing so it can fade back in smoothly
@@ -49,7 +60,17 @@ function Login() {
 
     setPhase("closing");
     setShellActive(false);
+
+    // reset to login view when closing
+    setAuthMode("login");
+    setSwapDir("back");
   };
+
+  // mode switch helper (so swap animation knows direction)
+  function switchMode(nextMode) {
+    setSwapDir(nextMode === "signup" ? "forward" : "back");
+    setAuthMode(nextMode);
+  }
 
   // ESC closes the shell (only when fully open)
   useEffect(() => {
@@ -60,15 +81,27 @@ function Login() {
     return () => window.removeEventListener("keydown", handleEsc);
   }, [phase]);
 
-  // Focus email when fully open
+  // Focus email when fully open (only on login view)
   useEffect(() => {
-    if (phase === "open") {
+    if (phase === "open" && authMode === "login") {
       window.setTimeout(() => emailInputRef.current?.focus(), 0);
     }
-  }, [phase]);
+  }, [phase, authMode]);
 
-  async function handleSubmit({ email, password }) {
+  async function handleLoginSubmit({ email, password }) {
     await login({ email, password });
+    navigate("/dashboard", { replace: true });
+  }
+
+  // ✅ REAL SIGNUP FLOW (signup -> login -> dashboard)
+  async function handleSignupSubmit({ name, email, password }) {
+    // 1) Create account
+    await signup({ name, email, password });
+
+    // 2) Immediately sign in
+    await login({ email, password });
+
+    // 3) Go to dashboard
     navigate("/dashboard", { replace: true });
   }
 
@@ -132,18 +165,31 @@ function Login() {
       )}
 
       {isShellMounted && (
-        <LoginShell
+        <AuthShell
           phase={phase}
           shellActive={shellActive}
-          isAuthenticated={isAuthenticated}
-          emailInputRef={emailInputRef}
-          onClose={closeShell}
-          onSubmit={handleSubmit}
-          onGuest={handleGuest}
-          onGoDashboard={handleGoDashboard}
-          onRequestInvite={handleRequestInvite}
           onTransitionEnd={handleShellTransitionEnd}
-        />
+          contentKey={authMode}
+          swapDir={swapDir}
+        >
+          {authMode === "login" ? (
+            <LoginForm
+              emailInputRef={emailInputRef}
+              isAuthenticated={isAuthenticated}
+              onClose={closeShell}
+              onSubmit={handleLoginSubmit}
+              onGuest={handleGuest}
+              onGoDashboard={handleGoDashboard}
+              onRequestInvite={handleRequestInvite}
+              onSwitchMode={switchMode}
+            />
+          ) : (
+            <SignupForm
+              onSubmit={handleSignupSubmit}
+              onSwitchMode={switchMode}
+            />
+          )}
+        </AuthShell>
       )}
     </main>
   );

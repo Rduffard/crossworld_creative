@@ -1,20 +1,17 @@
 import LeftRail from "../LeftRail/LeftRail.jsx";
 import InfoPanel from "../InfoPanel/InfoPanel.jsx";
-import LoginForm from "../../../../components/Auth/LoginForm.jsx"; // <-- match your actual path/case
 
-import "./LoginShell.css";
+import "./AuthShell.css";
 
-function LoginShell({
+function AuthShell({
   phase,
   shellActive,
-  isAuthenticated,
-  emailInputRef,
-  onClose,
-  onSubmit,
-  onGuest,
-  onGoDashboard,
-  onRequestInvite,
   onTransitionEnd,
+  children,
+
+  // NEW: used to trigger swap animation when mode changes
+  contentKey = "login",
+  swapDir = "forward", // "forward" | "back"
 }) {
   return (
     <div
@@ -29,15 +26,17 @@ function LoginShell({
 
       {/* CENTER */}
       <section className="login__center">
-        <LoginForm
-          emailInputRef={emailInputRef}
-          isAuthenticated={isAuthenticated}
-          onClose={onClose}
-          onSubmit={onSubmit}
-          onGuest={onGuest}
-          onGoDashboard={onGoDashboard}
-          onRequestInvite={onRequestInvite}
-        />
+        <div
+          key={contentKey}
+          className={
+            "login__center-content " +
+            (swapDir === "back"
+              ? "login__center-content--back"
+              : "login__center-content--forward")
+          }
+        >
+          {children}
+        </div>
       </section>
 
       {/* RIGHT */}
@@ -48,4 +47,4 @@ function LoginShell({
   );
 }
 
-export default LoginShell;
+export default AuthShell;

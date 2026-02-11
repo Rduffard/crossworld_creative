@@ -1,59 +1,104 @@
 // src/context/AuthContext.jsx
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { api } from "../utils/api.js";
 
 const AuthContext = createContext(null);
+const STORAGE_KEY = "cw_auth";
+
+function readStoredAuth() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    localStorage.removeItem(STORAGE_KEY);
+    return null;
+  }
+}
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null); // null = logged out
+  // auth shape: { token, user } | null
+  const [auth, setAuth] = useState(() => readStoredAuth());
   const [loaded, setLoaded] = useState(false);
 
-  // On first load, try to restore user from localStorage
+  // On first load: if token exists, verify it by fetching /me
   useEffect(() => {
-    const stored = localStorage.getItem("cw_auth");
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored));
-      } catch {
-        localStorage.removeItem("cw_auth");
+    const boot = async () => {
+      const stored = readStoredAuth();
+      if (!stored?.token) {
+        setLoaded(true);
+        return;
       }
-    }
-    setLoaded(true);
+
+      try {
+        const me = await api.getMe();
+        setAuth({ token: stored.token, user: me });
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+        setAuth(null);
+      } finally {
+        setLoaded(true);
+      }
+    };
+
+    boot();
   }, []);
 
-  // Whenever `user` changes, keep it in localStorage
+  // Persist to localStorage
   useEffect(() => {
-    if (!loaded) return; // avoid writing before first load
-    if (user) {
-      localStorage.setItem("cw_auth", JSON.stringify(user));
-    } else {
-      localStorage.removeItem("cw_auth");
-    }
-  }, [user, loaded]);
+    if (!loaded) return;
+    if (auth) localStorage.setItem(STORAGE_KEY, JSON.stringify(auth));
+    else localStorage.removeItem(STORAGE_KEY);
+  }, [auth, loaded]);
 
-  function login({ email }) {
-    // TODO: replace with real API call later
-    setUser({ email });
+  async function login({ email, password }) {
+    // 1) get token
+    const { token } = await api.signin({ email, password });
+
+    // 2) store token immediately so api.getMe can attach it
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ token }));
+
+    // 3) fetch user
+    const me = await api.getMe();
+
+    // 4) store full auth
+    setAuth({ token, user: me });
+
+    return me;
+  }
+
+  async function signup({ name, avatar, email, password }) {
+    // create user (no token returned)
+    await api.signup({ name, avatar, email, password });
+
+    // you can choose: auto-login after signup
+    // this is nice UX and makes signup "feel" complete
+    return login({ email, password });
   }
 
   function logout() {
-    setUser(null);
+    setAuth(null);
+    localStorage.removeItem(STORAGE_KEY);
   }
 
-  const value = {
-    user,
-    isAuthenticated: !!user,
-    login,
-    logout,
-    loaded,
-  };
+  const value = useMemo(() => {
+    return {
+      user: auth?.user ?? null,
+      token: auth?.token ?? null,
+      isAuthenticated: Boolean(auth?.token),
+      loaded,
+
+      login,
+      signup,
+      logout,
+    };
+  }, [auth, loaded]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const ctx = useContext(AuthContext);
-  if (!ctx) {
-    throw new Error("useAuth must be used inside an AuthProvider");
-  }
+  if (!ctx) throw new Error("useAuth must be used inside an AuthProvider");
   return ctx;
 }
