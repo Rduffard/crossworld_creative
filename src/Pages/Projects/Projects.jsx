@@ -21,7 +21,7 @@ const projects = [
       "React app that suggests clothing items based on weather conditions with a connected backend.",
     status: "Demo",
     tags: ["React", "API", "Routing"],
-    route: "https://github.com/Rduffard", // swap this to your actual WTWR link
+    route: "https://wtwr.crossworldcreative.com", // swap this to your actual WTWR link
     external: true,
   },
   {
