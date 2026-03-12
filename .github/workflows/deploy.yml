@@ -12,10 +12,14 @@ concurrency:
   group: deploy-crossworld-frontend
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   deploy:
     name: Build and deploy
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     env:
       DEPLOY_HOST: ${{ secrets.VM_HOST }}
@@ -48,6 +52,13 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
+      - name: Ensure deploy directory exists
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
+
       - name: Deploy dist to VM
         run: |
-          rsync -avz --delete dist/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
+          rsync -avz --delete \
+            --omit-dir-times \
+            --no-perms \
+            dist/ "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/"
