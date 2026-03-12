@@ -1,26 +1,26 @@
-.projects {
+.music-page {
   padding: 36px 48px;
   color: rgba(255, 255, 255, 0.92);
 }
 
-.projects__header {
+.music-hero {
   margin-bottom: 22px;
 }
 
-.projects__title {
+.music-title {
   margin: 0 0 10px;
   font-size: 56px;
   letter-spacing: -1px;
 }
 
-.projects__subtitle {
+.music-intro {
   margin: 0;
-  opacity: 0.8;
   max-width: 760px;
   line-height: 1.6;
+  opacity: 0.8;
 }
 
-.projects__grid {
+.music-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
   gap: 18px;
@@ -28,15 +28,15 @@
 }
 
 @media (max-width: 950px) {
-  .projects__grid {
+  .music-grid {
     grid-template-columns: 1fr;
   }
 
-  .projects {
+  .music-page {
     padding: 28px 18px;
   }
 
-  .projects__title {
+  .music-title {
     font-size: 42px;
   }
 }

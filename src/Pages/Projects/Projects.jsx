@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import DashboardCard from "../../components/DashboardCard/DashboardCard";
 import "./Projects.css";
 
 const projects = [
@@ -8,10 +8,12 @@ const projects = [
     subtitle: "QA + bug tracking platform (in progress)",
     description:
       "A bug tracking + QA management platform inspired by Jira, built to be clean, fast, and portfolio-ready.",
-    status: "Live",
+    pillText: "Live",
     tags: ["React", "Express", "MongoDB", "Auth", "Storage"],
-    route: "https://squash.crossworldcreative.com",
+    href: "https://squash.crossworldcreative.com",
     external: true,
+    ctaText: "Open Squash →",
+    featured: true,
   },
   {
     id: "wtwr",
@@ -19,10 +21,11 @@ const projects = [
     subtitle: "Weather-based outfit picker",
     description:
       "React app that suggests clothing items based on weather conditions with a connected backend.",
-    status: "Demo",
+    pillText: "Demo",
     tags: ["React", "API", "Routing"],
-    route: "https://wtwr.crossworldcreative.com", // swap this to your actual WTWR link
+    href: "https://wtwr.crossworldcreative.com",
     external: true,
+    ctaText: "View Project →",
   },
   {
     id: "crossworld",
@@ -30,25 +33,15 @@ const projects = [
     subtitle: "Portfolio + creative hub",
     description:
       "Your main landing site for projects, music, games, and writing — built as a hub for everything Crossworld.",
-    status: "Live",
+    pillText: "Live",
     tags: ["React", "Branding", "UI/UX"],
-    route: "https://crossworldcreative.com",
+    href: "https://crossworldcreative.com",
     external: true,
+    ctaText: "View Project →",
   },
 ];
 
 function Projects() {
-  const navigate = useNavigate();
-
-  const handleOpen = (project) => {
-    if (project.external) {
-      window.open(project.route, "_blank", "noreferrer");
-      return;
-    }
-
-    navigate(project.route);
-  };
-
   return (
     <main className="projects">
       <header className="projects__header">
@@ -60,63 +53,20 @@ function Projects() {
       </header>
 
       <section className="projects__grid">
-        {projects.map((p) => (
-          <article
-            key={p.id}
-            className={`projects__card ${
-              p.id === "squash" ? "projects__card--featured" : ""
-            }`}
-          >
-            <div className="projects__card-top">
-              <div>
-                <h2 className="projects__card-title">{p.title}</h2>
-                <p className="projects__card-subtitle">{p.subtitle}</p>
-              </div>
-
-              <span
-                className={`projects__pill ${
-                  p.id === "squash" ? "projects__pill--gold" : ""
-                }`}
-              >
-                {p.status}
-              </span>
-            </div>
-
-            <p className="projects__card-desc">{p.description}</p>
-
-            <div className="projects__tags">
-              {p.tags.map((tag) => (
-                <span key={tag} className="projects__tag">
-                  {tag}
-                </span>
-              ))}
-            </div>
-
-            <div className="projects__actions">
-              <button
-                type="button"
-                className="projects__button"
-                onClick={() => handleOpen(p)}
-              >
-                {p.id === "squash" ? "Open Squash" : "View Project"}
-              </button>
-
-              {p.id === "squash" && (
-                <button
-                  type="button"
-                  className="projects__button projects__button--ghost"
-                  onClick={() =>
-                    window.open(
-                      "https://squash.crossworldcreative.com",
-                      "_blank",
-                    )
-                  }
-                >
-                  Live Site
-                </button>
-              )}
-            </div>
-          </article>
+        {projects.map((project) => (
+          <DashboardCard
+            key={project.id}
+            title={project.title}
+            subtitle={project.subtitle}
+            description={project.description}
+            href={project.href}
+            external={project.external}
+            pillText={project.pillText}
+            ctaText={project.ctaText}
+            tags={project.tags}
+            featured={project.featured}
+            variant="projects"
+          />
         ))}
       </section>
     </main>
