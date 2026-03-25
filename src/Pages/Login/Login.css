@@ -24,6 +24,10 @@
   position: relative;
 }
 
+.login__page--closing {
+  pointer-events: none;
+}
+
 /* ===========================
    LANDING
 =========================== */

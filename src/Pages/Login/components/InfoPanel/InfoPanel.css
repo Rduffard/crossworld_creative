@@ -1,110 +1,214 @@
 /* src/pages/Login/components/InfoPanel/InfoPanel.css */
 
 /* ===========================
-   RIGHT PANEL CONTENT
+   RIGHT PANEL
 =========================== */
 .login__info {
-  width: min(420px, 90%);
+  position: relative;
+  width: min(430px, 90%);
   max-height: calc(100vh - 56px);
   overflow-y: auto;
   overscroll-behavior: contain;
 
-  background: rgba(0, 0, 0, 0.45);
-  border-radius: 18px;
-  padding: 22px 22px;
+  padding: 24px;
+  border-radius: 20px;
   border: 1px solid rgba(255, 255, 255, 0.12);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.02)
+    ),
+    rgba(0, 0, 0, 0.42);
+
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
 }
 
+.login__info::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+
+  background: radial-gradient(
+    circle at top right,
+    rgba(255, 255, 255, 0.08),
+    transparent 34%
+  );
+}
+
+/* ===========================
+   SCROLLBAR
+=========================== */
 .login__info::-webkit-scrollbar {
   width: 10px;
 }
+
 .login__info::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.14);
   border-radius: 999px;
 }
+
 .login__info::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.login__info-title {
+/* ===========================
+   TYPOGRAPHY
+=========================== */
+.login__eyebrow {
   margin: 0 0 10px;
-  color: #fff;
-  font-size: 1.15rem;
+  font-size: 0.76rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.52);
 }
 
-.login__tiers {
-  display: grid;
-  gap: 14px;
+.login__info-title {
+  margin: 0 0 14px;
+  color: #ffffff;
+  font-size: 2rem;
+  font-weight: 650;
+  line-height: 1.12;
+  letter-spacing: -0.02em;
 }
 
-.login__tier {
-  padding: 14px 14px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.25);
-}
-
-.login__tier-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.login__tier-title {
-  margin: 0;
-  color: #fff;
-  font-size: 1.02rem;
-}
-
-.login__badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.25);
-}
-
-.login__badge--gold {
-  border-color: rgba(255, 220, 120, 0.35);
-  color: rgba(255, 220, 120, 0.95);
-  background: rgba(255, 220, 120, 0.08);
-}
-
-.login__badge--outline {
-  background: transparent;
-}
-
-.login__tier-list {
-  margin: 0;
-  padding-left: 18px;
-  color: rgba(255, 255, 255, 0.75);
-  line-height: 1.6;
-}
-
-.login__info-list {
-  margin: 0;
-  padding-left: 18px;
-  color: rgba(255, 255, 255, 0.75);
-  line-height: 1.6;
-}
-
-.login__divider {
-  height: 1px;
-  background: rgba(255, 255, 255, 0.12);
-  margin: 16px 0;
+.login__section-title {
+  margin: 0 0 12px;
+  color: #ffffff;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .login__info-text {
   margin: 0 0 12px;
-  color: rgba(255, 255, 255, 0.75);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.98rem;
+  line-height: 1.7;
+}
+
+.login__info-text--lead {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.84);
+}
+
+.login__info-text--muted {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.login__highlight {
+  color: rgba(255, 255, 255, 0.96);
+  font-weight: 600;
+}
+
+/* ===========================
+   CARDS
+=========================== */
+.login__cards {
+  display: grid;
+  gap: 12px;
+}
+
+.login__card {
+  position: relative;
+  padding: 15px 15px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.045),
+      rgba(255, 255, 255, 0.02)
+    ),
+    rgba(0, 0, 0, 0.18);
+
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.login__card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.18);
+  background:
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.07),
+      rgba(255, 255, 255, 0.03)
+    ),
+    rgba(0, 0, 0, 0.22);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.login__card-title {
+  margin: 0 0 7px;
+  color: #ffffff;
+  font-size: 0.98rem;
+  font-weight: 600;
+}
+
+.login__card-text {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.93rem;
+  line-height: 1.6;
+}
+
+/* ===========================
+   LIST
+=========================== */
+.login__info-list {
+  margin: 0;
+  padding-left: 18px;
+  color: rgba(255, 255, 255, 0.77);
+  line-height: 1.7;
+}
+
+.login__info-list li + li {
+  margin-top: 6px;
+}
+
+/* ===========================
+   STRUCTURE
+=========================== */
+.login__info-section {
+  position: relative;
+  z-index: 1;
+}
+
+.login__divider {
+  position: relative;
+  z-index: 1;
+  height: 1px;
+  margin: 18px 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04),
+    rgba(255, 255, 255, 0.14),
+    rgba(255, 255, 255, 0.04)
+  );
+}
+
+.login__signature {
+  position: relative;
+  z-index: 1;
+  margin: 20px 0 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.42);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 /* ===========================
@@ -114,5 +218,31 @@
   .login__info {
     max-height: none;
     overflow: visible;
+  }
+}
+
+@media (max-width: 640px) {
+  .login__info {
+    width: 100%;
+    padding: 20px 18px;
+    border-radius: 18px;
+  }
+
+  .login__info-title {
+    font-size: 1.7rem;
+  }
+
+  .login__info-text {
+    font-size: 0.95rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login__card {
+    transition: none;
+  }
+
+  .login__card:hover {
+    transform: none;
   }
 }

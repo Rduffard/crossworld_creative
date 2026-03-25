@@ -1,4 +1,16 @@
 /* ===== HERO ===== */
+.dashboard-page {
+  opacity: 0;
+  transform: translateY(10px);
+  transition:
+    opacity 320ms ease,
+    transform 320ms ease;
+}
+
+.dashboard-page--visible {
+  opacity: 1;
+  transform: translateY(0);
+}
 
 .dashboard-hero {
   display: flex;

@@ -1,15 +1,23 @@
+import { useEffect, useState } from "react";
 import "./Dashboard.css";
 import DashboardCardGrid from "../../components/DashboardCardGrid/DashboardCardGrid.jsx";
 import { useAuth } from "../../context/AuthContext.jsx";
 
 function Dashboard() {
   const { user, loaded } = useAuth();
+  const [isVisible, setIsVisible] = useState(false);
 
-  // optional: avoids greeting flicker
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setIsVisible(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   if (!loaded) return null;
 
   return (
-    <main className="dashboard-page">
+    <main
+      className={`dashboard-page ${isVisible ? "dashboard-page--visible" : ""}`}
+    >
       <header className="dashboard-hero">
         <div className="dashboard-hero__text">
           <h1 className="dashboard-hero__title">

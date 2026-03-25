@@ -18,7 +18,7 @@ function LeftRail({ shellActive }) {
       <nav className={`login__links ${shellActive ? "is-active" : ""}`}>
         <a
           className="login__link"
-          href="https://github.com/CrossworldCreative"
+          href="https://github.com/rduffard"
           target="_blank"
           rel="noreferrer"
         >
@@ -26,7 +26,7 @@ function LeftRail({ shellActive }) {
         </a>
         <a
           className="login__link"
-          href="https://www.linkedin.com/"
+          href="https://www.linkedin.com/in/romain-duffard/"
           target="_blank"
           rel="noreferrer"
         >

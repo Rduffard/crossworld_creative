@@ -15,32 +15,31 @@ function Login() {
   const [phase, setPhase] = useState("landing");
 
   // auth view inside the shell
-  const [authMode, setAuthMode] = useState("login"); // "login" | "signup"
+  const [authMode, setAuthMode] = useState("login");
 
   // direction hint for swap animation
-  const [swapDir, setSwapDir] = useState("forward"); // "forward" | "back"
+  const [swapDir, setSwapDir] = useState("forward");
 
-  // pre-enter shell flag (prevents pop-in)
+  // pre-enter shell flag
   const [shellActive, setShellActive] = useState(false);
 
   // first-load animation flag
   const [isBooting, setIsBooting] = useState(true);
 
+  // where to go after the closing animation finishes
+  const [pendingRoute, setPendingRoute] = useState(null);
+
   const emailInputRef = useRef(null);
 
-  // ✅ add signup here
   const { login, signup, isAuthenticated } = useAuth();
-
   const navigate = useNavigate();
 
-  // Keep landing mounted during closing so it can fade back in smoothly
   const isLandingMounted =
     phase === "landing" || phase === "opening" || phase === "closing";
 
   const isShellMounted =
     phase === "opening" || phase === "open" || phase === "closing";
 
-  // first frame: remove boot class so landing eases in
   useEffect(() => {
     requestAnimationFrame(() => setIsBooting(false));
   }, []);
@@ -49,8 +48,6 @@ function Login() {
     if (phase !== "landing") return;
 
     setPhase("opening");
-
-    // mount shell in pre-enter state, then activate it next frame so it transitions in
     setShellActive(false);
     requestAnimationFrame(() => setShellActive(true));
   };
@@ -58,30 +55,33 @@ function Login() {
   const closeShell = () => {
     if (phase !== "open") return;
 
+    setPendingRoute(null);
     setPhase("closing");
     setShellActive(false);
-
-    // reset to login view when closing
     setAuthMode("login");
     setSwapDir("back");
   };
 
-  // mode switch helper (so swap animation knows direction)
+  function beginExitTo(route) {
+    setPendingRoute(route);
+    setPhase("closing");
+    setShellActive(false);
+  }
+
   function switchMode(nextMode) {
     setSwapDir(nextMode === "signup" ? "forward" : "back");
     setAuthMode(nextMode);
   }
 
-  // ESC closes the shell (only when fully open)
   useEffect(() => {
     const handleEsc = (e) => {
       if (e.key === "Escape" && phase === "open") closeShell();
     };
+
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
   }, [phase]);
 
-  // Focus email when fully open (only on login view)
   useEffect(() => {
     if (phase === "open" && authMode === "login") {
       window.setTimeout(() => emailInputRef.current?.focus(), 0);
@@ -90,27 +90,21 @@ function Login() {
 
   async function handleLoginSubmit({ email, password }) {
     await login({ email, password });
-    navigate("/dashboard", { replace: true });
+    beginExitTo("/dashboard");
   }
 
-  // ✅ REAL SIGNUP FLOW (signup -> login -> dashboard)
   async function handleSignupSubmit({ name, email, password }) {
-    // 1) Create account
     await signup({ name, email, password });
-
-    // 2) Immediately sign in
     await login({ email, password });
-
-    // 3) Go to dashboard
-    navigate("/dashboard", { replace: true });
+    beginExitTo("/dashboard");
   }
 
   function handleGuest() {
-    navigate("/dashboard?demo=true");
+    beginExitTo("/dashboard?demo=true");
   }
 
   function handleGoDashboard() {
-    navigate("/dashboard");
+    beginExitTo("/dashboard");
   }
 
   function handleRequestInvite() {
@@ -123,19 +117,21 @@ function Login() {
     window.location.href = `mailto:youremail@example.com?subject=${subject}&body=${body}`;
   }
 
-  // Landing finished fading OUT during opening -> shell becomes "open"
   const handleLandingTransitionEnd = (e) => {
-    // Landing transitions both opacity and transform; we only care about opacity finishing.
     if (e.propertyName !== "opacity") return;
     if (phase !== "opening") return;
 
     setPhase("open");
   };
 
-  // Shell finished fading OUT during closing -> return to landing
   const handleShellTransitionEnd = (e) => {
     if (e.propertyName !== "opacity") return;
     if (phase !== "closing") return;
+
+    if (pendingRoute) {
+      navigate(pendingRoute, { replace: true });
+      return;
+    }
 
     setPhase("landing");
   };
