@@ -29,6 +29,9 @@ function Login() {
   // where to go after the closing animation finishes
   const [pendingRoute, setPendingRoute] = useState(null);
 
+  // auth error shown inside the modal
+  const [authError, setAuthError] = useState("");
+
   const emailInputRef = useRef(null);
 
   const { login, signup, isAuthenticated } = useAuth();
@@ -47,6 +50,7 @@ function Login() {
   const openShell = () => {
     if (phase !== "landing") return;
 
+    setAuthError("");
     setPhase("opening");
     setShellActive(false);
     requestAnimationFrame(() => setShellActive(true));
@@ -55,6 +59,7 @@ function Login() {
   const closeShell = () => {
     if (phase !== "open") return;
 
+    setAuthError("");
     setPendingRoute(null);
     setPhase("closing");
     setShellActive(false);
@@ -63,12 +68,14 @@ function Login() {
   };
 
   function beginExitTo(route) {
+    setAuthError("");
     setPendingRoute(route);
     setPhase("closing");
     setShellActive(false);
   }
 
   function switchMode(nextMode) {
+    setAuthError("");
     setSwapDir(nextMode === "signup" ? "forward" : "back");
     setAuthMode(nextMode);
   }
@@ -89,14 +96,25 @@ function Login() {
   }, [phase, authMode]);
 
   async function handleLoginSubmit({ email, password }) {
-    await login({ email, password });
-    beginExitTo("/dashboard");
+    setAuthError("");
+
+    try {
+      await login({ email, password });
+      beginExitTo("/dashboard");
+    } catch (err) {
+      setAuthError(err.message || "Invalid email or password.");
+    }
   }
 
-  async function handleSignupSubmit({ name, email, password }) {
-    await signup({ name, email, password });
-    await login({ email, password });
-    beginExitTo("/dashboard");
+  async function handleSignupSubmit({ name, email, password, avatar }) {
+    setAuthError("");
+
+    try {
+      await signup({ name, email, password, avatar });
+      beginExitTo("/dashboard");
+    } catch (err) {
+      setAuthError(err.message || "Could not create account.");
+    }
   }
 
   function handleGuest() {
@@ -172,6 +190,7 @@ function Login() {
             <LoginForm
               emailInputRef={emailInputRef}
               isAuthenticated={isAuthenticated}
+              error={authError}
               onClose={closeShell}
               onSubmit={handleLoginSubmit}
               onGuest={handleGuest}
@@ -181,6 +200,7 @@ function Login() {
             />
           ) : (
             <SignupForm
+              error={authError}
               onSubmit={handleSignupSubmit}
               onSwitchMode={switchMode}
             />

@@ -8,14 +8,9 @@ function LoginForm({
   onSubmit,
   onGuest,
   onGoDashboard,
-
-  // NEW: switches modal content between "login" and "signup"
   onSwitchMode,
-
-  // Keep for later if you want an invite-request flow.
-  // Not used for switching anymore.
   onRequestInvite,
-
+  error,
   title = "Welcome back",
   subtitle = "Log in for full access, or continue as a guest to explore the demo.",
   submitLabel = "Log In",
@@ -24,7 +19,6 @@ function LoginForm({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // Clear sensitive data when unmounting
   useEffect(() => {
     return () => {
       setPassword("");
@@ -77,6 +71,8 @@ function LoginForm({
             autoComplete="current-password"
           />
         </label>
+
+        {error && <p className="login__error">{error}</p>}
 
         <button className="login__button" type="submit">
           {submitLabel}

@@ -32,7 +32,7 @@ function LeftRail({ shellActive }) {
         >
           LinkedIn
         </a>
-        <a className="login__link" href="mailto:youremail@example.com">
+        <a className="login__link" href="mailto:iroamm@gmail.com">
           Contact
         </a>
       </nav>

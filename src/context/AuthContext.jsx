@@ -1,4 +1,3 @@
-// src/context/AuthContext.jsx
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { api } from "../utils/api.js";
 
@@ -17,11 +16,9 @@ function readStoredAuth() {
 }
 
 export function AuthProvider({ children }) {
-  // auth shape: { token, user } | null
   const [auth, setAuth] = useState(() => readStoredAuth());
   const [loaded, setLoaded] = useState(false);
 
-  // On first load: if token exists, verify it by fetching /me
   useEffect(() => {
     const boot = async () => {
       const stored = readStoredAuth();
@@ -44,7 +41,6 @@ export function AuthProvider({ children }) {
     boot();
   }, []);
 
-  // Persist to localStorage
   useEffect(() => {
     if (!loaded) return;
     if (auth) localStorage.setItem(STORAGE_KEY, JSON.stringify(auth));
@@ -52,27 +48,19 @@ export function AuthProvider({ children }) {
   }, [auth, loaded]);
 
   async function login({ email, password }) {
-    // 1) get token
     const { token } = await api.signin({ email, password });
 
-    // 2) store token immediately so api.getMe can attach it
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ token }));
 
-    // 3) fetch user
     const me = await api.getMe();
 
-    // 4) store full auth
     setAuth({ token, user: me });
 
     return me;
   }
 
   async function signup({ name, avatar, email, password }) {
-    // create user (no token returned)
     await api.signup({ name, avatar, email, password });
-
-    // you can choose: auto-login after signup
-    // this is nice UX and makes signup "feel" complete
     return login({ email, password });
   }
 
@@ -87,7 +75,6 @@ export function AuthProvider({ children }) {
       token: auth?.token ?? null,
       isAuthenticated: Boolean(auth?.token),
       loaded,
-
       login,
       signup,
       logout,
