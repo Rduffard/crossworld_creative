@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext.jsx";
+import { useAuth } from "../../hooks/useAuth.js";
 
 import Landing from "./components/Landing/Landing.jsx";
 import AuthShell from "./components/AuthShell/AuthShell.jsx";
@@ -11,25 +11,12 @@ import SignupForm from "../../components/Auth/SignupForm.jsx";
 import "./Login.css";
 
 function Login() {
-  // landing | opening | open | closing
   const [phase, setPhase] = useState("landing");
-
-  // auth view inside the shell
   const [authMode, setAuthMode] = useState("login");
-
-  // direction hint for swap animation
   const [swapDir, setSwapDir] = useState("forward");
-
-  // pre-enter shell flag
   const [shellActive, setShellActive] = useState(false);
-
-  // first-load animation flag
   const [isBooting, setIsBooting] = useState(true);
-
-  // where to go after the closing animation finishes
   const [pendingRoute, setPendingRoute] = useState(null);
-
-  // auth error shown inside the modal
   const [authError, setAuthError] = useState("");
 
   const emailInputRef = useRef(null);
@@ -56,7 +43,7 @@ function Login() {
     requestAnimationFrame(() => setShellActive(true));
   };
 
-  const closeShell = () => {
+  const closeShell = useCallback(() => {
     if (phase !== "open") return;
 
     setAuthError("");
@@ -65,7 +52,7 @@ function Login() {
     setShellActive(false);
     setAuthMode("login");
     setSwapDir("back");
-  };
+  }, [phase]);
 
   function beginExitTo(route) {
     setAuthError("");
@@ -81,13 +68,13 @@ function Login() {
   }
 
   useEffect(() => {
-    const handleEsc = (e) => {
-      if (e.key === "Escape" && phase === "open") closeShell();
+    const handleEsc = (event) => {
+      if (event.key === "Escape" && phase === "open") closeShell();
     };
 
     window.addEventListener("keydown", handleEsc);
     return () => window.removeEventListener("keydown", handleEsc);
-  }, [phase]);
+  }, [phase, closeShell]);
 
   useEffect(() => {
     if (phase === "open" && authMode === "login") {
@@ -101,8 +88,8 @@ function Login() {
     try {
       await login({ email, password });
       beginExitTo("/dashboard");
-    } catch (err) {
-      setAuthError(err.message || "Invalid email or password.");
+    } catch (error) {
+      setAuthError(error.message || "Invalid email or password.");
     }
   }
 
@@ -112,8 +99,8 @@ function Login() {
     try {
       await signup({ name, email, password, avatar });
       beginExitTo("/dashboard");
-    } catch (err) {
-      setAuthError(err.message || "Could not create account.");
+    } catch (error) {
+      setAuthError(error.message || "Could not create account.");
     }
   }
 
@@ -125,25 +112,15 @@ function Login() {
     beginExitTo("/dashboard");
   }
 
-  function handleRequestInvite() {
-    const subject = encodeURIComponent(
-      "Invite Access Request — Crossworld Demo",
-    );
-    const body = encodeURIComponent(
-      `Hey Romain,\n\nI'd like invite access.\n\nName:\nCompany (optional):\nReason / use-case:\n\nThanks!`,
-    );
-    window.location.href = `mailto:youremail@example.com?subject=${subject}&body=${body}`;
-  }
-
-  const handleLandingTransitionEnd = (e) => {
-    if (e.propertyName !== "opacity") return;
+  const handleLandingTransitionEnd = (event) => {
+    if (event.propertyName !== "opacity") return;
     if (phase !== "opening") return;
 
     setPhase("open");
   };
 
-  const handleShellTransitionEnd = (e) => {
-    if (e.propertyName !== "opacity") return;
+  const handleShellTransitionEnd = (event) => {
+    if (event.propertyName !== "opacity") return;
     if (phase !== "closing") return;
 
     if (pendingRoute) {
@@ -195,7 +172,6 @@ function Login() {
               onSubmit={handleLoginSubmit}
               onGuest={handleGuest}
               onGoDashboard={handleGoDashboard}
-              onRequestInvite={handleRequestInvite}
               onSwitchMode={switchMode}
             />
           ) : (

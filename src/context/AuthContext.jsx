@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../utils/api.js";
 
 const AuthContext = createContext(null);
@@ -47,7 +47,7 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem(STORAGE_KEY);
   }, [auth, loaded]);
 
-  async function login({ email, password }) {
+  const login = useCallback(async ({ email, password }) => {
     const { token } = await api.signin({ email, password });
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ token }));
@@ -57,17 +57,17 @@ export function AuthProvider({ children }) {
     setAuth({ token, user: me });
 
     return me;
-  }
+  }, []);
 
-  async function signup({ name, avatar, email, password }) {
+  const signup = useCallback(async ({ name, avatar, email, password }) => {
     await api.signup({ name, avatar, email, password });
     return login({ email, password });
-  }
+  }, [login]);
 
-  function logout() {
+  const logout = useCallback(() => {
     setAuth(null);
     localStorage.removeItem(STORAGE_KEY);
-  }
+  }, []);
 
   const value = useMemo(() => {
     return {
@@ -79,13 +79,9 @@ export function AuthProvider({ children }) {
       signup,
       logout,
     };
-  }, [auth, loaded]);
+  }, [auth, loaded, login, signup, logout]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside an AuthProvider");
-  return ctx;
-}
+export default AuthContext;

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import "./Dashboard.css";
 import DashboardCardGrid from "../../components/DashboardCardGrid/DashboardCardGrid.jsx";
-import { useAuth } from "../../context/AuthContext.jsx";
+import { useAuth } from "../../hooks/useAuth.js";
 
 function Dashboard() {
   const { user, loaded } = useAuth();

@@ -5,12 +5,13 @@ const games = [
   {
     id: "sanguine-archipelago",
     title: "Sanguine Archipelago",
-    subtitle: "Original game world",
+    subtitle: "Live tabletop companion",
     description:
-      "A narrative-rich world of fractured islands, conflict, mystery, and long-form creative development.",
-    pillText: "In Progress",
-    to: "/games/sanguine-archipelago",
-    ctaText: "Explore Game →",
+      "A narrative-rich world of fractured islands, conflict, mystery, and long-form creative development, now taking shape as a live companion app.",
+    pillText: "Live",
+    href: "https://archipelago.crossworldcreative.com",
+    external: true,
+    ctaText: "Open Archipelago ->",
   },
   {
     id: "taxi-cop",
@@ -20,7 +21,7 @@ const games = [
       "A gritty sci-fi action concept blending absurdity, violence, and worldbuilding into a strange future ride.",
     pillText: "Concept",
     to: "/games/taxi-cop",
-    ctaText: "Explore Game →",
+    ctaText: "Explore Game ->",
   },
 ];
 
@@ -43,6 +44,8 @@ function Games() {
             subtitle={item.subtitle}
             description={item.description}
             to={item.to}
+            href={item.href}
+            external={item.external}
             pillText={item.pillText}
             ctaText={item.ctaText}
             variant="games"

@@ -9,7 +9,6 @@ function LoginForm({
   onGuest,
   onGoDashboard,
   onSwitchMode,
-  onRequestInvite,
   error,
   title = "Welcome back",
   subtitle = "Log in for full access, or continue as a guest to explore the demo.",
@@ -25,8 +24,8 @@ function LoginForm({
     };
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     await onSubmit?.({ email, password });
   };
 
@@ -38,7 +37,7 @@ function LoginForm({
         onClick={onClose}
         aria-label="Close"
       >
-        ✕
+        x
       </button>
 
       <h1 className="login__title">{title}</h1>
@@ -52,7 +51,7 @@ function LoginForm({
             className="login__input"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(event) => setEmail(event.target.value)}
             required
             placeholder="you@example.com"
             autoComplete="email"
@@ -65,9 +64,9 @@ function LoginForm({
             className="login__input"
             type="password"
             value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            onChange={(event) => setPassword(event.target.value)}
             required
-            placeholder="••••••••"
+            placeholder="********"
             autoComplete="current-password"
           />
         </label>
@@ -102,7 +101,7 @@ function LoginForm({
 
       {isAuthenticated && (
         <p className="login__already-text">
-          You&apos;re already logged in —{" "}
+          You're already logged in -{" "}
           <button
             type="button"
             className="login__link-button"

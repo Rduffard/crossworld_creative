@@ -1,6 +1,6 @@
 import { useState } from "react";
 import Modal from "../../common/Modal/Modal.jsx";
-import { useAuth } from "../../../context/AuthContext.jsx";
+import { useAuth } from "../../../hooks/useAuth.js";
 
 export default function AuthModal({
   isOpen,

@@ -3,6 +3,19 @@ import "./Projects.css";
 
 const projects = [
   {
+    id: "archipelago",
+    title: "Archipelago",
+    subtitle: "Tabletop companion for Sanguine Archipelago",
+    description:
+      "A DnD Beyond style companion app for character sheets, campaigns, and future live tabletop tools built around your original world.",
+    pillText: "New",
+    tags: ["React", "Express", "MongoDB", "Auth", "TTRPG"],
+    href: "https://archipelago.crossworldcreative.com",
+    external: true,
+    ctaText: "Open Archipelago ->",
+    featured: true,
+  },
+  {
     id: "squash",
     title: "Squash",
     subtitle: "QA + bug tracking platform (in progress)",
@@ -12,8 +25,8 @@ const projects = [
     tags: ["React", "Express", "MongoDB", "Auth", "Storage"],
     href: "https://squash.crossworldcreative.com",
     external: true,
-    ctaText: "Open Squash →",
-    featured: true,
+    ctaText: "Open Squash ->",
+    featured: false,
   },
   {
     id: "wtwr",
@@ -25,19 +38,19 @@ const projects = [
     tags: ["React", "API", "Routing"],
     href: "https://wtwr.crossworldcreative.com",
     external: true,
-    ctaText: "View Project →",
+    ctaText: "View Project ->",
   },
   {
     id: "crossworld",
     title: "Crossworld Creative",
     subtitle: "Portfolio + creative hub",
     description:
-      "Your main landing site for projects, music, games, and writing — built as a hub for everything Crossworld.",
+      "Your main landing site for projects, music, games, and writing, built as a hub for everything Crossworld.",
     pillText: "Live",
     tags: ["React", "Branding", "UI/UX"],
     href: "https://crossworldcreative.com",
     external: true,
-    ctaText: "View Project →",
+    ctaText: "View Project ->",
   },
 ];
 

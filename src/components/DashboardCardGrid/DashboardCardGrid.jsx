@@ -1,6 +1,6 @@
 import DashboardCard from "../DashboardCard/DashboardCard";
 import "./DashboardCardGrid.css";
-import { useAuth } from "../../context/AuthContext.jsx";
+import { useAuth } from "../../hooks/useAuth.js";
 
 export default function DashboardCardGrid() {
   const { loaded, isAuthenticated } = useAuth();

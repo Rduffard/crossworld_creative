@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useMemo, useState } from "react";
 
 const ModalContext = createContext(null);
 
@@ -19,8 +19,4 @@ export function ModalProvider({ children }) {
   );
 }
 
-export function useModal() {
-  const ctx = useContext(ModalContext);
-  if (!ctx) throw new Error("useModal must be used inside ModalProvider");
-  return ctx;
-}
+export default ModalContext;
