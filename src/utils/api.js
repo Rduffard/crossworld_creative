@@ -76,13 +76,13 @@ export const api = {
     }),
 
   getMe: () =>
-    request("/auth/users/me", {
+    request("/users/me", {
       method: "GET",
       auth: true,
     }),
 
   updateMe: ({ name, avatar }) =>
-    request("/auth/users/me", {
+    request("/users/me", {
       method: "PATCH",
       body: { name, avatar },
       auth: true,
