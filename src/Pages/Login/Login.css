@@ -2,7 +2,7 @@
    PAGE BACKGROUND
 =========================== */
 .login__page {
-  height: 100vh;
+  min-height: 100dvh;
   width: 100%;
   box-sizing: border-box;
 
@@ -32,7 +32,7 @@
    LANDING
 =========================== */
 .login__landing {
-  height: calc(100vh - 56px);
+  min-height: calc(100dvh - 56px);
   display: grid;
   place-items: center;
 
@@ -60,7 +60,7 @@
    SHELL (3 columns)
 =========================== */
 .login__shell {
-  height: calc(100vh - 56px);
+  min-height: calc(100dvh - 56px);
 
   display: grid;
   grid-template-columns: 1fr minmax(380px, 460px) 1fr;
@@ -418,7 +418,7 @@
 =========================== */
 .login__info {
   width: min(420px, 90%);
-  max-height: calc(100vh - 56px);
+  max-height: calc(100dvh - 56px);
   overflow-y: auto;
   overscroll-behavior: contain;
 
