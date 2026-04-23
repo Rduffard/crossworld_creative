@@ -2,7 +2,7 @@
    LANDING
 =========================== */
 .login__landing {
-  height: calc(100vh - 56px);
+  height: var(--login-shell-height);
   display: grid;
   place-items: center;
 

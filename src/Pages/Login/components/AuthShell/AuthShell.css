@@ -2,7 +2,7 @@
    SHELL (3 columns)
 =========================== */
 .login__shell {
-  height: calc(100vh - 56px);
+  height: var(--login-shell-height);
 
   display: grid;
   grid-template-columns: 1fr minmax(380px, 460px) 1fr;

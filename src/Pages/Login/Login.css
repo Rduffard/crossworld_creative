@@ -2,8 +2,11 @@
    PAGE BACKGROUND
 =========================== */
 .login__page {
+  --login-shell-height: calc(100dvh - 56px);
+  height: 100dvh;
   min-height: 100dvh;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
 
   background:
@@ -32,7 +35,7 @@
    LANDING
 =========================== */
 .login__landing {
-  min-height: calc(100dvh - 56px);
+  height: var(--login-shell-height);
   display: grid;
   place-items: center;
 
@@ -60,7 +63,7 @@
    SHELL (3 columns)
 =========================== */
 .login__shell {
-  min-height: calc(100dvh - 56px);
+  height: var(--login-shell-height);
 
   display: grid;
   grid-template-columns: 1fr minmax(380px, 460px) 1fr;
@@ -101,13 +104,22 @@
 .login__right {
   min-height: 0;
   display: grid;
-  place-items: center;
+  align-items: center;
 }
 
 /* left docks upward */
 .login__left {
-  place-items: start center;
+  justify-items: start;
+  align-items: start;
   padding-top: 28px;
+}
+
+.login__center {
+  justify-items: center;
+}
+
+.login__right {
+  justify-items: end;
 }
 
 /* left stack moves as one unit */
@@ -418,7 +430,7 @@
 =========================== */
 .login__info {
   width: min(420px, 90%);
-  max-height: calc(100dvh - 56px);
+  max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
 
@@ -475,8 +487,13 @@
   }
 
   .login__left {
-    place-items: center;
+    justify-items: center;
+    align-items: center;
     padding-top: 0;
+  }
+
+  .login__right {
+    justify-items: center;
   }
 
   .login__left-stack {
