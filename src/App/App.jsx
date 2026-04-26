@@ -10,6 +10,7 @@ import Music from "../Pages/Music/Music";
 import Games from "../Pages/Games/Games";
 import Literature from "../Pages/Literature/Literature";
 import Community from "../Pages/Community/Community";
+import CommunitySpace from "../Pages/Community/CommunitySpace";
 import Profile from "../Pages/Profile/Profile";
 import Settings from "../Pages/Settings/Settings";
 
@@ -30,6 +31,17 @@ function App() {
           <Route path="games" element={<Games />} />
           <Route path="literature" element={<Literature />} />
           <Route path="community" element={<Community />} />
+          <Route path="community/spaces/:spaceSlug" element={<CommunitySpace />} />
+        </Route>
+
+        <Route
+          element={
+            <ProtectedRoute>
+              <DashboardShell />
+            </ProtectedRoute>
+          }
+        >
+          <Route path="/settings" element={<Settings />} />
         </Route>
 
         {/* Account-only pages */}
@@ -38,14 +50,6 @@ function App() {
           element={
             <ProtectedRoute>
               <Profile />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/settings"
-          element={
-            <ProtectedRoute>
-              <Settings />
             </ProtectedRoute>
           }
         />

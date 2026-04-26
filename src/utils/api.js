@@ -5,6 +5,7 @@ const STORAGE_KEY = "cw_auth";
 function getToken() {
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return null;
+
   try {
     const parsed = JSON.parse(raw);
     return parsed?.token || null;
@@ -59,8 +60,9 @@ async function request(
   return data;
 }
 
+export { request as requestJson };
+
 export const api = {
-  // ✅ matches your backend exactly
   signup: ({ name, avatar, email, password }) =>
     request("/auth/signup", {
       method: "POST",
@@ -85,6 +87,33 @@ export const api = {
     request("/users/me", {
       method: "PATCH",
       body: { name, avatar },
+      auth: true,
+    }),
+
+  updateAccount: (account) =>
+    request("/auth/users/me", {
+      method: "PATCH",
+      body: account,
+      auth: true,
+    }),
+
+  getUserSettings: () =>
+    request("/auth/users/me/settings", {
+      method: "GET",
+      auth: true,
+    }),
+
+  updateUserSettings: (settings) =>
+    request("/auth/users/me/settings", {
+      method: "PATCH",
+      body: settings,
+      auth: true,
+    }),
+
+  updatePassword: (passwords) =>
+    request("/auth/users/me/password", {
+      method: "PATCH",
+      body: passwords,
       auth: true,
     }),
 };

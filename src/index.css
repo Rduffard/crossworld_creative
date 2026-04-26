@@ -3,9 +3,250 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* Runtime theme values are applied from src/context/themeConfig.js. */
+
+  --theme-flavor-tint: #9c7f44;
+  --theme-flavor-border: rgba(229, 190, 114, 0.18);
+  --theme-flavor-glow: rgba(229, 190, 114, 0.15);
+  --theme-flavor-glow-secondary: rgba(96, 132, 184, 0.11);
+
+  --base-bg: #090d13;
+  --base-surface: rgba(19, 24, 33, 0.78);
+  --base-surface-solid: rgba(27, 33, 43, 0.92);
+  --base-border: rgba(205, 186, 145, 0.14);
+  --base-text: rgba(244, 246, 252, 0.96);
+  --base-text-muted: rgba(201, 197, 190, 0.78);
+
+  --color-accent: #e6bf74;
+  --color-bg: var(--base-bg);
+  --color-surface: color-mix(
+    in srgb,
+    var(--base-surface) 94%,
+    var(--theme-flavor-tint) 6%
+  );
+  --color-surface-solid: color-mix(
+    in srgb,
+    var(--base-surface-solid) 92%,
+    var(--theme-flavor-tint) 8%
+  );
+  --color-border: color-mix(
+    in srgb,
+    var(--base-border) 84%,
+    rgba(255, 255, 255, 0.1) 16%
+  );
+  --color-text: var(--base-text);
+  --color-text-muted: var(--base-text-muted);
+  --color-accent-soft: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  --color-accent-border: color-mix(
+    in srgb,
+    var(--color-accent) 38%,
+    transparent
+  );
+  --focus-ring: color-mix(in srgb, var(--color-accent) 22%, transparent);
+  --color-danger: #ff7f90;
+  --color-success: #7ee2b8;
+  --color-warning: #e5be6e;
+  --color-shadow-ambient: rgba(5, 7, 11, 0.56);
+  --color-shadow-elevated: rgba(5, 7, 11, 0.62);
+  --color-glow-primary: var(--theme-flavor-glow);
+  --color-glow-secondary: var(--theme-flavor-glow-secondary);
+  --cw-bg-soft: #0c1017;
+  --cw-surface-strong: rgba(29, 35, 46, 0.94);
+  --cw-border-cool: rgba(150, 164, 188, 0.1);
+  --cw-accent-soft: var(--color-accent-soft);
+  --cw-shadow: rgba(0, 0, 0, 0.45);
+  --cw-page-bg:
+    radial-gradient(
+      circle at 10% 10%,
+      color-mix(in srgb, var(--theme-flavor-glow) 76%, transparent),
+      transparent 24%
+    ),
+    radial-gradient(
+      circle at 84% 14%,
+      color-mix(in srgb, var(--theme-flavor-glow-secondary) 72%, transparent),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 74% 100%,
+      rgba(31, 42, 64, 0.18),
+      transparent 42%
+    ),
+    radial-gradient(circle at 50% 120%, rgba(8, 12, 20, 0.42), transparent 48%),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--base-bg) 95%, #20160e 5%) 0%,
+      color-mix(in srgb, var(--base-bg) 90%, #182130 10%) 44%,
+      color-mix(in srgb, var(--base-bg) 84%, black 16%) 100%
+    );
+  --cw-panel-bg:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--theme-flavor-glow) 62%, transparent),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 85% 10%,
+      color-mix(in srgb, var(--theme-flavor-glow-secondary) 56%, transparent),
+      transparent 36%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.08),
+      rgba(255, 255, 255, 0.025)
+    ),
+    color-mix(in srgb, var(--base-surface) 91%, #182234 9%);
+  --cw-panel-bg-hero:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--theme-flavor-glow) 74%, transparent),
+      transparent 28%
+    ),
+    radial-gradient(
+      circle at bottom right,
+      color-mix(in srgb, var(--theme-flavor-glow-secondary) 62%, transparent),
+      transparent 36%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.085),
+      rgba(255, 255, 255, 0.03)
+    ),
+    color-mix(in srgb, var(--base-surface-solid) 88%, #182334 12%);
+  --cw-panel-bg-hover:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--theme-flavor-glow) 78%, transparent),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 85% 10%,
+      color-mix(in srgb, var(--theme-flavor-glow-secondary) 64%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.1),
+      rgba(255, 255, 255, 0.035)
+    ),
+    color-mix(in srgb, var(--base-surface-solid) 85%, #1b2840 15%);
+  --cw-panel-bg-selected:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--theme-flavor-glow) 82%, transparent),
+      transparent 32%
+    ),
+    radial-gradient(
+      circle at 85% 10%,
+      color-mix(in srgb, var(--theme-flavor-glow-secondary) 68%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.11),
+      rgba(255, 255, 255, 0.035)
+    ),
+    color-mix(in srgb, var(--base-surface-solid) 82%, #1f2d46 18%);
+  --cw-panel-bg-subtle:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--theme-flavor-glow) 50%, transparent),
+      transparent 34%
+    ),
+    linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.065),
+      rgba(255, 255, 255, 0.022)
+    ),
+    color-mix(in srgb, var(--base-surface) 93%, #151e2d 7%);
+  --cw-panel-border: color-mix(
+    in srgb,
+    var(--theme-flavor-border) 70%,
+    rgba(154, 167, 191, 0.16) 30%
+  );
+  --cw-panel-border-hero: color-mix(
+    in srgb,
+    var(--theme-flavor-border) 78%,
+    rgba(166, 178, 198, 0.16) 22%
+  );
+  --cw-panel-border-hover: color-mix(
+    in srgb,
+    var(--theme-flavor-border) 88%,
+    rgba(196, 204, 219, 0.18)
+  );
+  --cw-panel-pill-border: rgba(183, 190, 204, 0.12);
+  --cw-panel-shadow:
+    0 24px 60px rgba(3, 5, 9, 0.5), 0 0 0 1px rgba(229, 190, 114, 0.03),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --cw-panel-shadow-soft:
+    0 10px 24px rgba(3, 5, 9, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --cw-panel-shadow-hover:
+    0 28px 64px rgba(3, 5, 9, 0.56), 0 0 0 1px rgba(229, 190, 114, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --cw-panel-shadow-selected:
+    0 28px 64px rgba(3, 5, 9, 0.56), 0 0 0 1px rgba(229, 190, 114, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --cw-panel-chip-bg: rgba(255, 255, 255, 0.055);
+  --cw-panel-tag-bg: rgba(255, 255, 255, 0.045);
+  --cw-panel-blur: blur(12px);
+  --cw-control-bg: linear-gradient(
+    180deg,
+    color-mix(
+      in srgb,
+      color-mix(in srgb, var(--cw-bg) 86%, #1c2432 14%) 68%,
+      var(--cw-surface-elevated) 32%
+    ),
+    color-mix(in srgb, var(--cw-bg) 84%, black 16%)
+  );
+  --cw-control-bg-soft: color-mix(
+    in srgb,
+    var(--cw-surface-elevated) 68%,
+    rgba(33, 41, 57, 0.24)
+  );
+  --cw-control-bg-selected: color-mix(
+    in srgb,
+    var(--cw-accent) 18%,
+    color-mix(in srgb, var(--cw-surface-elevated) 90%, #1a2230 10%)
+  );
+  --cw-control-border: var(--cw-border);
+  --cw-control-border-strong: var(--cw-panel-pill-border);
+  --cw-control-border-active: var(--color-accent-border);
+  --cw-control-shadow: inset 0 1px 0 color-mix(in srgb, white 4%, transparent);
+  --cw-control-shadow-elevated:
+    0 8px 18px rgba(3, 5, 9, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --cw-control-focus: 0 0 0 3px var(--focus-ring);
+  --cw-button-bg: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cw-accent) 76%, #ffe4ab 24%),
+    color-mix(in srgb, var(--cw-accent) 68%, #ab7d2d 32%)
+  );
+  --cw-button-bg-hover: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--cw-accent) 84%, #fff0c6 16%),
+    color-mix(in srgb, var(--cw-accent) 74%, #b78633 26%)
+  );
+  --cw-button-border: var(--color-accent-border);
+  --cw-button-border-hover: color-mix(
+    in srgb,
+    var(--color-accent) 56%,
+    transparent
+  );
+  --cw-button-shadow:
+    0 16px 30px rgba(230, 191, 116, 0.16),
+    0 12px 28px color-mix(in srgb, var(--cw-bg) 66%, black 34%),
+    inset 0 1px 0 color-mix(in srgb, white 24%, transparent);
+
+  --cw-accent: var(--color-accent);
+  --cw-dashboard-card-gold: var(--cw-accent);
+  --cw-bg: var(--color-bg);
+  --cw-surface: var(--color-surface);
+  --cw-surface-elevated: var(--color-surface-solid);
+  --cw-text: var(--color-text);
+  --cw-muted: var(--color-text-muted);
+  --cw-border: var(--color-border);
+
+  color-scheme: dark;
+  color: var(--color-text);
+  background-color: var(--color-bg);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -20,20 +261,34 @@ body,
   min-height: 100%;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
+html {
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: visible;
+  background: var(--cw-page-bg);
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100dvh;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--cw-page-bg);
+  color: var(--color-text);
+  transition:
+    background-color 180ms ease,
+    color 180ms ease;
+}
+
+a {
+  font-weight: 500;
+  color: color-mix(in srgb, var(--color-accent) 76%, var(--color-text) 24%);
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: color-mix(in srgb, var(--color-accent) 92%, white 8%);
 }
 
 h1 {
@@ -48,27 +303,36 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface-solid) 90%, white 10%),
+    color-mix(in srgb, var(--color-surface) 96%, black 4%)
+  );
+  color: var(--color-text);
+  box-shadow:
+    0 12px 24px
+      color-mix(in srgb, var(--color-shadow-elevated) 74%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition:
+    border-color 0.25s,
+    background-color 0.25s,
+    color 0.25s,
+    transform 0.25s,
+    box-shadow 0.25s;
 }
+
 button:hover {
-  border-color: #646cff;
+  border-color: color-mix(in srgb, var(--color-accent) 60%, transparent);
+  transform: translateY(-1px);
+  box-shadow:
+    0 16px 30px
+      color-mix(in srgb, var(--color-shadow-elevated) 78%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--color-accent) 12%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
+
 button:focus,
 button:focus-visible {
   outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
 }

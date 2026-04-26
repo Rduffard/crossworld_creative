@@ -69,6 +69,19 @@ export function AuthProvider({ children }) {
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
+  const updateUser = useCallback((nextUser) => {
+    setAuth((currentAuth) => {
+      if (!currentAuth?.token) {
+        return currentAuth;
+      }
+
+      return {
+        ...currentAuth,
+        user: nextUser,
+      };
+    });
+  }, []);
+
   const value = useMemo(() => {
     return {
       user: auth?.user ?? null,
@@ -78,8 +91,9 @@ export function AuthProvider({ children }) {
       login,
       signup,
       logout,
+      updateUser,
     };
-  }, [auth, loaded, login, signup, logout]);
+  }, [auth, loaded, login, signup, logout, updateUser]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
