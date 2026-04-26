@@ -1,20 +1,16 @@
 .dashboard-card {
-  --accent: rgba(255, 200, 120, 0.55);
+  --dashboard-gold: var(--cw-dashboard-card-gold, var(--cw-accent));
+  --accent: color-mix(in srgb, var(--dashboard-gold) 55%, transparent);
 
   padding: 22px 22px 18px;
-  border-radius: 20px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  border-radius: 24px;
+  border: 1px solid var(--cw-panel-border);
+  box-shadow: var(--cw-panel-shadow);
 
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: var(--cw-panel-blur);
+  -webkit-backdrop-filter: var(--cw-panel-blur);
 
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.06),
-    rgba(255, 255, 255, 0.02)
-  );
+  background: var(--cw-panel-bg);
 
   transition:
     transform 180ms ease,
@@ -26,6 +22,20 @@
   display: block;
   position: relative;
   overflow: hidden;
+}
+
+.dashboard-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--dashboard-gold) 12%, transparent),
+      transparent 32%
+    ),
+    radial-gradient(circle at 85% 10%, var(--cw-glow-blue-soft), transparent 30%);
+  pointer-events: none;
 }
 
 .dashboard-card::after {
@@ -44,12 +54,17 @@
     opacity 180ms ease;
 }
 
+.dashboard-card > * {
+  position: relative;
+  z-index: 1;
+}
+
 .dashboard-card:hover,
 .dashboard-card:focus-visible {
-  transform: translateY(-5px);
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4);
+  transform: translateY(-2px);
+  border-color: var(--cw-panel-border-hover);
+  background: var(--cw-panel-bg-hover);
+  box-shadow: var(--cw-panel-shadow-hover);
   outline: none;
 }
 
@@ -77,13 +92,14 @@
   font-weight: 850;
   letter-spacing: -0.01em;
   line-height: 1.2;
+  color: color-mix(in srgb, var(--dashboard-gold) 28%, var(--cw-text) 72%);
 }
 
 .dashboard-card__subtitle {
   margin: 6px 0 0;
   font-size: 13px;
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.68);
+  color: var(--cw-copy-muted);
 }
 
 .dashboard-card__pill {
@@ -92,17 +108,18 @@
   font-weight: 700;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(0, 0, 0, 0.22);
-  color: rgba(255, 255, 255, 0.78);
+  border: 1px solid var(--cw-control-border-strong);
+  background: var(--cw-panel-chip-bg);
+  color: var(--cw-text);
   white-space: nowrap;
+  box-shadow: var(--cw-control-shadow);
 }
 
 .dashboard-card__description {
   margin: 0 0 16px;
   font-size: 14px;
   line-height: 1.5;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--cw-copy-muted);
   max-width: 44ch;
 }
 
@@ -117,10 +134,11 @@
   padding: 6px 10px;
   border-radius: 999px;
   font-size: 11px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(0, 0, 0, 0.25);
-  color: rgba(255, 255, 255, 0.88);
+  border: 1px solid var(--cw-control-border-strong);
+  background: var(--cw-panel-tag-bg);
+  color: var(--cw-text);
   opacity: 0.9;
+  box-shadow: var(--cw-control-shadow);
 }
 
 .dashboard-card__footer {
@@ -132,7 +150,7 @@
 .dashboard-card__cta {
   font-size: 14px;
   font-weight: 700;
-  color: rgba(140, 160, 255, 0.95);
+  color: color-mix(in srgb, var(--cw-accent) 74%, var(--cw-text) 26%);
   transition:
     transform 180ms ease,
     opacity 180ms ease;
@@ -146,33 +164,33 @@
 }
 
 .dashboard-card--featured {
-  border-color: rgba(255, 210, 130, 0.28);
+  border-color: color-mix(in srgb, var(--dashboard-gold) 28%, transparent);
 }
 
 .dashboard-card--projects {
-  --accent: rgba(255, 210, 130, 0.65);
+  --accent: var(--cw-dashboard-accent-projects);
 }
 
 .dashboard-card--music {
-  --accent: rgba(255, 170, 90, 0.65);
+  --accent: var(--cw-dashboard-accent-music);
 }
 
 .dashboard-card--games {
-  --accent: rgba(120, 210, 255, 0.65);
+  --accent: var(--cw-dashboard-accent-games);
 }
 
 .dashboard-card--literature {
-  --accent: rgba(190, 150, 255, 0.65);
+  --accent: var(--cw-dashboard-accent-literature);
 }
 
 .dashboard-card--community {
-  --accent: rgba(140, 255, 200, 0.55);
+  --accent: var(--cw-dashboard-accent-community);
 }
 
 .dashboard-card--profile {
-  --accent: rgba(255, 255, 255, 0.35);
+  --accent: var(--cw-dashboard-accent-profile);
 }
 
 .dashboard-card--settings {
-  --accent: rgba(255, 255, 255, 0.35);
+  --accent: var(--cw-dashboard-accent-settings);
 }

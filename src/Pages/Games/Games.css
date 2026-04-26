@@ -1,6 +1,6 @@
 .games-page {
   padding: 36px 48px;
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--cw-text);
 }
 
 .games-hero {
@@ -17,7 +17,7 @@
   margin: 0;
   max-width: 760px;
   line-height: 1.6;
-  opacity: 0.8;
+  color: var(--cw-muted);
 }
 
 .games-grid {

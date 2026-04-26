@@ -13,41 +13,50 @@
 }
 
 .dashboard-hero {
+  position: relative;
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
   gap: 18px;
   margin-bottom: 22px;
+  padding: 24px;
+  border-radius: 28px;
+  background: var(--cw-panel-bg-hero);
+  border: 1px solid var(--cw-panel-border-hero);
+  box-shadow: var(--cw-panel-shadow);
+  backdrop-filter: var(--cw-panel-blur);
+  -webkit-backdrop-filter: var(--cw-panel-blur);
+  overflow: hidden;
+}
 
-  padding: 22px 22px;
-  border-radius: 22px;
+.dashboard-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at top left, var(--cw-hero-glow-gold), transparent 32%),
+    radial-gradient(circle at 85% 10%, var(--cw-hero-glow-blue), transparent 30%);
+  pointer-events: none;
+}
 
-  /* 🧊 REPLACE background for depth */
-  background: rgba(20, 22, 30, 0.55);
-
-  /* 🌫️ ADD: frosted glass effect */
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-
-  border: 1px solid rgba(255, 255, 255, 0.12);
-
-  /* 💡 ADD: stronger lift */
-  box-shadow:
-    0 18px 40px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+.dashboard-hero > * {
+  position: relative;
+  z-index: 1;
 }
 
 .dashboard-hero__title {
   margin: 0 0 6px;
-  font-size: 28px;
+  font-size: clamp(1.9rem, 3vw, 2.45rem);
   font-weight: 900;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  color: var(--cw-text-strong);
 }
 
 .dashboard-hero__subtitle {
   margin: 0;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.98rem;
+  color: var(--cw-copy-soft);
 }
 
 .dashboard-hero__meta {
@@ -58,22 +67,21 @@
 }
 
 .dashboard-hero__chip {
-  font-size: 12px;
-  padding: 8px 10px;
-  border-radius: 999px;
-
-  background: rgba(0, 0, 0, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: rgba(255, 255, 255, 0.82);
-
-  /* ✨ ADD: subtle chip depth */
-  box-shadow:
-    0 6px 14px rgba(0, 0, 0, 0.35),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  display: grid;
+  gap: 0.18rem;
+  min-width: 108px;
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.68rem 0.82rem;
+  border-radius: 16px;
+  background: var(--cw-chip-bg-soft);
+  border: 1px solid var(--cw-chip-border-soft);
+  color: var(--cw-copy-faint);
 }
 
 .dashboard-hero__chip--muted {
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--cw-copy-soft);
 }
 
 @media (max-width: 700px) {
