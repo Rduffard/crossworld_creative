@@ -11,3 +11,16 @@
 .operations-finance__entries li { display: flex; gap: 1rem; justify-content: space-between; padding-block: .75rem; border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); }
 .operations-finance__entries strong, .operations-finance__entries small { display: block; overflow-wrap: anywhere; }
 .operations-finance__entries span { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.operations-finance__entry-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.operations-finance__entry-actions:empty { display: none; }
+.operations-finance nav { justify-content: start; }
+.operations-finance nav [aria-current="page"] { border-color: var(--ops-brass); }
+.operations-finance__history { overflow-x: auto; }
+.operations-finance__history table { width: 100%; text-align: start; border-collapse: collapse; }
+.operations-finance__history caption { text-align: start; margin-block: .5rem; }
+.operations-finance__history :is(th, td) { text-align: start; vertical-align: top; padding: .5rem; border-bottom: 1px solid var(--ops-border); }
+.operations-finance__history small { display: block; }
+@media (max-width: 480px) {
+  .operations-finance__entries li { flex-wrap: wrap; }
+  .operations-finance__entry-actions { flex-basis: 100%; }
+}

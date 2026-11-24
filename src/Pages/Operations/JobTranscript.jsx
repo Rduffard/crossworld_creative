@@ -4,6 +4,19 @@ import remarkGfm from "remark-gfm";
 import { conversationPage, readTurn, readConversation, conversationMarkdown, redactExport, downloadText } from "./conversationExport";
 import { MediaPreview } from "./MediaAttachments";
 import { profileNames, workspaceNames } from "./workspaces";
+import { activityEntries, agentMessages } from "./executionEvents";
+
+function AgentUpdates({ messages, actor, copy }) {
+  return messages.map((event, index) => <article className="operations__message operations__message--update" key={index}>
+    <div className="operations__message-meta">
+      <strong>{actor}</strong>
+      <span>{event.label}</span>
+      {event.at && <time dateTime={event.at}>{new Date(event.at).toLocaleTimeString()}</time>}
+    </div>
+    <div className="operations__response"><Markdown skipHtml remarkPlugins={[remarkGfm]} disallowedElements={["img"]}>{event.text}</Markdown></div>
+    <button type="button" onClick={() => copy(event.text)}>Copy message</button>
+  </article>);
+}
 
 function SessionTurns({ api, sessionId, jobId, selectJob }) {
   const [turns, setTurns] = useState([]);
@@ -88,6 +101,7 @@ function PreviousConversation({ api, sessionId, jobId, copy }) {
         {turn.attachments.length > 0 && <p>Attachments: {turn.attachments.map(({ name }) => name || "Attachment").join(", ")}</p>}
         <button type="button" onClick={() => copy(turn.prompt)}>Copy message</button>
       </article>
+      <AgentUpdates messages={turn.messages} actor={turn.actor} copy={copy} />
       <article className="operations__message">
         <div className="operations__message-meta"><strong>{turn.actor}</strong>
           {turn.finishedAt && <time dateTime={turn.finishedAt}>{new Date(turn.finishedAt).toLocaleString()}</time>}
@@ -101,12 +115,13 @@ function PreviousConversation({ api, sessionId, jobId, copy }) {
   </>;
 }
 
-export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, promptPreview, proposal, children }) {
+export default function JobTranscript({ api, job, host, copy, jobId, mode, selectJob, promptPreview, proposal, children }) {
   const answer = useMemo(() => job.events.filter((event) => event.view === "response").map((event) => event.text).join(""), [job.events]);
   const [exportProgress, setExportProgress] = useState(null);
   const [exportFailure, setExportFailure] = useState("");
   const [visibleCount, setVisibleCount] = useState(80);
   const [filter, setFilter] = useState("");
+  const [category, setCategory] = useState("");
   const [prompt, setPrompt] = useState(null);
   const [loadingPrompt, setLoadingPrompt] = useState(true);
   const [promptAttempt, retryPrompt] = useState(0);
@@ -114,29 +129,25 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
   const transcript = useRef(null);
   const followsLatest = useRef(true);
   const [showLatest, setShowLatest] = useState(false);
-  const entries = useMemo(() => {
-    const output = new Map();
-    const rows = job.events.reduce((rows, event, index) => {
-      if (!["activity", "execution"].includes(event.view)) return rows;
-      if (/^(?:Command output|Output) · /.test(event.label)) {
-        const existing = output.get(event.label);
-        if (existing) {
-          existing.text += event.text;
-          return rows;
-        }
-      }
-      const row = { ...event, index };
-      rows.push(row);
-      if (/^(?:Command output|Output) · /.test(event.label)) output.set(event.label, row);
-      return rows;
-    }, []);
-    return rows.reverse();
-  }, [job.events]);
+  const entries = useMemo(() => activityEntries(job.events), [job.events]);
+  const messages = useMemo(() => agentMessages(job.events), [job.events]);
+  const categories = [...new Set(entries.map(entry => entry.category))].sort();
   const term = filter.trim().toLowerCase();
-  const matching = term ? entries.filter((entry) => `${entry.label}\n${entry.text}`.toLowerCase().includes(term)) : entries;
+  const matching = entries.filter(entry => (!category || entry.category === category) &&
+    (!term || `${entry.label}\n${entry.text}`.toLowerCase().includes(term)));
   const workerRole = job.assignedRole || job.workerRole;
   const actor = job.conversationActor?.name || job.assigneeName || job.studioActor?.name || (job.studioTools ? "First Mate" :
     workerRole && workerRole !== "direct" ? workerRole.replaceAll("-", " ") : "Codex");
+  const confirmedModel = entries.find(entry => entry.label === "Confirmed model" && entry.view === "execution")?.text;
+  const executionSummary = [
+    ["Employee", actor], ["Status", job.status], ["Host", host?.label || "Unknown"],
+    ["Requested model", job.model || "Unknown"], ["Confirmed model", confirmedModel || "Unknown"],
+    ["Requested reasoning", job.effort || "Unknown"], ["Confirmed reasoning", "Unknown"],
+    ["Permission profile", profileNames[job.profile || "read-only"]],
+    ["Started", job.startedAt ? new Date(job.startedAt).toLocaleString() : "Not recorded"],
+    ["Objective", job.objectiveId], ["Previous turn", job.parentId], ["Delegated by", job.delegatedBy?.sourceTurnId],
+    ["Delegated review", job.delegatedReview?._id],
+  ].filter(([, value]) => value);
   const summary = [
     "# Crossworld Operations session",
     `- Session: ${job.sessionId}`,
@@ -144,7 +155,7 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
     `- Status: ${job.status}`,
     `- Workspace: ${workspaceNames[job.workspace]}`,
     `- Permissions: ${profileNames[job.profile || "read-only"]}`,
-    `- Model: ${job.model} (${job.effort})`,
+    `- Requested model: ${job.model || "Unknown"} (${job.effort || "unknown"} reasoning)`,
     job.error && `\nError: ${job.error}`,
     answer && `\n${answer}`,
   ].filter(Boolean).join("\n");
@@ -173,8 +184,24 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
     setExportFailure("");
     try {
       const turn = await readTurn(api, jobId, true);
-      await copy(redactExport(turn.activity.map(event =>
+      await copy(redactExport(activityEntries(turn.activity).map(event =>
         [event.at, turn.actor, event.label, "\n" + event.text].filter(Boolean).join(" \u00b7 ")).join("\n\n")));
+    } catch (failure) {
+      setExportFailure(failure.message);
+    } finally {
+      setExportProgress(null);
+    }
+  }
+
+  async function exportTurn() {
+    setExportProgress(0);
+    setExportFailure("");
+    try {
+      const turn = await readTurn(api, jobId, true);
+      const activity = activityEntries(turn.activity).map(event =>
+        [event.at, event.label, "\n" + event.text].filter(Boolean).join(" · ")).join("\n\n");
+      const text = [conversationMarkdown([turn]), "## Execution activity", activity].join("\n\n");
+      downloadText("operations-turn-" + jobId + ".md", "text/markdown;charset=utf-8", redactExport(text));
     } catch (failure) {
       setExportFailure(failure.message);
     } finally {
@@ -227,9 +254,11 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
       {prompt != null && <button type="button" onClick={() => copy(prompt)}>Copy message</button>}
       {job.mediaInputs?.map(({ id, name }) => <MediaPreview key={id} id={id} name={name} />)}
       </article>
+      <AgentUpdates messages={messages} actor={actor} copy={copy} />
       <article className="operations__message">
       <div className="operations__message-meta">
         <strong>{actor}</strong>
+        {answer && <span>Final response</span>}
         {job.finishedAt && <time dateTime={job.finishedAt}>{new Date(job.finishedAt).toLocaleString()}</time>}
       </div>
       {answer ? <div className="operations__response"><Markdown skipHtml remarkPlugins={[remarkGfm]} disallowedElements={["img"]}
@@ -246,6 +275,7 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
         {answer && job.events.length >= job.eventCount && <button type="button" onClick={() => copy(answer)}>Copy message</button>}
         <details><summary>Conversation actions</summary>
           <button type="button" onClick={() => copy(summary)}>Copy turn summary</button>
+          <button type="button" disabled={exportProgress !== null} onClick={exportTurn}>Download execution turn</button>
           <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("copy")}>Copy conversation</button>
           <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("markdown")}>Download Markdown</button>
           <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("json")}>Download JSON</button>
@@ -260,13 +290,22 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
     </section>
     <section className="operations__pane" aria-label="Execution" tabIndex={0}>
       <h3>Execution</h3>
+      <details>
+        <summary>Execution summary</summary>
+        <dl className="operations__execution-summary">{executionSummary.map(([label, value]) =>
+          <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
+      </details>
       {children}
       {job.sessionId && <SessionTurns api={api} key={job.sessionId} sessionId={job.sessionId} jobId={jobId} selectJob={selectJob} />}
       {entries[0] && <p>{actor} {"\u00b7"} {entries[0].label}{entries[0].at && <>{" \u00b7 "}<time dateTime={entries[0].at}>{new Date(entries[0].at).toLocaleTimeString()}</time></>}</p>}
       <button type="button" disabled={exportProgress !== null || !entries.length} onClick={copyActivity}>Copy execution activity</button>
       {mode === "Execution" && exportFailure && <p role="alert">{exportFailure}</p>}
       <label>Search execution output<input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} /></label>
-      {matching.length === 0 && <p>{term ? "No matching execution events." : "No execution events yet."}</p>}
+      <label>Event category<select value={category} onChange={event => setCategory(event.target.value)}>
+        <option value="">All categories</option>
+        {categories.map(value => <option key={value}>{value}</option>)}
+      </select></label>
+      {matching.length === 0 && <p>{term || category ? "No matching execution events." : "No execution events yet."}</p>}
       {matching.length > visibleCount && <button type="button" onClick={() => setVisibleCount((count) => count + 80)}>Show earlier events</button>}
       {matching.slice(0, visibleCount).map((event) => <details key={event.index}>
         <summary>{event.label}{event.at && <time dateTime={event.at}>{new Date(event.at).toLocaleTimeString()}</time>}</summary>

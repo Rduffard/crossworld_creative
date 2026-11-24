@@ -1,3 +1,5 @@
+import { agentMessages } from "./executionEvents.js";
+
 export async function readTurn(api, id, includeActivity = false) {
   const endpoint = "/jobs/" + id;
   const first = await api(endpoint);
@@ -14,9 +16,10 @@ export async function readTurn(api, id, includeActivity = false) {
       (first.studioTools ? "First Mate" : "Codex"),
     prompt: first.prompt || "",
     answer: events.filter(event => event.view === "response").map(event => event.text).join(""),
+    messages: agentMessages(events),
     attachments: [...(first.mediaInputs || []), ...(first.mediaOutputs || [])].map(({ name, mime }) => ({ name, mime })),
     ...(first.delegatedBy ? { delegatedFrom: first.delegatedBy.sourceTurnId, objectiveId: first.objectiveId } : {}),
-    ...(includeActivity ? { activity: events.filter(event => ["activity", "execution"].includes(event.view)).reverse() } : {}),
+    ...(includeActivity ? { activity: events.filter(event => ["activity", "execution"].includes(event.view)) } : {}),
   };
 }
 
@@ -64,6 +67,9 @@ export function redactExport(value) {
 export function conversationMarkdown(turns) {
   return turns.map(turn => [
     `## Owner${turn.createdAt ? " · " + turn.createdAt : ""}`, turn.prompt,
+    ...(turn.messages || []).flatMap(event => [
+      `### ${turn.actor} · ${event.label}${event.at ? " · " + event.at : ""}`, event.text,
+    ]),
     `## ${turn.actor}${turn.finishedAt ? " · " + turn.finishedAt : ""}`, turn.answer || `Status: ${turn.status}`,
     turn.attachments.length ? "Attachments: " + turn.attachments.map(({ name }) => name || "Attachment").join(", ") : "",
     turn.delegatedFrom ? "First Mate handoff: " + turn.delegatedFrom + ". Objective: " + turn.objectiveId : "",

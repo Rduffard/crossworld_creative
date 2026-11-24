@@ -31,6 +31,7 @@ export default function Infrastructure({ request }) {
       {!snapshot && !error && <p role="status">Checking relay status…</p>}
       {snapshot && <>
         <small>Checked {new Date(snapshot.observedAt).toLocaleTimeString()} · Cloud VM telemetry unavailable</small>
+        <p>Remote relay restart and update are unavailable. Supervisor activation and device readiness require verification on the Windows host.</p>
         {!snapshot.devices.length && <p>No home relays are registered.</p>}
         <ul className="operations-finance__entries">
           {snapshot.devices.map(device => <li key={device._id}>
@@ -40,6 +41,13 @@ export default function Infrastructure({ request }) {
                 {device.lastSeen && ` · Heartbeat ${new Date(device.lastSeen).toLocaleString()}`}
               </small>
               <small>{device.online && device.media ? "Media enabled" : "Media unavailable"}</small>
+              <dl className="operations__execution-summary">
+                <div><dt>Last reported relay version</dt><dd>{device.relayVersion || "Unknown"}</dd></div>
+                <div><dt>Installed relay version</dt><dd>Unknown from this view</dd></div>
+                <div><dt>Supervisor</dt><dd>{device.supervised == null ? "Unreported" : device.supervised ? "Reported attached" : "Standalone"}</dd></div>
+                <div><dt>Profiles</dt><dd>{device.profiles?.join(", ") || "Unreported"}</dd></div>
+                <div><dt>Review slot</dt><dd>{device.reviewSlot ? "Advertised" : "Unreported"}</dd></div>
+              </dl>
               {device.resources ? <dl>
                 <dt>CPU utilization</dt><dd>{device.resources.cpu == null ? "Unavailable" : `${device.resources.cpu}%`}</dd>
                 <dt>Memory</dt><dd>{capacity(device.resources.memory)}</dd>

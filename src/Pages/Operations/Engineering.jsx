@@ -9,6 +9,24 @@ const sections = {
   releases: ["Recent releases", item => [`releases/tag/${encodeURIComponent(item.tag_name)}`, item.name || item.tag_name, item.prerelease ? "Prerelease" : null]],
 };
 
+function DeploymentWorkflows({ repo }) {
+  const workflows = repo.details?.workflows;
+  const runs = workflows?.items?.filter(item => /\bdeploy(?:ment|ing)?\b/i.test(item.name));
+  if (!runs?.length) return null;
+  return <details>
+    <summary>Deployment workflows</summary>
+    <p>GitHub workflow outcomes. Live environment health is unavailable in this feed.</p>
+    {workflows.status !== "available" && <small>Showing cached runs · {workflows.status.replaceAll("-", " ")}</small>}
+    <ul className="operations-finance__entries">{runs.map(item => <li key={item.id}>
+      <div>
+        <a href={`https://github.com/${repo.name}/actions/runs/${item.id}`} target="_blank" rel="noreferrer">{item.name}</a>
+        <small>{[item.conclusion || item.status, item.head_branch, item.updated_at && new Date(item.updated_at).toLocaleString()]
+          .filter(Boolean).join(" · ")}</small>
+      </div>
+    </li>)}</ul>
+  </details>;
+}
+
 function RepositoryDetails({ repo }) {
   const url = `https://github.com/${repo.name}`;
   return Object.entries(sections).map(([key, [label, describe]]) => {
@@ -48,8 +66,7 @@ export default function Engineering({ request }) {
     setRefreshing(true);
     setError("");
     try {
-      await request("/engineering/refresh", { method: "POST" });
-      setSnapshot(await request("/engineering"));
+      setSnapshot(await request("/engineering/refresh", { method: "POST" }));
     } catch (failure) {
       setError(failure.message);
     } finally {
@@ -87,6 +104,7 @@ export default function Engineering({ request }) {
               {repo.pushed_at && <small>Last push {new Date(repo.pushed_at).toLocaleString()}</small>}
               {Number.isFinite(repo.open_issues_count) && <small>{repo.open_issues_count} open issues and pull requests combined</small>}
               <RepositoryDetails repo={repo} />
+              <DeploymentWorkflows repo={repo} />
             </>}
           </div>
         </li>)}

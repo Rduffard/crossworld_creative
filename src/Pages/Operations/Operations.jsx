@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { SubscriptionLink } from "./subscriptionUsage";
 import { requestJson } from "../../utils/api";
 import { MediaComposer, MediaLibrary } from "./MediaAttachments";
 import OperationsShell from "./OperationsShell";
@@ -91,10 +92,12 @@ export default function Operations() {
   const recipientId = !jobId && jobIdPattern.test(params.get("recipient") || "") ? params.get("recipient") : "";
   const page = workspaces.find(([slug]) => slug === params.get("workspace"))?.[1] || "Command Center";
   const recordGroup = params.get("source");
+  const financeView = page === "Finance" && recordGroup === "finance" ? params.get("record") : null;
   const linkedRecord = sourcePages[recordGroup] === page ? { target: page, group: recordGroup, id: params.get("record") } : null;
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState("");
   const [relayError, setRelayError] = useState("");
+  const [transcriptError, setTranscriptError] = useState(null);
   const [accessDenied, setAccessDenied] = useState(false);
   const [search, setSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
@@ -299,7 +302,7 @@ export default function Operations() {
       if (current) setRecipients(employees.filter(employee => employee.status === "available"));
     }).catch(failure => { if (current) setError(failure.message); });
     return () => { current = false; };
-  }, [page, jobId, assignment, accessDenied, api]);
+  }, [page, jobId, assignment, accessDenied]);
 
   useEffect(() => {
     if (!assignment) return;
@@ -367,6 +370,10 @@ export default function Operations() {
       try {
         const detail = await api(`/jobs/${jobId}?offset=${buffer.events.length}&compact=true`);
         if (!active) return;
+        if (!detail.events.length && buffer.events.length < detail.eventCount) {
+          throw new Error("Waiting for a committed execution event page.");
+        }
+        setTranscriptError(null);
         if (detail.events.length) {
           buffer.events.push(...detail.events);
           buffer.rendered = [...buffer.events];
@@ -376,7 +383,7 @@ export default function Operations() {
         timer = setTimeout(refresh, buffer.events.length < detail.eventCount ? 0 : document.hidden ? 10_000 : detail.status === "scheduled" ? 5000 : 900);
       } catch (failure) {
         if (!active) return;
-        setError(failure.message);
+        setTranscriptError({ jobId, message: failure.message });
         if (![401, 403, 404].includes(failure.status)) timer = setTimeout(refresh, 2500);
       }
     }
@@ -386,7 +393,7 @@ export default function Operations() {
 
   const host = snapshot?.hosts.find((entry) => entry._id === hostId && !entry.revokedAt) ||
     snapshot?.hosts.find((entry) => entry.online) || snapshot?.hosts.find((entry) => !entry.revokedAt);
-  const selectedEffort = host?.efforts?.includes(effort) ? effort : host?.efforts?.[0] || "";
+  const selectedEffort = host?.efforts?.includes(effort) ? effort : "";
   const selectedJob = job?._id === jobId ? job : null;
   const hostOnline = !relayError && host?.online;
   const selectedHost = snapshot?.hosts.find((entry) => entry._id === selectedJob?.hostId);
@@ -586,7 +593,9 @@ export default function Operations() {
     </label>}
     {recipientId && host && !host.employeeConversations && <p role="status">Choose a relay that supports employee conversations.</p>}
     {!jobId && <details className="operations__composer-options">
-    <summary>Execution settings <span>{workspaceNames[recipient?.workspace || workspace]} · {profileNames[selectedProfile]}</span></summary>
+    <summary>Execution settings <span className={selectedProfile === "full-access" ? "operations__access-warning" : undefined}>
+      {profileNames[selectedProfile]} · gpt-6.2-sol · {selectedEffort || "Effort unavailable"}
+    </span></summary>
     <div className="operations__selectors">
       <label>Host<select value={host?._id || ""} onChange={(event) => { setOutputScope(null); setHostId(event.target.value); }}>
         <option value="" disabled>Select host</option>
@@ -607,7 +616,7 @@ export default function Operations() {
       </>}
       <label>Model<select defaultValue="gpt-6.2-sol"><option value="gpt-6.2-sol">GPT-6.2 Sol</option></select></label>
       <label>Reasoning effort<select value={selectedEffort} onChange={(event) => setEffort(event.target.value)}>
-        {!selectedEffort && <option value="">Awaiting host</option>}
+        {!selectedEffort && <option value="" disabled>{host?.efforts?.length ? "Select a supported effort" : "Awaiting host"}</option>}
         {host?.efforts?.map((entry) => <option key={entry}>{entry}</option>)}
       </select></label>
     </div>
@@ -643,6 +652,9 @@ export default function Operations() {
         This relay accepts up to {(jobId ? continuationLimit : startLimit).toLocaleString()} characters per message.
       </p>}
       {promptError && <p role="alert">{promptError}</p>}
+      {!recipientId && (selectedJob?.profile || selectedProfile) === "read-only" &&
+        /^(?:please\s+)?(?:implement|fix|refactor|deploy|modify|edit)\b/i.test(prompt.trimStart()) &&
+        <p role="status">Read Only is selected. File changes and deployment require a separately authorized execution with the appropriate permissions.</p>}
       {attachment.error && <p role="alert">{attachment.error}</p>}
       {attachment.message && <p role="status">{attachment.message}</p>}
       {draft.error && <p role="alert">{draft.error}</p>}
@@ -696,7 +708,8 @@ export default function Operations() {
           {Array.from(dateGroups, ([group, conversations]) => <section key={group}>
           <h3>{group}</h3><ul>{conversations.map(([id, turns]) => {
             const latest = turns[0];
-            const label = latest.title || turns.find((entry) => !entry.parentId)?.prompt || latest.prompt;
+            const preview = (turns.find((entry) => !entry.parentId)?.prompt || latest.prompt || "").trim().replace(/\s+/g, " ");
+            const label = latest.title || (preview.length > 64 ? preview.slice(0, 63).trimEnd() + "…" : preview);
             const active = turns.some(entry => entry._id === jobId) || selectedJob?.sessionId === id;
             const employee = latest.conversationActor?.name || latest.assigneeName || latest.studioActor?.name;
             return <li key={id}>
@@ -769,11 +782,19 @@ export default function Operations() {
           </details>
   </>;
   const pendingApprovalCount = governance?.requests.filter((request) => request.state === "pending").length || 0;
+  const knownCapacity = !relayError && snapshot.hosts.length > 0 &&
+    snapshot.hosts.every(entry => Number.isInteger(entry.activeSlots) && Number.isInteger(entry.relaySlots));
+  const occupancy = knownCapacity ? snapshot.hosts.reduce((total, entry) => ({
+    active: total.active + entry.activeSlots,
+    open: total.open + Math.max(0, entry.relaySlots - entry.activeSlots),
+  }), { active: 0, open: 0 }) : null;
 
   return <OperationsShell page={page} navigate={setPage} keyboardOpen={keyboardOpen} paused={snapshot.dispatch?.paused} health={{
     online: !!hostOnline,
     label: relayError ? "API unavailable" : hostOnline ? "Relay online" : "Relay offline",
-  }}>
+  }} occupancy={occupancy} pendingApprovals={pendingApprovalCount} openApprovals={() => setShowApprovalInbox(true)}
+    subscription={<SubscriptionLink observation={snapshot.hosts.find(entry => entry.online && entry.usage)?.usage ||
+    snapshot.hosts.find(entry => !entry.revokedAt && entry.usage)?.usage} />}>
       <Suspense fallback={<p role="status">Loading workspace…</p>}>
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
         openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
@@ -795,7 +816,8 @@ export default function Operations() {
       {page === "Activity" && <Activity api={api} openSource={openSource} />}
       {page === "Knowledge" && <Knowledge key={linkedRecord?.id ?? "library"} api={api} initialId={linkedRecord?.id} />}
       {page === "Art Department" && <ArtDepartment api={api} openSource={openSource} />}
-      {page === "Finance" && <Finance request={api} />}
+      {page === "Finance" && <Finance request={api} view={financeView} onView={view => setPage("Finance", "finance", view)}
+        hosts={snapshot.hosts.filter(entry => !entry.revokedAt)} />}
       {page === "Engineering" && <Engineering request={api} />}
       {page === "Schedules" && <section className="operations__panel">
         <button type="button" onClick={() => { setAssignment(null); selectJob(null); }}>Open scheduling composer</button>
@@ -927,16 +949,19 @@ export default function Operations() {
             <h1>Command Center</h1>
             <p>Send a message to start a conversation, or open one from history.</p>
           </div>}
-          {jobId && !selectedJob && !error && <p className="operations__loading" role="status">Loading conversation…</p>}
+          {transcriptError?.jobId === jobId && <p role="status">Conversation sync · {transcriptError.message}</p>}
+          {jobId && !selectedJob && !error && transcriptError?.jobId !== jobId && <p className="operations__loading" role="status">Loading conversation…</p>}
           {selectedJob && <section className="operations__transcript">
             <header>
               <div className="operations__conversation-title">
                 <h1>{selectedJob.title || "Conversation"}</h1>
+                <div className="operations__conversation-status">
                 <span role="status">
                   {selectedJob.status === "running" && selectedHost?.online && <span className="operations__processing" aria-hidden="true" />}
                   {executionStatus(selectedJob, selectedHost)}
                 </span>
                 <ExecutionElapsed startedAt={selectedJob.startedAt} finishedAt={selectedJob.finishedAt} active={selectedJob.status === "running"} />
+                </div>
               </div>
               {running.includes(selectedJob.status) && <button type="button" disabled={busy || selectedJob.status === "cancelling"}
                 onClick={() => action(async () => {
@@ -1013,7 +1038,7 @@ export default function Operations() {
                 onClick={() => changeMode(entry)}>{entry}</button>)}
             </div>
             <Suspense fallback={<p role="status">Loading transcript…</p>}>
-            <JobTranscript api={api} key={jobId} job={selectedJob} jobId={jobId} mode={mode} copy={copy} selectJob={selectJob}
+            <JobTranscript api={api} key={jobId} job={selectedJob} host={selectedHost} jobId={jobId} mode={mode} copy={copy} selectJob={selectJob}
               promptPreview={sessions.get(selectedJob.sessionId)?.find((turn) => turn._id === jobId)?.prompt}
               proposal={selectedJob.studioTools && <Suspense fallback={null}>
                 <ObjectiveProposal key={jobId} request={api} jobId={jobId} jobStatus={selectedJob.status}

@@ -5,13 +5,15 @@ const roleLabels = {
   worker: "Worker", lead: "Department lead", "first-mate": "First Mate", "art-director": "Art Director", qa: "Quality assurance", air: "AIR",
 };
 
-function Room({ name, members, assignments, openEmployee, openJob }) {
+function Room({ name, members, assignments, projectAssignments, openEmployee, openJob }) {
   return <section className="operations__room" aria-label={name}>
     <h3>{name}</h3>
     {members.length === 0 && <p>No employees assigned.</p>}
     <ul className="operations__room-list">{members.map((employee) => {
-      const current = assignments.find((run) => run.employeeId === employee._id && activeStates.includes(run.status));
-      const state = current?.status || employee.status;
+      const turns = assignments.filter(run => run.employeeId === employee._id && activeStates.includes(run.status));
+      const current = turns.find(run => ["running", "cancelling"].includes(run.status)) || turns[0];
+      const assigned = projectAssignments.some(run => run.employeeId === employee._id && run.status === "assigned");
+      const state = current?.status || (employee.status === "available" && assigned ? "assigned" : employee.status);
       return <li key={employee._id} className="operations__occupant" data-state={state}>
         <span className="operations__occupant-symbol" aria-hidden="true" />
         <div>
@@ -50,7 +52,7 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
   }, [api]);
 
   if (!snapshot) return <p role={error ? "alert" : "status"}>{error || "Loading office…"}</p>;
-  const { departments, employees, observedRuns = [] } = snapshot.directory;
+  const { departments, employees, observedRuns = [], projectAssignments = [] } = snapshot.directory;
   const rooms = [
     { id: "owner", name: "Direct reports", members: employees.filter((employee) => !employee.departmentId) },
     ...departments.map((department) => ({
@@ -65,7 +67,7 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
     {error && <p role="alert">Office updates unavailable. Showing the last successful refresh. {error}</p>}
     <div className="operations__floorplan">
       {rooms.map((room) => <Room key={room.id} name={room.name} members={room.members}
-        assignments={observedRuns} openEmployee={openEmployee} openJob={openJob} />)}
+        assignments={observedRuns} projectAssignments={projectAssignments} openEmployee={openEmployee} openJob={openJob} />)}
       <section className="operations__room operations__machine-room" aria-label="Execution hosts">
         <h3>Execution hosts</h3>
         {snapshot.stations.length === 0 && <p>No execution hosts reported.</p>}

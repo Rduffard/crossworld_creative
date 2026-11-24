@@ -1,21 +1,15 @@
 import { useEffect, useState } from "react";
+import { SubscriptionLink } from "./subscriptionUsage";
 
 const time = (value) => value
   ? <time dateTime={value}>{new Date(value).toLocaleString()}</time>
   : "No heartbeat recorded";
 
 function Usage({ observation, resumesAt }) {
-  if (!observation) return <small>Subscription usage unavailable</small>;
-  const windows = [["Primary", observation.primary], ["Secondary", observation.secondary]];
-  return <details className="operations__station-usage">
-    <summary>Subscription usage</summary>
-    {windows.map(([label, window]) => window && <p key={label}>
-      {label} · {window.usedPercent}% used{window.windowDurationMins && ` over ${window.windowDurationMins.toLocaleString()} min`}
-      <small>Resets {window.resetsAt ? time(new Date(window.resetsAt * 1000).toISOString()) : "at an unreported time"}</small>
-    </p>)}
+  return <div className="operations__station-usage">
+    <SubscriptionLink observation={observation} />
     {resumesAt && <p>Dependent turns are currently held until {time(new Date(resumesAt).toISOString())}.</p>}
-    <small>Last observed {time(new Date(observation.observedAt).toISOString())}</small>
-  </details>;
+  </div>;
 }
 
 export default function Headquarters({ api, openJob, openObjectives, openWorkforce, openProject, openFinance, pendingGovernance, openGovernance }) {
@@ -85,7 +79,8 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
         <div><dt>Turns running</dt><dd>{(jobs.running || 0) + (jobs.cancelling || 0)}</dd></div>
         <div><dt>Turns waiting</dt><dd>{(jobs.queued || 0) + (jobs.waiting || 0)}</dd></div>
         <div><dt>Scheduled turns</dt><dd>{jobs.scheduled || 0}</dd></div>
-        <div><dt>Active objectives</dt><dd><button type="button" onClick={openObjectives}>{objectives.active || 0}<span className="operations__sr-only"> active objectives</span></button></dd></div>
+        <div><dt>Active objectives</dt><dd><button type="button" onClick={openObjectives}
+          aria-label={`View objectives, ${objectives.active || 0} active`}>{objectives.active || 0}<small>View objectives</small></button></dd></div>
       </dl>
     </section>
     <section className="operations__panel operations__office" aria-labelledby="operations-office">

@@ -10,7 +10,8 @@ function WorkspaceLinks({ page, navigate }) {
   </div>);
 }
 
-export default function OperationsShell({ page, navigate, health, paused, keyboardOpen, children }) {
+export default function OperationsShell({ page, navigate, health, paused, keyboardOpen, subscription, occupancy,
+  pendingApprovals, openApprovals, children }) {
   const workspaces = useRef(null);
   const workspace = useRef(null);
 
@@ -25,7 +26,12 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
     <header className="operations__topbar">
       <Link className="operations__wordmark" to="/dashboard">Crossworld <span>Operations</span></Link>
       <div className="operations__topbar-tools">
+        {subscription}
+        {occupancy && <span className="operations__topbar-capacity" title="Unoccupied relay slots; dispatch and provider limits still apply">
+          {occupancy.active} active · {occupancy.open} open
+        </span>}
         <span className="operations__health" data-online={health.online} role="status">{health.label}</span>
+        {pendingApprovals > 0 && <button type="button" onClick={openApprovals}>{pendingApprovals} pending approvals</button>}
         {paused && <button type="button" onClick={() => navigate("Settings")}>Dispatch paused</button>}
         <Link className="operations__account" to="/profile">Account</Link>
       </div>

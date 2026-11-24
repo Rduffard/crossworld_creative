@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { profileNames } from "./workspaces";
+import WorkforcePolicy from "./WorkforcePolicy";
 
 const roles = {
   worker: "Worker", lead: "Department lead", "first-mate": "First Mate", "art-director": "Art Director", qa: "Quality assurance", air: "AIR",
@@ -42,6 +44,7 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
+  const [policyOpen, setPolicyOpen] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -73,6 +76,7 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
   const projects = projectAssignments.filter((assignment) => assignment.employeeId === employee?._id);
   const position = positions.find((entry) => entry.key === employee?.role);
   const supervisor = employees.find((entry) => entry._id === employee?.supervisorId);
+  const department = departments.find((entry) => entry._id === employee?.departmentId);
   const employeeList = (members) => <ul className="operations__feed">{members.map((entry) => <li key={entry._id}>
     <button type="button" aria-pressed={selection === entry._id} onClick={() => setSelection(entry._id)}>{entry.name}</button>
     <small>{roles[entry.role]} · {entry.status}</small>
@@ -81,6 +85,10 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
   return <section className="operations__layout operations__knowledge" aria-label="Workforce">
     <section className="operations__panel">
       <h2>Organization</h2>
+      <details onToggle={event => setPolicyOpen(event.currentTarget.open)}>
+        <summary>Execution configuration</summary>
+        {policyOpen && <WorkforcePolicy api={api} employees={employees} departments={departments} />}
+      </details>
       <h3>Owner</h3>
       {employeeList(employees.filter((entry) => !entry.departmentId))}
       {departments.map((department) => <section key={department._id}>
@@ -98,6 +106,7 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
       {position && <p><strong>{position.name}</strong>{supervisor && <> · Reports to{" "}
         <button className="operations__source" type="button" onClick={() => setSelection(supervisor._id)}>{supervisor.name}</button>
       </>}</p>}
+      {department && <p>Department · {department.name}</p>}
       {employee?.status === "available" && <button type="button" onClick={() => messageEmployee(employee)}>Message employee</button>}
       {(employee || selection === "employee") && <EmployeeForm key={employee ? employee._id + "/" + employee.revision : "new"}
         employee={employee} departments={departments} save={save} pending={pending} />}
@@ -113,11 +122,17 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
             <small>{assignment.status}</small>
           </li>)}</ul>
         </>}
-        <h3>Recent assigned turns</h3>
+        <h3>Recent employee executions</h3>
         {assignments.length === 0 && <p>No recent turns recorded for {employee.name}.</p>}
         <ul className="operations__feed">{assignments.map((run) => <li key={run._id}>
-          <button type="button" onClick={() => openJob(run._id, "Conversation")}>{run.title}</button>
-          <small>{run.status}</small>
+          <button type="button" onClick={() => openJob(run._id, "Execution")}>{run.title || "Open execution"}</button>
+          <small>{run.status}{run.startedAt && ` · Started ${new Date(run.startedAt).toLocaleString()}`}
+            {run.finishedAt && ` · Finished ${new Date(run.finishedAt).toLocaleString()}`}</small>
+          <small>Requested {run.model || "model unknown"} · {run.effort || "reasoning unknown"} · {profileNames[run.profile] || "Permission profile unknown"}</small>
+          {run.delegatedBy?.sourceTurnId && <button type="button" className="operations__source"
+            onClick={() => openJob(run.delegatedBy.sourceTurnId, "Execution")}>Open initiating execution</button>}
+          {run.status === "completed" && run.objectiveId && !run.parentId && <button type="button" className="operations__source"
+            onClick={() => openRecord("report", run._id)}>Open report</button>}
         </li>)}</ul>
       </section>}
       {selection === "department" && <form onSubmit={(event) => {
