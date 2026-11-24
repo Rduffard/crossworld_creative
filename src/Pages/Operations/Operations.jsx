@@ -25,6 +25,8 @@ const OrganizationSetup = lazy(() => import("./OrganizationSetup"));
 const Projects = lazy(() => import("./Projects"));
 const ReferenceLibrary = lazy(() => import("./ReferenceLibrary"));
 const VirtualOffice = lazy(() => import("./VirtualOffice"));
+const ArtifactGallery = lazy(() => import("./ArtifactGallery"));
+const Quality = lazy(() => import("./Quality"));
 const Reports = lazy(() => import("./Reports"));
 const Workflow = lazy(() => import("./Workflow"));
 const Workforce = lazy(() => import("./Workforce"));
@@ -823,6 +825,13 @@ export default function Operations() {
         messageEmployee={messageEmployee} canMessage={employee => !!hostOnline && (employee.role === "first-mate" ||
           !!(host.employeeConversations && host.profiles?.includes("read-only")))}
         openHeadquarters={() => setPage("Headquarters")} />}
+      {page === "Artifacts" && <ArtifactGallery api={api} artifactId={params.get("artifact")} openArtifact={id => {
+        const next = new URLSearchParams(params);
+        if (id) next.set("artifact", id);
+        else next.delete("artifact");
+        setParams(next);
+      }} />}
+      {page === "Quality" && <Quality />}
       {page === "Activity" && <Activity api={api} openSource={openSource} />}
       {page === "Knowledge" && <Knowledge key={linkedRecord?.id ?? "library"} api={api} initialId={linkedRecord?.id} />}
       {page === "Art Department" && <ArtDepartment api={api} openSource={openSource} />}

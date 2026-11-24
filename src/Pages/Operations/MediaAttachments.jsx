@@ -191,7 +191,7 @@ export function MediaComposer({ hostId, api, attachments, onChange, onBusy, disa
   </div>;
 }
 
-export function MediaPreview({ id, name }) {
+export function MediaPreview({ id, name, inspect = false }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -224,6 +224,8 @@ export function MediaPreview({ id, name }) {
       {loading && <button type="button" onClick={() => request.current?.abort()}>Cancel preview loading</button>}
       {preview && <>
         {name && <span>{name}</span>}
+        {inspect && <a href={preview.url} target="_blank" rel="noopener noreferrer">Open original</a>}
+        {inspect && <a href={preview.url} download={name || "artifact"}>Download</a>}
         <button type="button" onClick={() => setPreview(null)}>Close preview</button>
       </>}
       {error && <p role="alert">{error}</p>}
@@ -255,7 +257,7 @@ function FrameExtractor({ api, item, available, onReady }) {
   </details>;
 }
 
-export function MediaLibrary({ api }) {
+export function MediaLibrary({ api, openArtifact }) {
   const [records, setRecords] = useState(null);
   const [host, setHost] = useState("");
   const [error, setError] = useState("");
@@ -292,7 +294,9 @@ export function MediaLibrary({ api }) {
     {!active?.online && !error && <p>No media device is currently available.</p>}
     <label>Find an upload <input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} /></label>
     {items?.map((item) => <div className="operations-media__record" key={item._id}>
-      <MediaPreview id={item._id} name={item.name} />
+      {openArtifact ? <button type="button" onClick={() => openArtifact(item._id)}>{item.name}</button>
+        : <MediaPreview id={item._id} name={item.name} />}
+      {openArtifact && <small>{storageSize(item.size)} · {item.mime || "Type unavailable"}{item.review && " · " + item.review.state}</small>}
       {item.derivedFrom && <small>Requested offset {(item.derivedFrom.requestedOffsetMs / 1000).toFixed(3)} s · Derived video frame</small>}
       {item.mime?.startsWith("video/") && <FrameExtractor api={api} item={item}
         available={records.hosts.some((device) => device._id === item.hostId && device.online && device.videoFrames)}

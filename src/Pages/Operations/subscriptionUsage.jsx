@@ -25,15 +25,27 @@ function windowLabel(minutes) {
   return `${minutes.toLocaleString()}-minute window`;
 }
 
+function remainingAllowance(window) {
+  const used = window?.usedPercent;
+  return typeof used === "number" && Number.isFinite(used) && used >= 0 && used <= 100 ? 100 - used : null;
+}
+
+function percent(value) {
+  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
+}
+
 export function SubscriptionLink({ observation }) {
   const now = useUsageClock();
   const state = usageState(observation, now);
   const window = [observation?.primary, observation?.secondary].find(window =>
     window?.windowDurationMins === 10_080 && (!window.resetsAt || window.resetsAt * 1000 > now));
-  const weekly = state === "Fresh" && window;
+  const remaining = state === "Fresh" ? remainingAllowance(window) : null;
+  const label = remaining === null ? "Usage: " + (state === "Fresh" ? "weekly data unavailable" : state.toLowerCase())
+    : "Weekly: " + percent(remaining) + "% remaining";
   return <Link to={subscriptionPath} className="operations__subscription-link"
-    aria-label={weekly ? `Subscriptions and usage, weekly allowance ${window.usedPercent}% used` : `Subscriptions and usage, ${state.toLowerCase()}`}>
-    {weekly ? `Weekly ${window.usedPercent}%` : `Usage · ${state.toLowerCase()}`}
+    data-low={remaining !== null && remaining <= 15}
+    title={window?.resetsAt ? "Resets " + new Date(window.resetsAt * 1000).toLocaleString() : undefined}>
+    {label}
   </Link>;
 }
 
@@ -61,7 +73,7 @@ function UsageHistory({ request, host, observedAt }) {
         <tbody>{result.observations.slice(0, visible).map(point => <tr key={point.observedAt}>
           <td><time dateTime={new Date(point.observedAt).toISOString()}>{new Date(point.observedAt).toLocaleString()}</time></td>
           {[point.primary, point.secondary].map((window, index) => <td key={index}>{window ? <>
-            {window.usedPercent}% used
+            {remainingAllowance(window) === null ? "Unavailable" : percent(remainingAllowance(window)) + "% remaining"}
             {window.resetsAt && <small>Reset {new Date(window.resetsAt * 1000).toLocaleString()}</small>}
           </> : "Unavailable"}</td>)}
         </tr>)}</tbody>
@@ -87,10 +99,10 @@ export function SubscriptionDetails({ hosts, request }) {
         <dl>{[["Primary", usage.primary], ["Secondary", usage.secondary]].map(([name, window]) => {
           if (!window) return <div key={name}><dt>{name} window</dt><dd>Unavailable</dd></div>;
           const reset = window.resetsAt ? new Date(window.resetsAt * 1000) : null;
-          const remaining = Math.max(0, 100 - window.usedPercent).toLocaleString(undefined, { maximumFractionDigits: 2 });
+          const remaining = remainingAllowance(window);
           return <div key={name}>
             <dt>{window.windowDurationMins === 10_080 ? "Weekly" : name} allowance</dt>
-            <dd>{window.usedPercent}% used · {remaining}% remaining
+            <dd>{remaining === null ? "Unavailable" : percent(remaining) + "% remaining"} · {window.usedPercent}% used
               {window.windowDurationMins && ` · ${windowLabel(window.windowDurationMins)}`}</dd>
             <dd>Reset {reset ? <time dateTime={reset.toISOString()}>{reset.toLocaleString()}</time> : "unreported"}</dd>
           </div>;

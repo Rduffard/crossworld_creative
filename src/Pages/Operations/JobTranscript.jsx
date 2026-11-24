@@ -269,7 +269,10 @@ export default function JobTranscript({ api, job, host, copy, jobId, mode, selec
         : <p>No final response yet.</p>}
       {!!job.mediaOutputs?.length && <section aria-label="Returned media">
         <h4>Returned media</h4>
-        {job.mediaOutputs.map(({ id, name }) => <MediaPreview key={id} id={id} name={name} />)}
+        {job.mediaOutputs.map(({ id, name }) => <div key={id}>
+          <MediaPreview id={id} name={name} />
+          <a href={"/operations?workspace=artifacts&artifact=" + encodeURIComponent(id)}>Inspect artifact</a>
+        </div>)}
       </section>}
       <div className="operations__modes">
         {answer && job.events.length >= job.eventCount && <button type="button" onClick={() => copy(answer)}>Copy message</button>}

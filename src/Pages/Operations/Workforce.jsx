@@ -9,13 +9,23 @@ const roles = {
   worker: "Worker", lead: "Department lead", "first-mate": "First Mate", "art-director": "Art Director", qa: "Quality assurance", air: "AIR",
 };
 
-function EmployeeForm({ employee, departments, save, pending }) {
+const identityFields = [
+  ["background", "Background", 1200], ["temperament", "Temperament", 300],
+  ["communication", "Communication style", 600], ["standards", "Professional standards", 1200],
+  ["terminology", "Preferred terminology", 400],
+];
+
+function EmployeeForm({ employee, departments, identityEnabled, save, pending }) {
   const [role, setRole] = useState(employee?.role || "worker");
   const reportsToOwner = role === "air" || role === "first-mate";
   return <form onSubmit={(event) => {
     event.preventDefault();
     const body = Object.fromEntries(new FormData(event.currentTarget));
     body.departmentId ||= "";
+    if (identityEnabled) {
+      body.identity = Object.fromEntries(identityFields.map(([key]) => [key, body["identity-" + key]]));
+      for (const [key] of identityFields) delete body["identity-" + key];
+    }
     if (employee) body.revision = employee.revision;
     save("/employees" + (employee ? "/" + employee._id : ""), body, employee ? "PUT" : "POST");
   }}>
@@ -37,6 +47,12 @@ function EmployeeForm({ employee, departments, save, pending }) {
     </select></label>
     <label>Responsibilities <textarea name="responsibilities" maxLength={2000} defaultValue={employee?.responsibilities} required /></label>
     <label>Instructions <textarea name="instructions" maxLength={6000} defaultValue={employee?.instructions} /></label>
+    {identityEnabled && <details>
+      <summary>Identity and communication</summary>
+      {identityFields.map(([key, label, limit]) => <label key={key}>{label}
+        <textarea name={"identity-" + key} maxLength={limit} defaultValue={employee?.identity?.[key]} />
+      </label>)}
+    </details>}
     <button type="submit" disabled={pending}>{employee ? "Save employee" : "Add employee"}</button>
   </form>;
 }
@@ -120,7 +136,7 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
       </details>}
       {employee?.status === "available" && <button type="button" onClick={() => messageEmployee(employee)}>Message employee</button>}
       {(employee || selection === "employee") && <EmployeeForm key={employee ? employee._id + "/" + employee.revision : "new"}
-        employee={employee} departments={departments} save={save} pending={pending} />}
+        employee={employee} departments={departments} identityEnabled={directory.capabilities?.employeeIdentity === true} save={save} pending={pending} />}
       {employee && <section>
         <button type="button" onClick={() => openWorkflow(employee._id)}>View employee workflow</button>
         {projects.length > 0 && <>

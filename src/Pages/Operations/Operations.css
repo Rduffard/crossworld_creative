@@ -721,3 +721,7 @@
 @media (max-width: 768px) {
   .operations .operations__projects, .operations__project-lanes { grid-template-columns: minmax(0, 1fr); }
 }
+.operations .operations__subscription-link[data-low="true"] { color: #f4b061; font-weight: 700; }
+@media (max-width: 560px) {
+  .operations__topbar-tools .operations__subscription-link { white-space: normal; }
+}
