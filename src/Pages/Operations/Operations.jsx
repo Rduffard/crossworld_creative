@@ -3,6 +3,8 @@ import Markdown from "react-markdown";
 import { requestJson } from "../../utils/api";
 import Objectives from "./Objectives";
 import Headquarters from "./Headquarters";
+import Knowledge from "./Knowledge";
+import Workforce from "./Workforce";
 import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
 } from "./promptEditor";
@@ -165,6 +167,12 @@ export default function Operations() {
   const [busy, setBusy] = useState(false);
   const pendingSubmit = useRef(null);
   const pendingSteer = useRef(null);
+
+  function openJob(id, view) {
+    selectJob(id);
+    changeMode(view);
+    setPage("Command Center");
+  }
 
   function selectJob(id) {
     const url = new URL(window.location.href);
@@ -443,15 +451,13 @@ export default function Operations() {
         </div>}
       </header>
       <nav className="operations__modes" aria-label="Operations navigation">
-        {["Headquarters", "Command Center", "Objectives"].map((entry) => <button key={entry} type="button"
+        {["Headquarters", "Command Center", "Objectives", "Workforce", "Knowledge"].map((entry) => <button key={entry} type="button"
           aria-pressed={page === entry} onClick={() => setPage(entry)}>{entry}</button>)}
       </nav>
-      {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openJob={(id, view) => {
-        selectJob(id);
-        changeMode(view);
-        setPage("Command Center");
-      }} />}
-      {page === "Objectives" && <Objectives api={api} />}
+      {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openJob={openJob} />}
+      {page === "Objectives" && <Objectives api={api} openJob={openJob} />}
+      {page === "Workforce" && <Workforce api={api} openJob={openJob} />}
+      {page === "Knowledge" && <Knowledge api={api} />}
       {page === "Command Center" && <>
       {error && <p role="alert">{error}</p>}
       <p role="status">{notice}</p>

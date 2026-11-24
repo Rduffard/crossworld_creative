@@ -155,3 +155,10 @@
 @media (max-width: 760px) {
   .operations__headquarters { grid-template-columns: minmax(0, 1fr); }
 }
+
+.operations__knowledge { grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); }
+.operations__knowledge article { overflow-wrap: anywhere; }
+.operations__knowledge-text { white-space: pre-wrap; }
+@media (max-width: 760px) {
+  .operations__knowledge { grid-template-columns: minmax(0, 1fr); }
+}

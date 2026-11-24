@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
+import ObjectiveReviews from "./ObjectiveReviews";
 
-export default function Objectives({ api }) {
+export default function Objectives({ api, openJob }) {
   const [records, setRecords] = useState(null);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState("");
@@ -93,6 +94,7 @@ export default function Objectives({ api }) {
         <h2>{selected.title}</h2>
         <p>{selected.status === "completed" ? "All criteria accepted" : "Awaiting owner validation"}</p>
         <pre>{selected.instruction}</pre>
+        <ObjectiveReviews api={api} objective={selected} openJob={openJob} />
         <h3>Acceptance criteria</h3>
         <ol>{selected.criteria.map((criterion) => <li key={criterion.id}>
           <strong>{criterion.text}</strong>
