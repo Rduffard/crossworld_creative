@@ -37,3 +37,23 @@
 .operations__response li { margin: 0; }
 .operations__response pre { padding: 12px; border: 1px solid var(--cw-panel-border-hero); border-radius: 8px; }
 @media (max-width: 760px) { .operations__layout { grid-template-columns: minmax(0, 1fr); } }
+
+.operations__editor { margin-block: 12px; }
+.operations__editor textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 70dvh;
+  font-family: ui-monospace, monospace;
+  font-size: max(1rem, 16px);
+}
+.operations__editor input[type="file"] { box-sizing: border-box; width: 100%; min-width: 0; }
+.operations__editor p { margin: 6px 0; overflow-wrap: anywhere; }
+.operations__editor-tools, .operations__prompt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.operations__editor-tools { justify-content: space-between; margin-block: 8px; }
+
+@media (max-width: 760px) {
+  .operations__layout > .operations__panel { min-width: 0; }
+  .operations__layout > aside { grid-row: 2; }
+  .operations__editor-tools button, .operations__prompt-actions button { min-height: 44px; }
+  .operations__prompt-actions button { flex: 1 1 140px; }
+}

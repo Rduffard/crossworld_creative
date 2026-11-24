@@ -1,10 +1,20 @@
 import { useEffect, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { requestJson } from "../../utils/api";
+import {
+  ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
+} from "./promptEditor";
 import "./Operations.css";
 
 const api = (path, options) => requestJson(`/operations${path}`, { auth: true, ...options });
-const post = (path, body) => api(path, { method: "POST", body });
+async function post(path, body) {
+  try {
+    return await api(path, { method: "POST", body });
+  } catch (failure) {
+    if (failure.status === 413) throw new Error("The request exceeds the Operations transport limit. Shorten the prompt and try again.");
+    throw failure;
+  }
+}
 const running = ["waiting", "queued", "running", "cancelling"];
 const profileNames = { "read-only": "Read-only inspection", development: "Development repository editing", workshop: "Workshop editing" };
 const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
@@ -12,6 +22,7 @@ const workspaceNames = { development: "C: · Development", workshop: "D: · Art 
 const modes = ["Activity", "Execution", "Summary"];
 
 function Transcript({ job, mode, copy }) {
+  const [visibleCount, setVisibleCount] = useState(80);
   const answer = job.events.filter((event) => event.view === "response").map((event) => event.text).join("");
   if (mode === "Summary") {
     const summary = [
@@ -42,7 +53,11 @@ function Transcript({ job, mode, copy }) {
     commandOutput.set(event.label, (commandOutput.get(event.label) || "") + event.text);
     return first;
   });
-  return visible.map((event) => mode === "Execution" ? (
+  return <>
+    {visible.length > visibleCount && <button type="button" onClick={() => setVisibleCount((count) => count + 80)}>
+      Show earlier {mode.toLowerCase()} events
+    </button>}
+    {visible.slice(-visibleCount).map((event) => mode === "Execution" ? (
     <details key={event.index}>
       <summary>{event.label}</summary>
       <button type="button" onClick={() => copy(commandOutput.get(event.label) ?? event.text)}>Copy output</button>
@@ -50,7 +65,8 @@ function Transcript({ job, mode, copy }) {
     </details>
   ) : (
     <p key={event.index}><strong>{event.label}</strong> {event.text}</p>
-  ));
+    ))}
+  </>;
 }
 
 export default function Operations() {
@@ -71,7 +87,14 @@ export default function Operations() {
   const [hostId, setHostId] = useState("");
   const [workspace, setWorkspace] = useState("development");
   const [effort, setEffort] = useState("medium");
-  const [prompt, setPrompt] = useState("");
+  const [draft, setDraft] = useState(() => {
+    try { return { prompt: loadPromptDraft(window.localStorage), error: "" }; }
+    catch { return { prompt: "", error: "Draft storage is unavailable in this browser." }; }
+  });
+  const { prompt } = draft;
+  const [expanded, setExpanded] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [attachment, setAttachment] = useState({});
   const [deviceName, setDeviceName] = useState("");
   const [credential, setCredential] = useState("");
   const [notice, setNotice] = useState("");
@@ -92,7 +115,7 @@ export default function Operations() {
     let timer;
     async function refresh() {
       try {
-        const query = new URLSearchParams({ search, archived: String(archived) });
+        const query = new URLSearchParams({ search, archived: String(archived), compact: "true" });
         const [hosts, jobs, approvals] = await Promise.all([
           api("/hosts"), api(`/jobs?${query}`), api("/approvals").catch((failure) => {
             if (failure.status === 404) return null;
@@ -125,7 +148,7 @@ export default function Operations() {
     const events = [];
     async function refresh() {
       try {
-        const detail = await api(`/jobs/${jobId}?offset=${events.length}`);
+        const detail = await api(`/jobs/${jobId}?offset=${events.length}&compact=true`);
         if (!active) return;
         events.push(...detail.events);
         setJob({ ...detail, events: [...events] });
@@ -154,6 +177,40 @@ export default function Operations() {
   const governance = snapshot?.approvals;
   const workerEnabled = governance?.workerEnabled !== false;
 
+  const startLimit = host?.promptLimit ?? LEGACY_PROMPT_LIMIT;
+  const continuationLimit = selectedHost?.promptLimit ?? LEGACY_PROMPT_LIMIT;
+  const validPrompt = !!prompt.trim() && prompt.length <= PROMPT_LIMIT && prompt.isWellFormed();
+  const promptError = prompt.length > PROMPT_LIMIT ? "The prompt exceeds 120,000 characters."
+    : !prompt.isWellFormed() ? "The prompt contains invalid Unicode." : "";
+  const editingLocked = busy || importing;
+
+  function updatePrompt(value) {
+    let error = "";
+    try { savePromptDraft(window.localStorage, value, prompt); }
+    catch { error = "This draft could not be saved in this browser. Keep a copy before refreshing."; }
+    setDraft({ prompt: value, error });
+  }
+
+  async function attachFile(event) {
+    const file = event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    setImporting(true);
+    try {
+      updatePrompt(await importPromptFile(file, prompt));
+      setAttachment({ message: `Added ${file.name} to the prompt.` });
+    } catch (failure) {
+      setAttachment({ error: failure.message });
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  function clearSubmittedDraft() {
+    updatePrompt("");
+    setAttachment({});
+  }
+
   async function action(callback) {
     setBusy(true);
     setError("");
@@ -162,6 +219,7 @@ export default function Operations() {
   }
 
   function submit(parent, queue = false) {
+    if (editingLocked || !validPrompt || prompt.length > (parent ? continuationLimit : startLimit)) return;
     return action(async () => {
       const request = {
         prompt, model: "gpt-6.2-sol", effort: parent?.effort || selectedEffort, queue,
@@ -176,19 +234,20 @@ export default function Operations() {
       pendingSubmit.current = null;
       if (queue) setNotice("Follow-up queued. Open it from session history.");
       else selectJob(_id);
-      setPrompt("");
+      clearSubmittedDraft();
       setMode("Activity");
     });
   }
 
   function steer() {
+    if (editingLocked || !validPrompt || prompt.length > continuationLimit) return;
     return action(async () => {
       const turnId = selectedJob.activeTurn.turnId;
       const signature = JSON.stringify([jobId, turnId, prompt]);
       if (pendingSteer.current?.signature !== signature) pendingSteer.current = { signature, id: crypto.randomUUID() };
       await post(`/jobs/${jobId}/steer`, { id: pendingSteer.current.id, turnId, input: prompt });
       pendingSteer.current = null;
-      setPrompt("");
+      clearSubmittedDraft();
     });
   }
 
@@ -335,15 +394,41 @@ export default function Operations() {
                 {host?.efforts?.map((entry) => <option key={entry}>{entry}</option>)}
               </select></label>
             </div>
-            <label>Prompt<textarea required maxLength={12000} rows={4} value={prompt} onChange={(event) => setPrompt(event.target.value)} /></label>
-            <button disabled={!workerEnabled || busy || !hostOnline || !selectedEffort || !prompt.trim()}>Start session</button>{" "}
-            <button type="button" disabled={!workerEnabled || !canAct || !selectedJob?.codexThreadId ||
-              running.includes(selectedJob.status) || !prompt.trim()}
-              onClick={() => submit(selectedJob)}>Continue session</button>{" "}
-            <button type="button" disabled={!workerEnabled || busy || !["queued", "running"].includes(selectedJob?.status) || !prompt.trim()}
-              onClick={() => submit(selectedJob, true)}>Queue follow-up</button>{" "}
-            <button type="button" disabled={!canAct || !selectedJob?.activeTurn || selectedJob.status !== "running" ||
-              ["pending", "sending"].includes(selectedJob.instruction?.state) || !prompt.trim()} onClick={steer}>Steer current task</button>
+            <div className="operations__editor">
+              <label htmlFor="operations-prompt">Prompt</label>
+              <textarea id="operations-prompt" required readOnly={editingLocked} rows={expanded ? 20 : 6}
+                value={prompt} spellCheck={false} autoCapitalize="off"
+                aria-invalid={!!promptError} aria-describedby="operations-prompt-count"
+                onChange={(event) => updatePrompt(event.target.value)} />
+              <div className="operations__editor-tools">
+                <span id="operations-prompt-count">{prompt.length.toLocaleString()} / {PROMPT_LIMIT.toLocaleString()} characters</span>
+                <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
+                  onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>
+              </div>
+              <label>Attach a Markdown or text file
+                <input type="file" accept=".md,.markdown,.txt" disabled={editingLocked} onChange={attachFile} />
+              </label>
+              <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
+              {host && startLimit < PROMPT_LIMIT && <p>The selected host supports {startLimit.toLocaleString()} characters for new sessions. Update and restart its worker for longer prompts.</p>}
+              {selectedHost && selectedJob && continuationLimit < PROMPT_LIMIT && <p>The session host supports {continuationLimit.toLocaleString()} characters for continuations, queued follow-ups, and steering.</p>}
+              {promptError && <p role="alert">{promptError}</p>}
+              {attachment.error && <p role="alert">{attachment.error}</p>}
+              {attachment.message && <p role="status">{attachment.message}</p>}
+              {draft.error && <p role="alert">{draft.error}</p>}
+              {prompt && !draft.error && <p>Draft saved in this browser.</p>}
+            </div>
+            <div className="operations__prompt-actions">
+              <button disabled={!workerEnabled || editingLocked || !hostOnline || !selectedEffort || !validPrompt || prompt.length > startLimit}>Start session</button>
+              <button type="button" disabled={!workerEnabled || editingLocked || !canAct || !selectedJob?.codexThreadId ||
+                running.includes(selectedJob.status) || !validPrompt || prompt.length > continuationLimit}
+                onClick={() => submit(selectedJob)}>Continue session</button>
+              <button type="button" disabled={!workerEnabled || editingLocked || !["queued", "running"].includes(selectedJob?.status) ||
+                !validPrompt || prompt.length > continuationLimit}
+                onClick={() => submit(selectedJob, true)}>Queue follow-up</button>
+              <button type="button" disabled={editingLocked || !canAct || !selectedJob?.activeTurn || selectedJob.status !== "running" ||
+                ["pending", "sending"].includes(selectedJob.instruction?.state) || !validPrompt || prompt.length > continuationLimit}
+                onClick={steer}>Steer current task</button>
+            </div>
           </form>
           {selectedJob && <section className="operations__transcript">
             <header>
@@ -383,7 +468,7 @@ export default function Operations() {
             <div className="operations__modes" aria-label="Execution views">
               {modes.map((entry) => <button key={entry} type="button" aria-pressed={mode === entry} onClick={() => setMode(entry)}>{entry}</button>)}
             </div>
-            <Transcript job={selectedJob} mode={mode} copy={copy} />
+            <Transcript key={`${jobId}:${mode}`} job={selectedJob} mode={mode} copy={copy} />
           </section>}
         </div>
       </div>
