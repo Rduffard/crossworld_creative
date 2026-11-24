@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import ObjectiveReviews from "./ObjectiveReviews";
 
-export default function Objectives({ api, openJob }) {
+export default function Objectives({ api, openJob, initialId }) {
   const [records, setRecords] = useState(null);
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState("");
@@ -13,6 +13,14 @@ export default function Objectives({ api, openJob }) {
       .catch((failure) => { if (mounted) setError(failure.message); });
     return () => { mounted = false; };
   }, [api]);
+
+  useEffect(() => {
+    if (!initialId) return;
+    let mounted = true;
+    api("/objectives/" + initialId).then((record) => { if (mounted) setSelected(record); })
+      .catch((failure) => { if (mounted) setError(failure.message); });
+    return () => { mounted = false; };
+  }, [api, initialId]);
 
   async function update(callback) {
     setBusy(true);

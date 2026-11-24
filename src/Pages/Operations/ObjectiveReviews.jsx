@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-const roles = { qa: "Independent QA", "first-mate": "First Mate", air: "AIR" };
+const roles = { qa: "Independent QA", "first-mate": "First Mate", air: "AIR", correction: "Bounded correction" };
 
 export default function ObjectiveReviews({ api, objective, openJob }) {
   const [reviews, setReviews] = useState([]);
@@ -17,7 +17,7 @@ export default function ObjectiveReviews({ api, objective, openJob }) {
   useEffect(() => {
     let current = true;
     api("/workforce").then(({ employees }) => {
-      if (current) setReviewers(employees.filter((employee) => Object.hasOwn(roles, employee.role) && employee.status === "available"));
+      if (current) setReviewers(employees.filter((employee) => (employee.role === "worker" || Object.hasOwn(roles, employee.role)) && employee.status === "available"));
     }).catch((failure) => { if (current) setError(failure.message); });
     return () => { current = false; };
   }, [api]);
@@ -63,19 +63,20 @@ export default function ObjectiveReviews({ api, objective, openJob }) {
     }
   }
 
-  const sources = (role === "first-mate" ? reviews : jobs).filter((job) => {
+  const sources = (role === "first-mate" || role === "correction" ? reviews : jobs).filter((job) => {
     if (role === "air") return job.workerRole !== "air";
     if (["failed", "cancelled", "interrupted", "cancelling"].includes(job.status)) return false;
     if (role === "first-mate") return job.workerRole === "qa";
-    return !Object.hasOwn(roles, job.workerRole);
+    if (role === "correction") return job.workerRole === "first-mate";
+    return job.workerRole === "correction" || !Object.hasOwn(roles, job.workerRole);
   });
   const source = sources.find((job) => job._id === sourceId);
-  const eligible = reviewers.filter((reviewer) => reviewer.workspace === source?.workspace && reviewer.role === role);
+  const eligible = reviewers.filter((reviewer) => reviewer.workspace === source?.workspace && reviewer.role === (role === "correction" ? "worker" : role));
 
   return <section aria-label="Objective runs">
     <h3>Objective runs</h3>
     {error && <p role="alert">{error}</p>}
-    {reviews.length === 0 && <p>No QA, First Mate, or AIR turns recorded.</p>}
+    {reviews.length === 0 && <p>No dependent turns recorded.</p>}
     <ul className="operations__feed">{reviews.map((review) => <li key={review._id}>
       <button type="button" onClick={() => openJob(review._id, "Conversation")}>{roles[review.workerRole]} · {review.reviewerName} · {review.status}</button>
       <button type="button" className="operations__source" onClick={() => openJob(review.reviewOf, "Conversation")}>Source turn</button>
@@ -100,8 +101,11 @@ export default function ObjectiveReviews({ api, objective, openJob }) {
           <option value="">{source && eligible.length === 0 ? "No available employee for this workspace" : "Select an employee"}</option>
           {eligible.map((reviewer) => <option key={reviewer._id} value={reviewer._id}>{reviewer.name}</option>)}
         </select></label>
-        <label>Evidence and checks <textarea name="evidence" maxLength={1500} required /></label>
-        <button type="submit" disabled={pending || !eligible.length}>{pending ? "Queuing…" : "Queue read-only turn"}</button>
+        <label>{role === "correction" ? "Owner-authorized correction scope" : "Evidence and checks"} <textarea name="evidence" maxLength={1500} required /></label>
+        {role === "correction" && <p>Runs once in the source editing workspace if QA reports a failure and the First Mate calls for correction.</p>}
+        <button type="submit" disabled={pending || !eligible.length}>
+          {pending ? "Queuing…" : role === "correction" ? "Authorize and queue correction" : "Queue read-only turn"}
+        </button>
       </form>
     </details>}
   </section>;

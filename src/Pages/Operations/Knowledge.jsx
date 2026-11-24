@@ -12,10 +12,10 @@ const fields = [
   ["limitations", "Limitations", 2000],
 ];
 
-export default function Knowledge({ api }) {
+export default function Knowledge({ api, initialId }) {
   const [filter, setFilter] = useState("");
   const [result, setResult] = useState(null);
-  const [selection, setSelection] = useState("");
+  const [selection, setSelection] = useState(initialId || "");
   const [detail, setDetail] = useState(null);
   const [saveError, setSaveError] = useState("");
   const [detailError, setDetailError] = useState(null);

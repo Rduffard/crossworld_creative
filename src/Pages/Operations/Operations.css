@@ -162,3 +162,13 @@
 @media (max-width: 760px) {
   .operations__knowledge { grid-template-columns: minmax(0, 1fr); }
 }
+
+.operations__office {
+  background-color: var(--ops-deep);
+  background-image: repeating-linear-gradient(0deg, transparent 0 23px, #45605d38 23px 24px),
+    repeating-linear-gradient(90deg, transparent 0 23px, #45605d38 23px 24px);
+}
+.operations__stations > li { box-shadow: 0 3px #091718; }
+.operations__stations > li[data-state="approval required"] { border-top-color: #ffbf6b; }
+.operations__stations > li[data-state="lease expired"] { border-top-color: #f29284; }
+.operations__station-usage { margin-top: 8px; border-top: 1px solid var(--ops-border); }

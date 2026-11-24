@@ -5,6 +5,7 @@ import Objectives from "./Objectives";
 import Headquarters from "./Headquarters";
 import Knowledge from "./Knowledge";
 import Workforce from "./Workforce";
+import Activity from "./Activity";
 import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
 } from "./promptEditor";
@@ -140,6 +141,8 @@ export default function Operations() {
   const [policyRole, setPolicyRole] = useState("direct");
   const [job, setJob] = useState(null);
   const [page, setPage] = useState("Command Center");
+  const [showApprovalInbox, setShowApprovalInbox] = useState(false);
+  const [linkedRecord, setLinkedRecord] = useState(null);
   const [mode, setMode] = useState(() => {
     try {
       const preference = window.localStorage.getItem("cw_operations_desk_view");
@@ -172,6 +175,13 @@ export default function Operations() {
     selectJob(id);
     changeMode(view);
     setPage("Command Center");
+  }
+
+  function openSource(group, id) {
+    if (group === "job") return openJob(id, "Conversation");
+    const target = group === "objective" ? "Objectives" : "Knowledge";
+    setLinkedRecord({ target, id });
+    setPage(target);
   }
 
   function selectJob(id) {
@@ -451,17 +461,20 @@ export default function Operations() {
         </div>}
       </header>
       <nav className="operations__modes" aria-label="Operations navigation">
-        {["Headquarters", "Command Center", "Objectives", "Workforce", "Knowledge"].map((entry) => <button key={entry} type="button"
-          aria-pressed={page === entry} onClick={() => setPage(entry)}>{entry}</button>)}
+        {["Headquarters", "Command Center", "Objectives", "Workforce", "Knowledge", "Activity"].map((entry) => <button key={entry} type="button"
+          aria-pressed={page === entry} onClick={() => { setLinkedRecord(null); setPage(entry); }}>{entry}</button>)}
       </nav>
-      {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openJob={openJob} />}
-      {page === "Objectives" && <Objectives api={api} openJob={openJob} />}
+      {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
+        pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
+        openGovernance={() => { setShowApprovalInbox(true); setPage("Command Center"); }} openJob={openJob} />}
+      {page === "Objectives" && <Objectives api={api} openJob={openJob} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
       {page === "Workforce" && <Workforce api={api} openJob={openJob} />}
-      {page === "Knowledge" && <Knowledge api={api} />}
+      {page === "Activity" && <Activity api={api} openSource={openSource} />}
+      {page === "Knowledge" && <Knowledge api={api} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
       {page === "Command Center" && <>
       {error && <p role="alert">{error}</p>}
       <p role="status">{notice}</p>
-      {governance && <details className="operations__panel operations__approvals">
+      {governance && <details className="operations__panel operations__approvals" open={showApprovalInbox} onToggle={(event) => setShowApprovalInbox(event.currentTarget.open)}>
         <summary>Operation approvals and policy ({governance.requests.filter((request) => request.state === "pending").length} pending)</summary>
         {!governance.githubEnabled && <p>Use an editing session for instructed Git operations. Review any command approval in that session.</p>}
         {!governance.toolsEnabled && <p>Editing sessions can use installed app commands and the worker’s selected MCP inspection tools.</p>}
