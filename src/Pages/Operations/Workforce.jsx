@@ -43,7 +43,13 @@ function EmployeeForm({ employee, departments, save, pending }) {
 
 export default function Workforce({ api, openJob, openRecord, openWorkflow, messageEmployee, initialId }) {
   const [directory, setDirectory] = useState(null);
-  const [selection, setSelection] = useState(initialId || null);
+  const [editor, setEditor] = useState(null);
+  const selection = editor || initialId;
+
+  function selectEmployee(id) {
+    setEditor(null);
+    openRecord("employee", id);
+  }
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
@@ -61,8 +67,8 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
     setError("");
     try {
       const created = await api("/workforce" + path, { method, body });
-      if (path === "/employees") setSelection(created._id);
-      if (path === "/departments") setSelection(null);
+      if (path === "/employees") selectEmployee(created._id);
+      if (path === "/departments") setEditor(null);
       setVersion((value) => value + 1);
     } catch (failure) {
       setError(failure.message);
@@ -80,6 +86,7 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
   const position = positions.find((entry) => entry.key === employee?.role);
   const supervisor = employees.find((entry) => entry._id === employee?.supervisorId);
   const department = departments.find((entry) => entry._id === employee?.departmentId);
+  const directReports = employee ? employees.filter(entry => entry.supervisorId === employee._id) : [];
   const state = employee ? employeeActivity(employee, observedRuns, projectAssignments).state : null;
   return <section className="operations__layout operations__knowledge operations__workforce" aria-label="Workforce">
     <section className="operations__panel">
@@ -89,10 +96,10 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
         {policyOpen && <WorkforcePolicy api={api} employees={employees} departments={departments} />}
       </details>
       <OrganizationChart departments={departments} employees={employees} observedRuns={observedRuns}
-        projectAssignments={projectAssignments} selection={selection} select={setSelection} />
+        projectAssignments={projectAssignments} selection={selection} select={selectEmployee} />
       <div className="operations__modes">
-        <button type="button" onClick={() => setSelection("employee")}>Add employee</button>
-        <button type="button" onClick={() => setSelection("department")}>Add department</button>
+        <button type="button" onClick={() => setEditor("employee")}>Add employee</button>
+        <button type="button" onClick={() => setEditor("department")}>Add department</button>
       </div>
     </section>
     <section className="operations__panel">
@@ -102,9 +109,15 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
         <CrewPortrait employee={employee} state={state} /><span>{state}</span>
       </div>}
       {position && <p><strong>{position.name}</strong>{supervisor && <> · Reports to{" "}
-        <button className="operations__source" type="button" onClick={() => setSelection(supervisor._id)}>{supervisor.name}</button>
+        <button className="operations__source" type="button" onClick={() => selectEmployee(supervisor._id)}>{supervisor.name}</button>
       </>}</p>}
       {department && <p>Department · {department.name}</p>}
+      {directReports.length > 0 && <details>
+        <summary>{directReports.length} direct {directReports.length === 1 ? "report" : "reports"}</summary>
+        <ul className="operations__crew-list">{directReports.map(report => <li key={report._id}>
+          <button type="button" onClick={() => selectEmployee(report._id)}>{report.name}</button>
+        </li>)}</ul>
+      </details>}
       {employee?.status === "available" && <button type="button" onClick={() => messageEmployee(employee)}>Message employee</button>}
       {(employee || selection === "employee") && <EmployeeForm key={employee ? employee._id + "/" + employee.revision : "new"}
         employee={employee} departments={departments} save={save} pending={pending} />}

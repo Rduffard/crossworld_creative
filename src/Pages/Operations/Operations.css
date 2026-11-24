@@ -76,6 +76,26 @@
 .operations__pane summary time { font-size: .8rem; margin-inline-start: 8px; color: var(--ops-muted); }
 .operations__pane form { border-top: 1px solid var(--ops-border); padding-top: 16px; }
 .operations__schedule { margin-top: 12px; }
+.operations__schedules .operations__modes { align-items: center; justify-content: space-between; margin-top: 0; }
+.operations__schedules .operations__modes h2 { margin: 0; }
+.operations__schedule-list { display: grid; gap: 8px; }
+.operations__schedule-list > li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--ops-border);
+  border-radius: 4px;
+}
+.operations__schedule-list small { margin-top: 4px; color: var(--ops-muted); }
+.operations__schedule-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 560px) {
+  .operations__schedules button { min-height: 44px; }
+  .operations__schedule-list > li > :first-child { flex-basis: 100%; }
+}
 .operations__access-warning { border-inline-start: 3px solid var(--ops-brass); padding-inline-start: 10px; }
 .operations__layout aside > ul { max-height: 32dvh; overflow: auto; }
 .operations a { color: var(--ops-brass); }

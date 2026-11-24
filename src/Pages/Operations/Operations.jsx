@@ -91,6 +91,8 @@ export default function Operations() {
   const jobId = jobIdPattern.test(requestedId || "") ? requestedId : "";
   const recipientId = !jobId && jobIdPattern.test(params.get("recipient") || "") ? params.get("recipient") : "";
   const page = workspaces.find(([slug]) => slug === params.get("workspace"))?.[1] || (params.size ? "Command Center" : "Headquarters");
+  const scheduling = page === "Command Center" && params.get("compose") === "schedule";
+  const scheduleSummary = useRef(null);
   const recordGroup = params.get("source");
   const financeView = page === "Finance" && recordGroup === "finance" ? params.get("record") : null;
   const linkedRecord = sourcePages[recordGroup] === page ? { target: page, group: recordGroup, id: params.get("record") } : null;
@@ -207,6 +209,11 @@ export default function Operations() {
     };
   }, []);
 
+  const schedulingAvailable = scheduling && !!snapshot?.schedule;
+  useEffect(() => {
+    if (schedulingAvailable) scheduleSummary.current?.focus();
+  }, [schedulingAvailable]);
+
   function openJob(id, view) {
     selectJob(id);
     changeMode(view);
@@ -231,6 +238,7 @@ export default function Operations() {
     if (!slug) return;
     const next = new URLSearchParams(params);
     next.set("workspace", slug);
+    next.delete("compose");
     if (group && id) {
       next.set("source", group);
       next.set("record", id);
@@ -247,12 +255,14 @@ export default function Operations() {
     changeMode("Conversation");
   }
 
-  function selectJob(id, employee) {
+  function selectJob(id, employee, compose) {
     setOutputScope(null);
     const next = new URLSearchParams(params);
     next.set("workspace", "command");
     next.delete("source");
     next.delete("record");
+    if (compose) next.set("compose", compose);
+    else next.delete("compose");
     if (employee) next.set("recipient", employee);
     else next.delete("recipient");
     if (id) {
@@ -669,8 +679,8 @@ export default function Operations() {
       </label>
       <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
     </details>
-    {snapshot?.schedule && !assignment && !jobId && !recipientId && <details className="operations__schedule">
-      <summary>Schedule a new session</summary>
+    {snapshot?.schedule && !assignment && !jobId && !recipientId && <details className="operations__schedule" open={scheduling || undefined}>
+      <summary ref={scheduleSummary}>Schedule a new session</summary>
       <label>Run at (local time)<input type="datetime-local" value={scheduledTime}
         onChange={(event) => setScheduledTime(event.target.value)} /></label>
       {snapshot.recurrence && <>
@@ -724,31 +734,6 @@ export default function Operations() {
           {older?.error && <p role="alert">{older.error}</p>}
           {!older?.end && activeHistory.length === 50 && <button type="button" disabled={older?.loading}
             onClick={loadOlder}>{older?.loading ? "Loading history…" : "Load older conversations"}</button>}
-  </>;
-  const scheduledWork = <>
-          <h2>Upcoming work</h2>
-          {snapshot.schedule?.length === 0 && !snapshot.recurrence?.some((entry) => entry.state === "active") && <p>No scheduled sessions.</p>}
-          <ul>{snapshot.schedule?.map((entry) => <li key={entry._id}>
-            <button type="button" aria-pressed={jobId === entry._id} onClick={() => openJob(entry._id, "Conversation")}>
-              <time dateTime={entry.scheduledAt}>{new Date(entry.scheduledAt).toLocaleString()}</time>
-              <small>{workspaceNames[entry.workspace]}</small>
-            </button>
-          </li>)}</ul>
-          {snapshot.recurrence?.length > 0 && <details>
-            <summary>Repeating schedules</summary>
-            <p>Stopping a series holds future occurrences. A turn the host already claimed can finish.</p>
-            <ul>{snapshot.recurrence.map((entry) => <li key={entry._id}>
-              <strong>{workspaceNames[entry.workspace]}</strong>
-              <small>Every {entry.repeatDays === 1 ? "24 hours" : "7 days"} · {entry.state} · {entry.remaining} of {entry.total} runs left</small>
-              {entry.state === "active" && <small><time dateTime={entry.nextAt}>{new Date(entry.nextAt).toLocaleString()}</time></small>}
-              {entry.stopReason && <small>{entry.stopReason}</small>}
-              {entry.occurrenceStatus && <button type="button" onClick={() => openJob(entry.occurrenceId, "Conversation")}>{entry.occurrenceStatus} turn</button>}
-              {entry.state === "active" && <button type="button" disabled={busy} onClick={() => action(async () => {
-                await api("/recurrence/" + entry._id, { method: "DELETE" });
-                setRefreshVersion((value) => value + 1);
-              })}>Stop series</button>}
-            </li>)}</ul>
-          </details>}
   </>;
   const devices = <>
           <details>
@@ -821,10 +806,46 @@ export default function Operations() {
       {page === "Finance" && <Finance request={api} view={financeView} onView={view => setPage("Finance", "finance", view)}
         hosts={snapshot.hosts.filter(entry => !entry.revokedAt)} />}
       {page === "Engineering" && <Engineering request={api} />}
-      {page === "Schedules" && <section className="operations__panel">
-        <button type="button" onClick={() => { setAssignment(null); selectJob(null); }}>Open scheduling composer</button>
+      {page === "Schedules" && <section className="operations__panel operations__schedules" aria-label="Schedules">
+        <div className="operations__modes">
+          <h2>Upcoming work</h2>
+          {snapshot.schedule && <button type="button" onClick={() => {
+            setAssignment(null);
+            selectJob(null, null, "schedule");
+          }}>Schedule a session</button>}
+        </div>
         {error && <p role="alert">{error}</p>}
-        {scheduledWork}
+        {!snapshot.schedule && <p role="status">Schedules are unavailable.</p>}
+        {snapshot.schedule?.length === 0 && <p>No one-time sessions scheduled.</p>}
+        {!!snapshot.schedule?.length && <ul className="operations__schedule-list" aria-label="One-time sessions">
+          {snapshot.schedule.map((entry) => <li key={entry._id}>
+            <div><strong>{workspaceNames[entry.workspace] || entry.workspace}</strong>
+              <small><time dateTime={entry.scheduledAt}>{new Date(entry.scheduledAt).toLocaleString()}</time></small>
+            </div>
+            <button type="button" onClick={() => openJob(entry._id, "Conversation")}>Open session</button>
+          </li>)}
+        </ul>}
+        {!!snapshot.recurrence?.length && <section aria-label="Repeating schedules">
+          <h3>Repeating schedules</h3>
+          {snapshot.recurrence.some(entry => entry.state === "active") &&
+            <p>Stopping a series holds future occurrences. A turn the host already claimed can finish.</p>}
+          <ul className="operations__schedule-list">
+            {snapshot.recurrence.map((entry) => <li key={entry._id}>
+              <div><strong>{workspaceNames[entry.workspace] || entry.workspace}</strong>
+                <small>Every {entry.repeatDays === 1 ? "24 hours" : "7 days"} · {entry.state} · {entry.remaining} of {entry.total} runs left</small>
+                {entry.state === "active" && <small>Next <time dateTime={entry.nextAt}>{new Date(entry.nextAt).toLocaleString()}</time></small>}
+                {entry.stopReason && <small>{entry.stopReason}</small>}
+              </div>
+              <div className="operations__schedule-actions">
+                {entry.occurrenceStatus && <button type="button" onClick={() => openJob(entry.occurrenceId, "Conversation")}>Open {entry.occurrenceStatus} turn</button>}
+                {entry.state === "active" && <button type="button" disabled={busy} onClick={() => action(async () => {
+                  await api("/recurrence/" + entry._id, { method: "DELETE" });
+                  setRefreshVersion((value) => value + 1);
+                })}>Stop series</button>}
+              </div>
+            </li>)}
+          </ul>
+        </section>}
       </section>}
       {page === "References" && <>
         {error && <p role="alert">{error}</p>}
