@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { conversationPage, readTurn, readConversation, conversationMarkdown, redactExport, downloadText } from "./conversationExport";
 import { MediaPreview } from "./MediaAttachments";
 import { profileNames, workspaceNames } from "./workspaces";
 
@@ -45,22 +46,78 @@ function SessionTurns({ api, sessionId, jobId, selectJob }) {
   </details>;
 }
 
+function PreviousConversation({ api, sessionId, jobId, copy }) {
+  const [before, setBefore] = useState(jobId);
+  const [messages, setMessages] = useState([]);
+  const [next, setNext] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [failure, setFailure] = useState("");
+  useEffect(() => {
+    let active = true;
+    async function load() {
+      setLoading(true);
+      setFailure("");
+      try {
+        const rows = await conversationPage(api, sessionId, before);
+        const ids = rows.slice(0, 5).map(row => row._id);
+        const results = await Promise.all(ids.map(id => readTurn(api, id)));
+        if (active) {
+          setMessages(previous => [...results.reverse(), ...previous]);
+          setNext(rows.length > ids.length ? ids.at(-1) : null);
+        }
+      } catch (error) {
+        if (active) setFailure(error.message);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    load();
+    return () => { active = false; };
+  }, [api, before, sessionId]);
+
+  return <>
+    {next && <button type="button" disabled={loading} onClick={() => setBefore(next)}>Load older messages</button>}
+    {loading && <p role="status">Loading earlier messages?</p>}
+    {failure && <p role="alert">{failure}</p>}
+    {messages.map(turn => <div key={turn.id}>
+      <article className="operations__message operations__message--owner">
+        <div className="operations__message-meta"><strong>Owner</strong>
+          {turn.createdAt && <time dateTime={turn.createdAt}>{new Date(turn.createdAt).toLocaleString()}</time>}
+        </div>
+        <div className="operations__response"><Markdown skipHtml remarkPlugins={[remarkGfm]} disallowedElements={["img"]}>{turn.prompt}</Markdown></div>
+        {turn.attachments.length > 0 && <p>Attachments: {turn.attachments.map(({ name }) => name || "Attachment").join(", ")}</p>}
+        <button type="button" onClick={() => copy(turn.prompt)}>Copy message</button>
+      </article>
+      <article className="operations__message">
+        <div className="operations__message-meta"><strong>{turn.actor}</strong>
+          {turn.finishedAt && <time dateTime={turn.finishedAt}>{new Date(turn.finishedAt).toLocaleString()}</time>}
+        </div>
+        {turn.answer ? <>
+          <div className="operations__response"><Markdown skipHtml remarkPlugins={[remarkGfm]} disallowedElements={["img"]}>{turn.answer}</Markdown></div>
+          <button type="button" onClick={() => copy(turn.answer)}>Copy message</button>
+        </> : <p>Turn status: {turn.status}</p>}
+      </article>
+    </div>)}
+  </>;
+}
+
 export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, promptPreview, proposal, children }) {
   const answer = useMemo(() => job.events.filter((event) => event.view === "response").map((event) => event.text).join(""), [job.events]);
-  const updates = useMemo(() => job.events.filter((event) => event.view === "activity" && event.label !== "Command started"), [job.events]);
-  const [updateCount, setUpdateCount] = useState(20);
+  const [exportProgress, setExportProgress] = useState(null);
+  const [exportFailure, setExportFailure] = useState("");
   const [visibleCount, setVisibleCount] = useState(80);
   const [filter, setFilter] = useState("");
   const [prompt, setPrompt] = useState(null);
-  const [loadingPrompt, setLoadingPrompt] = useState(false);
+  const [loadingPrompt, setLoadingPrompt] = useState(true);
+  const [promptAttempt, retryPrompt] = useState(0);
   const [promptError, setPromptError] = useState("");
   const transcript = useRef(null);
   const followsLatest = useRef(true);
   const [showLatest, setShowLatest] = useState(false);
   const entries = useMemo(() => {
     const output = new Map();
-    return job.events.reduce((rows, event, index) => {
-      if (event.view !== "execution") return rows;
+    const rows = job.events.reduce((rows, event, index) => {
+      if (!["activity", "execution"].includes(event.view)) return rows;
       if (/^(?:Command output|Output) · /.test(event.label)) {
         const existing = output.get(event.label);
         if (existing) {
@@ -73,11 +130,12 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
       if (/^(?:Command output|Output) · /.test(event.label)) output.set(event.label, row);
       return rows;
     }, []);
+    return rows.reverse();
   }, [job.events]);
   const term = filter.trim().toLowerCase();
   const matching = term ? entries.filter((entry) => `${entry.label}\n${entry.text}`.toLowerCase().includes(term)) : entries;
   const workerRole = job.assignedRole || job.workerRole;
-  const actor = job.assigneeName || job.studioActor?.name || (job.studioTools ? "First Mate" :
+  const actor = job.conversationActor?.name || job.assigneeName || job.studioActor?.name || (job.studioTools ? "First Mate" :
     workerRole && workerRole !== "direct" ? workerRole.replaceAll("-", " ") : "Codex");
   const summary = [
     "# Crossworld Operations session",
@@ -91,13 +149,49 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
     answer && `\n${answer}`,
   ].filter(Boolean).join("\n");
 
-  async function loadPrompt() {
+  async function exportConversation(format) {
+    setExportProgress(0);
+    setExportFailure("");
+    try {
+      const turns = await readConversation(api, job.sessionId || jobId, setExportProgress);
+      const markdown = redactExport(conversationMarkdown(turns));
+      const filename = "operations-conversation-" + (job.sessionId || jobId);
+      if (format === "copy") await copy(markdown);
+      else if (format === "json") downloadText(filename + ".json", "application/json", JSON.stringify(turns, (_key, value) =>
+        typeof value === "string" ? redactExport(value) : value, 2));
+      else if (format === "text") downloadText(filename + ".txt", "text/plain;charset=utf-8", markdown);
+      else downloadText(filename + ".md", "text/markdown;charset=utf-8", markdown);
+    } catch (failure) {
+      setExportFailure(failure.message);
+    } finally {
+      setExportProgress(null);
+    }
+  }
+
+  async function copyActivity() {
+    setExportProgress(0);
+    setExportFailure("");
+    try {
+      const turn = await readTurn(api, jobId, true);
+      await copy(redactExport(turn.activity.map(event =>
+        [event.at, turn.actor, event.label, "\n" + event.text].filter(Boolean).join(" ? ")).join("\n\n")));
+    } catch (failure) {
+      setExportFailure(failure.message);
+    } finally {
+      setExportProgress(null);
+    }
+  }
+
+  useEffect(() => {
+    let current = true;
     setLoadingPrompt(true);
     setPromptError("");
-    try { setPrompt((await api(`/jobs/${jobId}?offset=${job.eventCount || 0}`)).prompt); }
-    catch (failure) { setPromptError(failure.message); }
-    finally { setLoadingPrompt(false); }
-  }
+    api("/jobs/" + jobId + "?offset=" + Number.MAX_SAFE_INTEGER)
+      .then(result => { if (current) setPrompt(result.prompt); })
+      .catch(failure => { if (current) setPromptError(failure.message); })
+      .finally(() => { if (current) setLoadingPrompt(false); });
+    return () => { current = false; };
+  }, [api, jobId, promptAttempt]);
 
   function goToLatest() {
     const node = transcript.current;
@@ -117,31 +211,22 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
         followsLatest.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
         setShowLatest(!followsLatest.current);
       }}>
-      {job.sessionId && <SessionTurns api={api} key={job.sessionId} sessionId={job.sessionId} jobId={jobId} selectJob={selectJob} />}
+
+      {job.parentId && job.sessionId && <PreviousConversation key={jobId} api={api} sessionId={job.sessionId} jobId={jobId} copy={copy} />}
       <article className="operations__message operations__message--owner">
       <div className="operations__message-meta">
         <strong>Owner</strong>
         {job.createdAt && <time dateTime={job.createdAt}>{new Date(job.createdAt).toLocaleString()}</time>}
       </div>
-      {promptPreview && <p className="operations__prompt-preview">{promptPreview}</p>}
-      <details onToggle={(event) => {
-        if (event.currentTarget.open && prompt === null && !loadingPrompt) loadPrompt();
-      }}>
-        <summary>{promptPreview ? "Read full prompt" : "Submitted prompt"}</summary>
-        {loadingPrompt && <p role="status">Loading prompt…</p>}
-        {promptError && <p role="alert">{promptError} <button type="button" onClick={loadPrompt}>Retry</button></p>}
-        {prompt !== null && <><button type="button" onClick={() => copy(prompt)}>Copy prompt</button><pre>{prompt}</pre></>}
-      </details>
+      {prompt == null && promptPreview && <p className="operations__prompt-preview">{promptPreview}</p>}
+      {loadingPrompt && !promptPreview && <p role="status">Loading message?</p>}
+      {promptError && <p role="alert">{promptError} <button type="button" onClick={() => retryPrompt(value => value + 1)}>Retry</button></p>}
+      {prompt != null && (prompt.length > 8000 ? <details>
+        <summary>Read full message</summary><pre>{prompt}</pre>
+      </details> : <div className="operations__response"><Markdown skipHtml remarkPlugins={[remarkGfm]} disallowedElements={["img"]}>{prompt}</Markdown></div>)}
+      {prompt != null && <button type="button" onClick={() => copy(prompt)}>Copy message</button>}
       {job.mediaInputs?.map(({ id, name }) => <MediaPreview key={id} id={id} name={name} />)}
       </article>
-      {updates.length > 0 && <details>
-        <summary>Agent updates ({updates.length})</summary>
-        {updates.length > updateCount && <button type="button" onClick={() => setUpdateCount((count) => count + 20)}>Show earlier updates</button>}
-        {updates.slice(-updateCount).map((event, index) => <div key={updates.length - Math.min(updates.length, updateCount) + index}>
-          <strong>{event.label}</strong>
-          <Markdown skipHtml remarkPlugins={[remarkGfm]} disallowedElements={["img"]}>{event.text}</Markdown>
-        </div>)}
-      </details>}
       <article className="operations__message">
       <div className="operations__message-meta">
         <strong>{actor}</strong>
@@ -158,20 +243,32 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
         {job.mediaOutputs.map(({ id, name }) => <MediaPreview key={id} id={id} name={name} />)}
       </section>}
       <div className="operations__modes">
-        {answer && <button type="button" onClick={() => copy(answer)}>Copy response</button>}
-        <button type="button" onClick={() => copy(summary)}>Copy session summary</button>
+        {answer && job.events.length >= job.eventCount && <button type="button" onClick={() => copy(answer)}>Copy message</button>}
+        <button type="button" onClick={() => copy(summary)}>Copy turn summary</button>
+        <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("copy")}>Copy conversation</button>
+        <details><summary>Export conversation</summary>
+          <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("markdown")}>Download Markdown</button>
+          <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("json")}>Download JSON</button>
+          <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("text")}>Download text</button>
+        </details>
       </div>
       </article>
+      {exportProgress !== null && <p role="status">Preparing export? {exportProgress || ""}</p>}
+      {exportFailure && <p role="alert">{exportFailure}</p>}
       {proposal}
       {showLatest && <button type="button" className="operations__latest" onClick={goToLatest}>Back to latest</button>}
     </section>
     <section className="operations__pane" aria-label="Execution" tabIndex={0}>
       <h3>Execution</h3>
       {children}
+      {job.sessionId && <SessionTurns api={api} key={job.sessionId} sessionId={job.sessionId} jobId={jobId} selectJob={selectJob} />}
+      {entries[0] && <p>{actor} ? {entries[0].label}{entries[0].at && <> ? <time dateTime={entries[0].at}>{new Date(entries[0].at).toLocaleTimeString()}</time></>}</p>}
+      <button type="button" disabled={exportProgress !== null || !entries.length} onClick={copyActivity}>Copy execution activity</button>
+      {mode === "Execution" && exportFailure && <p role="alert">{exportFailure}</p>}
       <label>Search execution output<input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} /></label>
       {matching.length === 0 && <p>{term ? "No matching execution events." : "No execution events yet."}</p>}
       {matching.length > visibleCount && <button type="button" onClick={() => setVisibleCount((count) => count + 80)}>Show earlier events</button>}
-      {matching.slice(-visibleCount).map((event) => <details key={event.index}>
+      {matching.slice(0, visibleCount).map((event) => <details key={event.index}>
         <summary>{event.label}{event.at && <time dateTime={event.at}>{new Date(event.at).toLocaleTimeString()}</time>}</summary>
         <button type="button" onClick={() => copy(event.text)}>Copy entry</button>
         <pre>{event.text}</pre>

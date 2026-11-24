@@ -1,6 +1,6 @@
 export const groups = [
   ["Studio", [["headquarters", "Headquarters"], ["command", "Command Center"], ["office", "Office"], ["workforce", "Workforce"]]],
-  ["Production", [["projects", "Projects"], ["objectives", "Objectives"], ["art", "Art Department"], ["references", "References"], ["knowledge", "Knowledge"]]],
+  ["Production", [["projects", "Projects"], ["objectives", "Objectives"], ["reports", "Reports"], ["art", "Art Department"], ["references", "References"], ["knowledge", "Knowledge"]]],
   ["Operations", [["schedules", "Schedules"], ["engineering", "Engineering"], ["finance", "Finance"], ["activity", "Activity"], ["settings", "Settings"], ["help", "Help"]]],
 ];
 

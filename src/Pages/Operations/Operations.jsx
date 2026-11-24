@@ -24,6 +24,7 @@ const OrganizationSetup = lazy(() => import("./OrganizationSetup"));
 const Projects = lazy(() => import("./Projects"));
 const ReferenceLibrary = lazy(() => import("./ReferenceLibrary"));
 const VirtualOffice = lazy(() => import("./VirtualOffice"));
+const Reports = lazy(() => import("./Reports"));
 const Workforce = lazy(() => import("./Workforce"));
 
 const api = (path, options) => requestJson(`/operations${path}`, { auth: true, ...options });
@@ -36,22 +37,37 @@ async function post(path, body) {
   }
 }
 const running = ["scheduled", "waiting", "queued", "running", "cancelling"];
-function executionStatus(job) {
+function executionStatus(job, host) {
   if (job.status === "waiting") return "Waiting for previous turn";
-  if (job.status === "queued") return "Queued for worker";
+  if (job.status === "queued") return job.queueReason || "Queued for worker";
+  if (job.status === "running" && host && !host.online) return "Relay disconnected";
   if (job.status !== "running") return job.status[0].toUpperCase() + job.status.slice(1);
   if (job.approval?.state === "pending") {
     return job.decision?.id === job.approval.id ? "Decision sent" : "Waiting for owner";
   }
   if (!job.activeTurn) return "Connecting to Codex";
-  if (job.workerRole === "qa") return "Independent review";
+  if (job.delegatedBy || job.workerRole === "qa") return "Independent review";
   if (job.workerRole === "correction") return "Correcting";
-  return "Running";
+  return "Processing";
+}
+function ExecutionElapsed({ startedAt, finishedAt, active }) {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    if (!active || !startedAt) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [active, startedAt]);
+  if (!startedAt || (!active && !finishedAt)) return null;
+  const seconds = Math.max(0, Math.floor(((finishedAt ? Date.parse(finishedAt) : now) - Date.parse(startedAt)) / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return <small className="operations__elapsed" aria-label={seconds + " seconds elapsed"}>
+    {minutes}:{String(seconds % 60).padStart(2, "0")}
+  </small>;
 }
 const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
 const modes = ["Split", "Conversation", "Execution"];
 const jobIdPattern = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
-const sourcePages = { objective: "Objectives", "project-objectives": "Objectives", project: "Projects", knowledge: "Knowledge", employee: "Workforce" };
+const sourcePages = { report: "Reports", objective: "Objectives", "project-objectives": "Objectives", project: "Projects", knowledge: "Knowledge", employee: "Workforce" };
 
 function getDraft(session) {
   try { return { prompt: loadPromptDraft(window.localStorage, session), error: "" }; }
@@ -69,6 +85,7 @@ export default function Operations() {
   const [params, setParams] = useSearchParams();
   const requestedId = params.get("job");
   const jobId = jobIdPattern.test(requestedId || "") ? requestedId : "";
+  const recipientId = !jobId && jobIdPattern.test(params.get("recipient") || "") ? params.get("recipient") : "";
   const page = workspaces.find(([slug]) => slug === params.get("workspace"))?.[1] || "Command Center";
   const recordGroup = params.get("source");
   const linkedRecord = sourcePages[recordGroup] === page ? { target: page, group: recordGroup, id: params.get("record") } : null;
@@ -90,6 +107,8 @@ export default function Operations() {
   const [assignment, setAssignment] = useState(null);
   const [includeProjectReferences, setIncludeProjectReferences] = useState(false);
   const [outputScope, setOutputScope] = useState(null);
+  const [recipients, setRecipients] = useState([]);
+  const recipient = recipients.find(employee => employee._id === recipientId);
   const [assignees, setAssignees] = useState([]);
   const [employeeId, setEmployeeId] = useState("");
   const [mode, setMode] = useState(() => {
@@ -108,7 +127,7 @@ export default function Operations() {
   const [workspace, setWorkspace] = useState("development");
   const [effort, setEffort] = useState("medium");
   const session = job?._id === jobId ? job.sessionId : "";
-  const draftKey = session || (jobId ? null : "");
+  const draftKey = session || (jobId ? null : recipientId);
   const [storedDrafts, setDrafts] = useState({});
   const draft = storedDrafts[draftKey] ?? (draftKey === null ? { prompt: "", error: "" } : getDraft(draftKey));
   const { prompt } = draft;
@@ -216,12 +235,20 @@ export default function Operations() {
     setParams(next);
   }
 
-  function selectJob(id) {
+  function messageEmployee(employee) {
+    setAssignment(null);
+    selectJob(null, employee?.role === "first-mate" ? null : employee?._id);
+    changeMode("Conversation");
+  }
+
+  function selectJob(id, employee) {
     setOutputScope(null);
     const next = new URLSearchParams(params);
     next.set("workspace", "command");
     next.delete("source");
     next.delete("record");
+    if (employee) next.set("recipient", employee);
+    else next.delete("recipient");
     if (id) {
       next.set("job", id);
       setAssignment(null);
@@ -261,6 +288,15 @@ export default function Operations() {
     try { window.localStorage.setItem("cw_operations_desk_view", value); }
     catch { /* Browser storage is optional. */ }
   }
+
+  useEffect(() => {
+    if (page !== "Command Center" || jobId || assignment || accessDenied) return;
+    let current = true;
+    api("/workforce").then(({ employees }) => {
+      if (current) setRecipients(employees.filter(employee => employee.status === "available"));
+    }).catch(failure => { if (current) setError(failure.message); });
+    return () => { current = false; };
+  }, [page, jobId, assignment, accessDenied, api]);
 
   useEffect(() => {
     if (!assignment) return;
@@ -333,7 +369,7 @@ export default function Operations() {
           buffer.rendered = [...buffer.events];
         }
         setJob({ ...detail, events: buffer.rendered });
-        if (!running.includes(detail.status) && buffer.events.length >= detail.eventCount) return;
+        if (!running.includes(detail.status) && !running.includes(detail.delegatedReview?.status) && buffer.events.length >= detail.eventCount) return;
         timer = setTimeout(refresh, buffer.events.length < detail.eventCount ? 0 : document.hidden ? 10_000 : detail.status === "scheduled" ? 5000 : 900);
       } catch (failure) {
         if (!active) return;
@@ -355,7 +391,7 @@ export default function Operations() {
   const mediaKey = draftKey === null || !mediaHostId ? null : JSON.stringify([draftKey, mediaHostId]);
   const mediaAttachments = mediaDrafts[mediaKey] || [];
   const mediaUploading = mediaKey !== null && uploadingDraft === mediaKey;
-  const selectedProfile = (profile === workspace || profile === "full-access") && host?.profiles?.includes(profile)
+  const selectedProfile = !recipientId && (profile === workspace || profile === "full-access") && host?.profiles?.includes(profile)
     ? profile : "read-only";
   const canReturnMedia = !jobId && host?.mediaOutput && workspace === "workshop" && selectedProfile === "workshop";
   const outputScopeKey = JSON.stringify([host?._id, assignment?.id, employeeId, params.toString()]);
@@ -371,6 +407,15 @@ export default function Operations() {
     const id = entry.sessionId || entry._id;
     if (!sessions.has(id)) sessions.set(id, []);
     sessions.get(id).push(entry);
+  }
+  const today = new Date();
+  const yesterday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
+  const dateGroups = new Map();
+  for (const [id, turns] of sessions) {
+    const day = new Date(turns[0].createdAt).toDateString();
+    const group = day === today.toDateString() ? "Today" : day === yesterday.toDateString() ? "Yesterday" : "Earlier";
+    if (!dateGroups.has(group)) dateGroups.set(group, []);
+    dateGroups.get(group).push([id, turns]);
   }
   const awaitingApproval = selectedJob?.status === "running" && approval?.state === "pending";
   const canAct = !busy && !relayError && !!selectedHost?.online;
@@ -428,17 +473,18 @@ export default function Operations() {
   function submit(parent, queue = false, scheduledAt) {
     if (editingLocked || mediaUploading || !validPrompt || (parent && assignment) || (!parent && !validAssignment) ||
         (scheduledAt !== undefined && (!validRepeat || mediaAttachments.length)) || prompt.length > (parent ? continuationLimit : startLimit) ||
-        (!parent && profile === "full-access" && selectedProfile !== profile)) return;
+        (!parent && !recipientId && profile === "full-access" && selectedProfile !== profile)) return;
     return action(async () => {
       const request = {
         prompt, model: "gpt-6.2-sol", effort: parent?.effort || selectedEffort, queue,
         profile: parent ? parent.profile || "read-only" : selectedProfile,
-        workspace: parent?.workspace || workspace, hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
+        workspace: parent?.workspace || recipient?.workspace || workspace, hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
         ...(mediaAttachments.length ? { attachmentIds: mediaAttachments.map((item) => item._id) } : {}),
+        ...(recipientId ? { recipientId } : {}),
         ...(!parent && assignment ? { objectiveId: assignment.id, employeeId } : {}),
         ...(!parent && assignment && includeProjectReferences ? { includeProjectReferences: true } : {}),
         ...(!parent && scheduledAt === undefined && canReturnMedia && outputMedia ? { outputMedia: true } : {}),
-        ...(scheduledAt === undefined && !assignment && (!parent || parent.studioTools === true) ? { studioTools: true } : {}),
+        ...(scheduledAt === undefined && !recipientId && !assignment && (!parent || parent.studioTools === true) ? { studioTools: true } : {}),
         ...(scheduledAt !== undefined && snapshot.recurrence && repeatDays ? { repeat: { days: repeatDays, count: repeatCount } } : {}),
       };
       const signature = JSON.stringify(request);
@@ -450,8 +496,10 @@ export default function Operations() {
       pendingSubmit.current = null;
       setOutputScope(null);
       if (recurring) setNotice("Repeating schedule saved. Find it under Upcoming work.");
-      else if (queue) setNotice("Follow-up queued. Open it from session history.");
-      else selectJob(_id);
+      else {
+        selectJob(_id);
+        if (queue) setNotice("Follow-up queued in this conversation.");
+      }
       if (!parent && assignment) setAssignment(null);
       clearSubmittedDraft();
       if (mediaKey) setMediaDrafts((current) => ({ ...current, [mediaKey]: [] }));
@@ -488,14 +536,15 @@ export default function Operations() {
 
   const commonDisabled = !workerEnabled || editingLocked || mediaUploading || !validPrompt || !!relayError;
   const canStart = !commonDisabled && hostOnline && selectedEffort && validAssignment && prompt.length <= startLimit &&
-    (profile !== "full-access" || selectedProfile === profile);
+    (recipientId ? recipient && host?.employeeConversations && host.profiles?.includes("read-only") :
+      profile !== "full-access" || selectedProfile === profile);
   const canContinue = !commonDisabled && canAct && selectedJob?.codexThreadId &&
     !running.includes(selectedJob.status) && prompt.length <= continuationLimit;
   const canQueue = !commonDisabled && ["queued", "running"].includes(selectedJob?.status) && prompt.length <= continuationLimit;
   const canSteer = !editingLocked && canAct && selectedJob?.activeTurn && selectedJob.status === "running" &&
     !["pending", "sending"].includes(selectedJob.instruction?.state) && !mediaUploading && !mediaAttachments.length &&
     validPrompt && prompt.length <= continuationLimit;
-  const send = !jobId ? { label: assignment ? "Start assignment" : "Send message", enabled: canStart, run: () => submit(null) }
+  const send = !jobId ? { label: assignment ? "Start assignment" : recipient ? "Message " + recipient.name : "Send message", enabled: canStart, run: () => submit(null) }
     : canQueue || ["queued", "running"].includes(selectedJob?.status)
       ? { label: "Queue follow-up", enabled: canQueue, run: () => submit(selectedJob, true) }
       : { label: "Send follow-up", enabled: canContinue, run: () => submit(selectedJob) };
@@ -524,14 +573,23 @@ export default function Operations() {
       {!host?.media && <p>Choose a host with media enabled to include project images.</p>}
       <p>The worker receives the task prompt with the objective criteria and saved project and employee instructions.</p>
     </section>}
+    {!jobId && !assignment && <label>Recipient
+      <select value={recipientId} disabled={editingLocked} onChange={event => messageEmployee(recipients.find(employee => employee._id === event.target.value))}>
+        <option value="">{recipients.find(employee => employee.role === "first-mate")?.name || "First Mate"}</option>
+        {recipientId && !recipient && <option value={recipientId}>Selected employee</option>}
+        {recipients.filter(employee => employee.role !== "first-mate").map(employee =>
+          <option key={employee._id} value={employee._id}>{employee.name}</option>)}
+      </select>
+    </label>}
+    {recipientId && host && !host.employeeConversations && <p role="status">Choose a relay that supports employee conversations.</p>}
     {!jobId && <details className="operations__composer-options">
-    <summary>Execution settings <span>{workspaceNames[workspace]} · {profileNames[selectedProfile]}</span></summary>
+    <summary>Execution settings <span>{workspaceNames[recipient?.workspace || workspace]} · {profileNames[selectedProfile]}</span></summary>
     <div className="operations__selectors">
       <label>Host<select value={host?._id || ""} onChange={(event) => { setOutputScope(null); setHostId(event.target.value); }}>
         <option value="" disabled>Select host</option>
         {snapshot.hosts.filter((entry) => !entry.revokedAt).map((entry) => <option key={entry._id} value={entry._id}>{entry.label}</option>)}
       </select></label>
-      <label>Workspace<select value={workspace} onChange={(event) => { setOutputScope(null); setWorkspace(event.target.value); }}>
+      {!recipientId && <><label>Workspace<select value={workspace} onChange={(event) => { setOutputScope(null); setWorkspace(event.target.value); }}>
         {Object.entries(workspaceNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select></label>
       <label>Permissions<select value={profile === "full-access" ? profile : selectedProfile} onChange={(event) => {
@@ -543,6 +601,7 @@ export default function Operations() {
         {host?.profiles?.includes("full-access") && <option value="full-access">Full Access</option>}
         {profile === "full-access" && selectedProfile !== profile && <option value="full-access" disabled>Full Access unavailable</option>}
       </select></label>
+      </>}
       <label>Model<select defaultValue="gpt-6.2-sol"><option value="gpt-6.2-sol">GPT-6.2 Sol</option></select></label>
       <label>Reasoning effort<select value={selectedEffort} onChange={(event) => setEffort(event.target.value)}>
         {!selectedEffort && <option value="">Awaiting host</option>}
@@ -557,7 +616,7 @@ export default function Operations() {
       <strong>Full Access.</strong> Commands run with the Windows account’s access to files, applications, and the network.
       Codex approval prompts are disabled. Workspace selection sets the starting folder.
     </p>}
-    {profile === "full-access" && selectedProfile !== profile && <p role="alert">Full Access is unavailable on this host. Select another permission profile.</p>}
+    {!recipientId && profile === "full-access" && selectedProfile !== profile && <p role="alert">Full Access is unavailable on this host. Select another permission profile.</p>}
     </details>}
     <div className="operations__editor">
       <label className="operations__sr-only" htmlFor="operations-prompt">Message</label>
@@ -577,8 +636,9 @@ export default function Operations() {
         <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
           onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>
       </div>
-      {host && startLimit < PROMPT_LIMIT && <p>The selected host supports {startLimit.toLocaleString()} characters for new sessions. Update and restart its worker for longer prompts.</p>}
-      {selectedHost && selectedJob && continuationLimit < PROMPT_LIMIT && <p>The session host supports {continuationLimit.toLocaleString()} characters for continuations, queued follow-ups, and steering.</p>}
+      {validPrompt && prompt.length > (jobId ? continuationLimit : startLimit) && <p role="alert">
+        This relay accepts up to {(jobId ? continuationLimit : startLimit).toLocaleString()} characters per message.
+      </p>}
       {promptError && <p role="alert">{promptError}</p>}
       {attachment.error && <p role="alert">{attachment.error}</p>}
       {attachment.message && <p role="status">{attachment.message}</p>}
@@ -594,7 +654,7 @@ export default function Operations() {
       </label>
       <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
     </details>
-    {snapshot?.schedule && !assignment && !jobId && <details className="operations__schedule">
+    {snapshot?.schedule && !assignment && !jobId && !recipientId && <details className="operations__schedule">
       <summary>Schedule a new session</summary>
       <label>Run at (local time)<input type="datetime-local" value={scheduledTime}
         onChange={(event) => setScheduledTime(event.target.value)} /></label>
@@ -630,26 +690,24 @@ export default function Operations() {
           <label>Search sessions<input type="search" maxLength={120} value={search} onChange={(event) => setSearch(event.target.value)} /></label>
           <label className="operations__check"><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> Archived sessions</label>
           {sessions.size === 0 && <p>{snapshot.historyKey === historyKey ? "No matching conversations." : "Searching conversations…"}</p>}
-          <ul>{Array.from(sessions, ([id, turns]) => {
+          {Array.from(dateGroups, ([group, conversations]) => <section key={group}>
+          <h3>{group}</h3><ul>{conversations.map(([id, turns]) => {
             const latest = turns[0];
             const label = latest.title || turns.find((entry) => !entry.parentId)?.prompt || latest.prompt;
-            return <li key={id}>{turns.length === 1
-              ? <button type="button" aria-pressed={jobId === latest._id} onClick={() => selectJob(latest._id)}>
-                {label}<small>{latest.status}{latest.parentId ? " · Follow-up" : ""}</small>
+            const active = turns.some(entry => entry._id === jobId) || selectedJob?.sessionId === id;
+            const employee = latest.conversationActor?.name || latest.assigneeName || latest.studioActor?.name;
+            return <li key={id}>
+              <button type="button" aria-pressed={active} onClick={() => selectJob(latest._id)}>
+                {label || "Conversation"}
+                <small>{employee ? employee + " ? " : ""}{latest.status}
+                  {latest.createdAt && <> ? <time dateTime={latest.createdAt}>{new Date(latest.createdAt).toLocaleDateString()}</time></>}
+                </small>
               </button>
-              : <details open={turns.some((entry) => entry._id === jobId) || undefined}>
-                <summary>{label} · {turns.length} turns</summary>
-                <ul>{turns.map((entry) => <li key={entry._id}>
-                  <button type="button" aria-pressed={jobId === entry._id} onClick={() => selectJob(entry._id)}>
-                    {entry.prompt}<small>{entry.status}{entry.parentId ? " · Follow-up" : " · First turn"}</small>
-                  </button>
-                </li>)}</ul>
-              </details>}
             </li>;
-          })}</ul>
+          })}</ul></section>)}
           {older?.error && <p role="alert">{older.error}</p>}
           {!older?.end && activeHistory.length === 50 && <button type="button" disabled={older?.loading}
-            onClick={loadOlder}>{older?.loading ? "Loading history…" : "Load older turns"}</button>}
+            onClick={loadOlder}>{older?.loading ? "Loading history…" : "Load older conversations"}</button>}
   </>;
   const scheduledWork = <>
           <h2>Upcoming work</h2>
@@ -724,7 +782,8 @@ export default function Operations() {
         openProject={(id) => openSource("project", id)}
         initialId={linkedRecord?.group === "objective" ? linkedRecord.id : null}
         initialProjectId={linkedRecord?.group === "project-objectives" ? linkedRecord.id : null} />}
-      {page === "Workforce" && <Workforce api={api} openJob={openJob} openRecord={openSource} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
+      {page === "Reports" && <Reports key={linkedRecord?.id || "list"} api={api} reportId={linkedRecord?.id} openRecord={openSource} openJob={openJob} copy={copy} />}
+      {page === "Workforce" && <Workforce api={api} openJob={openJob} openRecord={openSource} messageEmployee={messageEmployee} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
       {page === "Office" && <VirtualOffice api={api} openJob={openJob}
         openEmployee={(id) => openSource("employee", id)} openHeadquarters={() => setPage("Headquarters")} />}
       {page === "Activity" && <Activity api={api} openSource={openSource} />}
@@ -867,7 +926,11 @@ export default function Operations() {
             <header>
               <div className="operations__conversation-title">
                 <h1>{selectedJob.title || "Conversation"}</h1>
-                <span role="status">{executionStatus(selectedJob)}</span>
+                <span role="status">
+                  {selectedJob.status === "running" && selectedHost?.online && <span className="operations__processing" aria-hidden="true" />}
+                  {executionStatus(selectedJob, selectedHost)}
+                </span>
+                <ExecutionElapsed startedAt={selectedJob.startedAt} finishedAt={selectedJob.finishedAt} active={selectedJob.status === "running"} />
               </div>
               {running.includes(selectedJob.status) && <button type="button" disabled={busy || selectedJob.status === "cancelling"}
                 onClick={() => action(async () => {
@@ -902,6 +965,23 @@ export default function Operations() {
                 </div>
               </details>
             </header>
+            {selectedJob.status === "completed" && selectedJob.employeeId && selectedJob.objectiveId && !selectedJob.parentId &&
+              <button type="button" onClick={() => openSource("report", selectedJob._id)}>View Final Report</button>}
+            {selectedJob.delegatedReview && <p>
+              <button type="button" className="operations__source" onClick={() => openJob(selectedJob.delegatedReview._id, "Conversation")}>
+                {selectedJob.delegatedReview.title}
+              </button>{" "}<span>{selectedJob.delegatedReview.assigneeName} ? {executionStatus(selectedJob.delegatedReview)}</span>
+              {selectedJob.delegatedReview.status === "completed" && <button type="button" className="operations__source"
+                onClick={() => openSource("report", selectedJob.delegatedReview._id)}>View Final Report</button>}
+            </p>}
+            {selectedJob.delegatedBy && <p>
+              <button type="button" className="operations__source" onClick={() => openJob(selectedJob.delegatedBy.sourceTurnId, "Conversation")}>
+                Open First Mate handoff
+              </button>
+              {" "}<button type="button" className="operations__source" onClick={() => openSource("objective", selectedJob.objectiveId)}>
+                Open review objective
+              </button>
+            </p>}
             {selectedJob.error && <p role="alert">{selectedJob.error}</p>}
             {selectedJob.profile === "full-access" && <p className="operations__access-warning">
               Full Access session · follow-ups inherit unrestricted access.
@@ -928,7 +1008,7 @@ export default function Operations() {
             <Suspense fallback={<p role="status">Loading transcript…</p>}>
             <JobTranscript api={api} key={jobId} job={selectedJob} jobId={jobId} mode={mode} copy={copy} selectJob={selectJob}
               promptPreview={sessions.get(selectedJob.sessionId)?.find((turn) => turn._id === jobId)?.prompt}
-              proposal={<Suspense fallback={null}>
+              proposal={selectedJob.studioTools && <Suspense fallback={null}>
                 <ObjectiveProposal key={jobId} request={api} jobId={jobId} jobStatus={selectedJob.status}
                   openObjective={(id) => openSource("objective", id)} />
               </Suspense>}>

@@ -36,7 +36,7 @@ function EmployeeForm({ employee, departments, save, pending }) {
   </form>;
 }
 
-export default function Workforce({ api, openJob, openRecord, initialId }) {
+export default function Workforce({ api, openJob, openRecord, messageEmployee, initialId }) {
   const [directory, setDirectory] = useState(null);
   const [selection, setSelection] = useState(initialId || null);
   const [pending, setPending] = useState(false);
@@ -98,6 +98,7 @@ export default function Workforce({ api, openJob, openRecord, initialId }) {
       {position && <p><strong>{position.name}</strong>{supervisor && <> · Reports to{" "}
         <button className="operations__source" type="button" onClick={() => setSelection(supervisor._id)}>{supervisor.name}</button>
       </>}</p>}
+      {employee?.status === "available" && <button type="button" onClick={() => messageEmployee(employee)}>Message employee</button>}
       {(employee || selection === "employee") && <EmployeeForm key={employee ? employee._id + "/" + employee.revision : "new"}
         employee={employee} departments={departments} save={save} pending={pending} />}
       {employee && <section>

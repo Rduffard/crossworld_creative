@@ -468,3 +468,26 @@
   .operations__editor-tools { justify-content: flex-end; }
   .operations__editor-tools button { min-height: 34px; }
 }
+
+.operations__processing {
+  display: inline-block;
+  width: .55em;
+  height: .55em;
+  margin-inline-end: .45em;
+  border-radius: 50%;
+  background: currentColor;
+  animation: operations-processing 1.4s ease-in-out infinite alternate;
+}
+
+.operations__elapsed {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes operations-processing {
+  from { opacity: .35; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .operations__processing { animation: none; }
+}
