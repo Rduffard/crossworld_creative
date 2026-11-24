@@ -787,7 +787,7 @@ export default function Operations() {
         openGovernance={() => setShowApprovalInbox(true)} openJob={openJob} />}
       {page === "Workflow" && <Workflow key={linkedRecord?.id || "studio"} api={api} scope={linkedRecord?.group} recordId={linkedRecord?.id}
         openRecord={openSource} openJob={openJob} />}
-      {page === "Projects" && <Projects api={api} initialId={linkedRecord?.group === "project" ? linkedRecord.id : null}
+      {page === "Projects" && <Projects api={api} openRecord={openSource} openJob={openJob} initialId={linkedRecord?.group === "project" ? linkedRecord.id : null}
         openObjectives={(id) => openSource("project-objectives", id)} openWorkflow={(id) => openSource("workflow-project", id)} />}
       {page === "Objectives" && <Objectives api={api} openJob={openJob} assignObjective={prepareAssignment}
         openProject={(id) => openSource("project", id)}

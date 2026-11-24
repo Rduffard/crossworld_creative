@@ -56,7 +56,7 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
     {error && <p role="alert">Office updates unavailable. Showing the last successful refresh. {error}</p>}
     <div className="operations__studio-layout">
       <div className="operations__studio-viewport" role="region" aria-label="Scrollable office floor plan" tabIndex={0}>
-        <div className="operations__studio-plan" style={{ minWidth: zoom + "%" }}>
+        <div className="operations__studio-plan" style={{ minWidth: zoom + "%", "--office-zoom": zoom / 100 }}>
           {rooms.map(entry => <button type="button" key={entry.id} className="operations__studio-room" data-room={entry.id === "owner" || entry.id === "hosts" ? entry.id : "department"}
             aria-pressed={entry.id === room.id} onClick={() => { setRoomId(entry.id); setEmployeeId(null); }}>
             <span className="operations__studio-furniture" aria-hidden="true"><i /><i /><i /></span>
