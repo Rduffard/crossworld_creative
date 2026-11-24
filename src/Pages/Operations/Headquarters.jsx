@@ -12,7 +12,7 @@ function Usage({ observation, resumesAt }) {
   </div>;
 }
 
-export default function Headquarters({ api, openJob, openObjectives, openWorkforce, openProject, openFinance, pendingGovernance, openGovernance }) {
+export default function Headquarters({ api, openJob, openObjectives, openWorkforce, openOffice, openProject, openFinance, pendingGovernance, openGovernance }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [attentionError, setAttentionError] = useState("");
@@ -69,6 +69,17 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
 
   return <section className="operations__headquarters" aria-label="Headquarters">
     {error && <p className="operations__briefing" role="alert">Updates unavailable. Showing the last successful refresh. {error}</p>}
+    <section className="operations__command-deck" aria-labelledby="operations-command-title">
+      <div className="operations__command-copy">
+        <p className="operations__command-status" data-paused={!!data.paused}>{error ? "Dispatch status stale" : data.paused === true ? "Dispatch paused" : data.paused === false ? "Dispatch open" : "Dispatch status unavailable"}</p>
+        <h1 id="operations-command-title">Headquarters</h1>
+        <div className="operations__modes">
+          <button type="button" onClick={openOffice}>Enter the office</button>
+          <button type="button" onClick={openObjectives}>View objectives</button>
+        </div>
+      </div>
+      <div className="operations__command-windows" aria-hidden="true"><i /><i /><i /></div>
+    </section>
     <section className="operations__panel operations__briefing">
       <div className="operations__briefing-title">
         <h2>Operational briefing</h2>

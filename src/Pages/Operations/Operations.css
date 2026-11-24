@@ -544,3 +544,137 @@
 .operations__workspace-menu nav span { grid-column: 1 / -1; color: var(--ops-muted); font-size: .85rem; }
 .operations__workspace-menu nav button { text-align: start; min-height: 44px; }
 .operations__workspace-menu nav button[aria-current="page"] { border-color: currentColor; font-weight: 700; }
+
+/* Admiralty studio surfaces */
+.operations__command-deck {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 6fr 5fr;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #142527;
+  border: 1px solid #60716a;
+  border-bottom: 4px solid #a87948;
+}
+.operations__command-copy { padding: clamp(20px, 5vw, 68px); }
+.operations__command-copy h1 {
+  margin: 0 0 22px;
+  font: 500 clamp(1.9rem, 5vw, 4.6rem)/1 Georgia, serif;
+  color: #fff0d7;
+}
+.operations__command-status { color: #a9e2be; font-size: .86rem; }
+.operations__command-status[data-paused="true"] { color: var(--ops-brass); }
+.operations__command-windows {
+  display: flex;
+  gap: 7px;
+  padding: 24px 20px 38px 8px;
+  transform: skewY(-7deg);
+}
+.operations__command-windows i {
+  width: 100%;
+  border: 7px solid #566761;
+  background:
+    linear-gradient(155deg, transparent 65%, #294745 65% 78%, transparent 78%),
+    linear-gradient(22deg, #263939 34%, #637d73 34% 48%, #b99469 48% 50%, #344c4b 50%);
+  box-shadow: inset 0 0 0 2px #182d30, 0 18px 0 #382f28;
+}
+.operations__studio-layout, .operations .operations__workforce {
+  display: grid;
+  grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.operations__studio-viewport, .operations__org-viewport {
+  overflow: auto;
+  overscroll-behavior-x: contain;
+  border: 1px solid var(--ops-border);
+  background: #0b1a1d;
+}
+.operations__studio-plan {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 175px), 1fr));
+  gap: 18px 13px;
+  padding: clamp(12px, 2vw, 28px);
+  background: repeating-linear-gradient(135deg, transparent 0 18px, #263e3b 19px 20px);
+}
+.operations button.operations__studio-room {
+  display: grid;
+  grid-template-rows: minmax(75px, 1fr) auto auto;
+  row-gap: 7px;
+  align-items: end;
+  min-height: 178px;
+  text-align: left;
+  padding: 12px;
+  border: 2px solid #698076;
+  border-top: 10px solid #617269;
+  border-bottom: 5px solid #3b2f2a;
+  box-shadow: 0 5px #080f11;
+  background: repeating-linear-gradient(0deg, #273b35 0 13px, #30443d 14px 15px);
+}
+.operations button.operations__studio-room[aria-pressed="true"] { border-color: var(--ops-brass); }
+.operations__studio-furniture { display: flex; gap: 10%; justify-content: center; align-items: center; height: 100%; }
+.operations__studio-furniture i {
+  display: block; width: 25%; height: 34px; transform: skewY(-14deg);
+  background: #ab7852; border: 4px solid #6f513d; box-shadow: 4px 8px #121c1b;
+}
+.operations__studio-furniture i:nth-child(2) { background: #4b7271; border-color: #395655; align-self: end; }
+.operations__studio-furniture i:nth-child(3) { background: #e1af6c; border-color: #80664c; height: 17px; align-self: start; }
+.operations__studio-room-label, .operations__crew-list button > span:last-child, .operations__org-person > span:last-child {
+  display: grid; gap: 4px; overflow-wrap: anywhere;
+}
+.operations__studio-room-label small, .operations__crew-list small, .operations__org-person small { color: var(--ops-muted); }
+.operations__studio-crew, .operations__profile-identity { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
+.operations__crew-portrait {
+  display: inline-grid; place-items: center; flex: none;
+  width: 38px; aspect-ratio: 1; border: 2px solid #b2bbb0;
+  background: #344c55; color: #fff1d9; font: 600 .73rem/1 system-ui;
+}
+.operations__crew-portrait[data-role="first-mate"] { background: #504032; }
+.operations__crew-portrait[data-role="art-director"] { background: #574450; }
+.operations__crew-portrait[data-role="qa"] { background: #394b38; }
+.operations__crew-portrait:is([data-state="running"], [data-state="cancelling"]) { border-color: #87d8a8; }
+.operations__crew-portrait:is([data-state="queued"], [data-state="waiting"], [data-state="assigned"]) { border-color: #eac382; }
+.operations__studio-crew .operations__crew-portrait { width: 27px; font-size: .65rem; }
+.operations__crew-list { list-style: none; margin: 12px 0; padding: 0; display: grid; gap: 5px; }
+.operations__crew-list button, .operations button.operations__org-person {
+  display: flex; gap: 9px; align-items: center; text-align: left; min-height: 44px;
+}
+.operations__crew-inspector { border-top: 1px solid var(--ops-border); padding-top: 14px; }
+.operations__studio-inspector select { width: 100%; }
+.operations__office-toolbar { margin-bottom: 12px; flex-wrap: wrap; }
+.operations__office-toolbar label { margin: 0; }
+.operations__org-chart { padding: 16px; width: max-content; }
+.operations__org-chart ul { list-style: none; margin: 8px 0; padding-left: 16px; border-left: 1px solid #627e74; }
+.operations__org-chart li { margin-bottom: 6px; }
+.operations__org-chart details { margin: 4px 0 4px 10px; }
+.operations__org-viewport { max-height: 65vh; margin-bottom: 12px; }
+
+@media (max-width: 768px) {
+  .operations__studio-layout, .operations .operations__workforce { grid-template-columns: minmax(0, 1fr); }
+  .operations__studio-viewport { max-height: 46vh; }
+  .operations__command-deck { grid-template-columns: minmax(0, 1fr); }
+  .operations__command-windows { display: none; }
+}
+
+.operations .operations__topbar button.operations__wordmark {
+  padding: 5px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--ops-brass);
+}
+.operations__studio-clock { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.operations__studio-room[data-room="owner"] .operations__studio-furniture i:first-child {
+  width: 45%; height: 42px; background: #ab7852;
+}
+.operations__studio-room[data-room="owner"] .operations__studio-furniture i:nth-child(2) {
+  width: 15%; height: 23px; background: #605140; border-color: #80664c;
+}
+.operations__studio-room[data-room="hosts"] .operations__studio-furniture i {
+  width: 22%; height: 52px; align-self: center;
+  background: repeating-linear-gradient(0deg, #273b3b 0 8px, #6b9a83 8px 10px);
+  border-color: #526560;
+}
+@media (max-width: 375px) {
+  .operations__studio-clock { display: none; }
+}

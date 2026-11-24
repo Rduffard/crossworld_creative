@@ -1,6 +1,9 @@
 import { useEffect, useState } from "react";
 import { profileNames } from "./workspaces";
 import WorkforcePolicy from "./WorkforcePolicy";
+import OrganizationChart from "./OrganizationChart";
+import CrewPortrait from "./CrewPortrait";
+import { employeeActivity } from "./crewActivity";
 
 const roles = {
   worker: "Worker", lead: "Department lead", "first-mate": "First Mate", "art-director": "Art Director", qa: "Quality assurance", air: "AIR",
@@ -77,24 +80,16 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
   const position = positions.find((entry) => entry.key === employee?.role);
   const supervisor = employees.find((entry) => entry._id === employee?.supervisorId);
   const department = departments.find((entry) => entry._id === employee?.departmentId);
-  const employeeList = (members) => <ul className="operations__feed">{members.map((entry) => <li key={entry._id}>
-    <button type="button" aria-pressed={selection === entry._id} onClick={() => setSelection(entry._id)}>{entry.name}</button>
-    <small>{roles[entry.role]} · {entry.status}</small>
-  </li>)}</ul>;
-
-  return <section className="operations__layout operations__knowledge" aria-label="Workforce">
+  const state = employee ? employeeActivity(employee, observedRuns, projectAssignments).state : null;
+  return <section className="operations__layout operations__knowledge operations__workforce" aria-label="Workforce">
     <section className="operations__panel">
       <h2>Organization</h2>
       <details onToggle={event => setPolicyOpen(event.currentTarget.open)}>
         <summary>Execution configuration</summary>
         {policyOpen && <WorkforcePolicy api={api} employees={employees} departments={departments} />}
       </details>
-      <h3>Owner</h3>
-      {employeeList(employees.filter((entry) => !entry.departmentId))}
-      {departments.map((department) => <section key={department._id}>
-        <h3>{department.name}</h3><p className="operations__knowledge-text">{department.responsibilities}</p>
-        {employeeList(employees.filter((entry) => entry.departmentId === department._id))}
-      </section>)}
+      <OrganizationChart departments={departments} employees={employees} observedRuns={observedRuns}
+        projectAssignments={projectAssignments} selection={selection} select={setSelection} />
       <div className="operations__modes">
         <button type="button" onClick={() => setSelection("employee")}>Add employee</button>
         <button type="button" onClick={() => setSelection("department")}>Add department</button>
@@ -103,6 +98,9 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
     <section className="operations__panel">
       <h2>{employee?.name || (selection === "department" ? "Add department" : "Employee profile")}</h2>
       {error && <p role="alert">{error}</p>}
+      {employee && <div className="operations__profile-identity">
+        <CrewPortrait employee={employee} state={state} /><span>{state}</span>
+      </div>}
       {position && <p><strong>{position.name}</strong>{supervisor && <> · Reports to{" "}
         <button className="operations__source" type="button" onClick={() => setSelection(supervisor._id)}>{supervisor.name}</button>
       </>}</p>}

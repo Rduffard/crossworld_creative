@@ -90,7 +90,7 @@ export default function Operations() {
   const requestedId = params.get("job");
   const jobId = jobIdPattern.test(requestedId || "") ? requestedId : "";
   const recipientId = !jobId && jobIdPattern.test(params.get("recipient") || "") ? params.get("recipient") : "";
-  const page = workspaces.find(([slug]) => slug === params.get("workspace"))?.[1] || "Command Center";
+  const page = workspaces.find(([slug]) => slug === params.get("workspace"))?.[1] || (params.size ? "Command Center" : "Headquarters");
   const recordGroup = params.get("source");
   const financeView = page === "Finance" && recordGroup === "finance" ? params.get("record") : null;
   const linkedRecord = sourcePages[recordGroup] === page ? { target: page, group: recordGroup, id: params.get("record") } : null;
@@ -797,7 +797,7 @@ export default function Operations() {
     snapshot.hosts.find(entry => !entry.revokedAt && entry.usage)?.usage} />}>
       <Suspense fallback={<p role="status">Loading workspace…</p>}>
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
-        openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
+        openOffice={() => setPage("Office")} openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
         openGovernance={() => setShowApprovalInbox(true)} openJob={openJob} />}
       {page === "Workflow" && <Workflow key={linkedRecord?.id || "studio"} api={api} scope={linkedRecord?.group} recordId={linkedRecord?.id}
@@ -810,9 +810,11 @@ export default function Operations() {
         initialProjectId={linkedRecord?.group === "project-objectives" ? linkedRecord.id : null} />}
       {page === "Reports" && <Reports key={linkedRecord?.id || "list"} api={api} reportId={linkedRecord?.id} openRecord={openSource} openJob={openJob} copy={copy} openWorkflow={(id) => openSource("workflow-job", id)} />}
       {page === "Workforce" && <Workforce api={api} openJob={openJob} openRecord={openSource} openWorkflow={(id) => openSource("workflow-employee", id)} messageEmployee={messageEmployee} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
-      {page === "Office" && <button type="button" onClick={() => setPage("Workflow")}>View live workflow</button>}
       {page === "Office" && <VirtualOffice api={api} openJob={openJob}
-        openEmployee={(id) => openSource("employee", id)} openHeadquarters={() => setPage("Headquarters")} />}
+        openEmployee={(id) => openSource("employee", id)} openWorkflow={() => setPage("Workflow")}
+        messageEmployee={messageEmployee} canMessage={employee => !!hostOnline && (employee.role === "first-mate" ||
+          !!(host.employeeConversations && host.profiles?.includes("read-only")))}
+        openHeadquarters={() => setPage("Headquarters")} />}
       {page === "Activity" && <Activity api={api} openSource={openSource} />}
       {page === "Knowledge" && <Knowledge key={linkedRecord?.id ?? "library"} api={api} initialId={linkedRecord?.id} />}
       {page === "Art Department" && <ArtDepartment api={api} openSource={openSource} />}
