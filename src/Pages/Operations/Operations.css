@@ -234,3 +234,6 @@
 }
 
 .operations__assignment { margin-bottom: 12px; }
+
+.operations__workshop-registry { margin-top: 16px; }
+.operations__workshop-registry dd { overflow-wrap: anywhere; }

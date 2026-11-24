@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import WorkshopRegistry from "./WorkshopRegistry";
 
 const kinds = [
   ["procedure", "Procedure"], ["research", "Research"], ["decision", "Decision"],
@@ -14,6 +15,7 @@ const fields = [
 
 export default function Knowledge({ api, initialId }) {
   const [filter, setFilter] = useState("");
+  const [workshopOpen, setWorkshopOpen] = useState(false);
   const [result, setResult] = useState(null);
   const [selection, setSelection] = useState(initialId || "");
   const [detail, setDetail] = useState(null);
@@ -75,7 +77,8 @@ export default function Knowledge({ api, initialId }) {
     setVersion((value) => value + 1);
   }
 
-  return <section className="operations__layout operations__knowledge" aria-label="Knowledge library">
+  return <>
+  <section className="operations__layout operations__knowledge" aria-label="Knowledge library">
     <section className="operations__panel">
       <h2>Knowledge library</h2>
       <form onSubmit={search}>
@@ -129,5 +132,10 @@ export default function Knowledge({ api, initialId }) {
         </form>
       </details>
     </section>
-  </section>;
+  </section>
+  <details className="operations__panel operations__workshop-registry" open={workshopOpen} onToggle={(event) => setWorkshopOpen(event.currentTarget.open)}>
+    <summary>Workshop resource registry</summary>
+    {workshopOpen && <WorkshopRegistry api={api} />}
+  </details>
+  </>;
 }
