@@ -100,7 +100,7 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
         {(host.jobs || (host.job ? [host.job] : [])).map(job => <p key={job._id}>
           {open(job, "Execution")}{job.employee && <small> {job.employee}</small>}
           {job.slot === "background review" && <small> Background review</small>}
-        </p>}
+        </p>)}
         <small>{host.profiles?.join(" · ") || "Capabilities pending"}</small>
         <small>{time(host.lastSeen)}</small>
         <Usage observation={host.usage} resumesAt={host.usageResumesAt} />

@@ -776,7 +776,7 @@ export default function Operations() {
   }}>
       <Suspense fallback={<p role="status">Loading workspace…</p>}>
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
-        openProject={(id) => openSource("project", id)} openWorkflow={(id) => openSource("workflow-objective", id)} openFinance={() => setPage("Finance")}
+        openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
         openGovernance={() => setShowApprovalInbox(true)} openJob={openJob} />}
       {page === "Workflow" && <Workflow key={linkedRecord?.id || "studio"} api={api} scope={linkedRecord?.group} recordId={linkedRecord?.id}
