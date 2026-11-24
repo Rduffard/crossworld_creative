@@ -2,7 +2,7 @@
 
 const activeStates = ["running", "cancelling", "queued", "waiting", "scheduled"];
 const roleLabels = {
-  worker: "Worker", lead: "Department lead", "first-mate": "First Mate", qa: "Quality assurance", air: "AIR",
+  worker: "Worker", lead: "Department lead", "first-mate": "First Mate", "art-director": "Art Director", qa: "Quality assurance", air: "AIR",
 };
 
 function Room({ name, members, assignments, openEmployee, openJob }) {

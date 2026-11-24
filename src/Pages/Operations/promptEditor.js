@@ -3,13 +3,17 @@ export const LEGACY_PROMPT_LIMIT = 12_000;
 export const ATTACHMENT_BYTES = 480_000;
 const draftKey = "cw_operations_prompt_draft";
 
-export function loadPromptDraft(storage) {
-  return storage.getItem(draftKey) ?? "";
+function keyFor(session) {
+  return session ? `${draftKey}:${session}` : draftKey;
 }
 
-export function savePromptDraft(storage, prompt, previous) {
-  if (prompt) storage.setItem(draftKey, prompt);
-  else if (loadPromptDraft(storage) === previous) storage.removeItem(draftKey);
+export function loadPromptDraft(storage, session) {
+  return storage.getItem(keyFor(session)) ?? "";
+}
+
+export function savePromptDraft(storage, prompt, previous, session) {
+  if (prompt) storage.setItem(keyFor(session), prompt);
+  else if (loadPromptDraft(storage, session) === previous) storage.removeItem(keyFor(session));
 }
 
 export async function importPromptFile(file, prompt) {

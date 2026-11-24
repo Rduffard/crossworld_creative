@@ -45,10 +45,13 @@ function App() {
           }
         >
           <Route path="/settings" element={<Settings />} />
-          <Route path="/operations" element={<Suspense fallback={<p role="status">Loading Operations…</p>}>
-            <Operations />
-          </Suspense>} />
         </Route>
+
+        <Route path="/operations" element={<ProtectedRoute>
+          <Suspense fallback={<p role="status">Loading Operations…</p>}>
+            <Operations />
+          </Suspense>
+        </ProtectedRoute>} />
 
         {/* Account-only pages */}
         <Route

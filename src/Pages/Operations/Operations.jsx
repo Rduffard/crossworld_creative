@@ -1,17 +1,30 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import Markdown from "react-markdown";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { requestJson } from "../../utils/api";
-import Objectives from "./Objectives";
-import Headquarters from "./Headquarters";
-import Knowledge from "./Knowledge";
-import Workforce from "./Workforce";
-import Activity from "./Activity";
-import VirtualOffice from "./VirtualOffice";
-import Projects from "./Projects";
+import { MediaComposer, MediaLibrary } from "./MediaAttachments";
+import OperationsShell from "./OperationsShell";
+import { profileNames, workspaceNames, workspaces } from "./workspaces";
 import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
 } from "./promptEditor";
 import "./Operations.css";
+
+const Activity = lazy(() => import("./Activity"));
+const ArtDepartment = lazy(() => import("./ArtDepartment"));
+const Engineering = lazy(() => import("./Engineering"));
+const Finance = lazy(() => import("./Finance"));
+const Headquarters = lazy(() => import("./Headquarters"));
+const Infrastructure = lazy(() => import("./Infrastructure"));
+const JobTranscript = lazy(() => import("./JobTranscript"));
+const Knowledge = lazy(() => import("./Knowledge"));
+const Objectives = lazy(() => import("./Objectives"));
+const ObjectiveProposal = lazy(() => import("./ObjectiveProposal"));
+const OperationsHelp = lazy(() => import("./OperationsHelp"));
+const OrganizationSetup = lazy(() => import("./OrganizationSetup"));
+const Projects = lazy(() => import("./Projects"));
+const ReferenceLibrary = lazy(() => import("./ReferenceLibrary"));
+const VirtualOffice = lazy(() => import("./VirtualOffice"));
+const Workforce = lazy(() => import("./Workforce"));
 
 const api = (path, options) => requestJson(`/operations${path}`, { auth: true, ...options });
 async function post(path, body) {
@@ -23,13 +36,27 @@ async function post(path, body) {
   }
 }
 const running = ["scheduled", "waiting", "queued", "running", "cancelling"];
-const profileNames = {
-  "read-only": "Read-only inspection", development: "Development repository editing",
-  workshop: "Workshop editing", "full-access": "Full Access",
-};
+function executionStatus(job) {
+  if (job.status === "waiting") return "Waiting for previous turn";
+  if (job.status === "queued") return "Queued for worker";
+  if (job.status !== "running") return job.status[0].toUpperCase() + job.status.slice(1);
+  if (job.approval?.state === "pending") {
+    return job.decision?.id === job.approval.id ? "Decision sent" : "Waiting for owner";
+  }
+  if (!job.activeTurn) return "Connecting to Codex";
+  if (job.workerRole === "qa") return "Independent review";
+  if (job.workerRole === "correction") return "Correcting";
+  return "Running";
+}
 const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
-const workspaceNames = { development: "C: · Development", workshop: "D: · Art Workshop" };
 const modes = ["Split", "Conversation", "Execution"];
+const jobIdPattern = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
+const sourcePages = { objective: "Objectives", "project-objectives": "Objectives", project: "Projects", knowledge: "Knowledge", employee: "Workforce" };
+
+function getDraft(session) {
+  try { return { prompt: loadPromptDraft(window.localStorage, session), error: "" }; }
+  catch { return { prompt: "", error: "Draft storage is unavailable in this browser." }; }
+}
 
 function localScheduleTime(value) {
   const date = new Date(value);
@@ -38,114 +65,31 @@ function localScheduleTime(value) {
   return wallTime === value ? date : null;
 }
 
-function JobTranscript({ job, copy, jobId, mode, composer, children }) {
-  const answer = useMemo(() => job.events.filter((event) => event.view === "response").map((event) => event.text).join(""), [job.events]);
-  const updates = useMemo(() => job.events.filter((event) => event.view === "activity" && event.label !== "Command started"), [job.events]);
-  const [updateCount, setUpdateCount] = useState(20);
-  const [visibleCount, setVisibleCount] = useState(80);
-  const [filter, setFilter] = useState("");
-  const [prompt, setPrompt] = useState(null);
-  const [loadingPrompt, setLoadingPrompt] = useState(false);
-  const [promptError, setPromptError] = useState("");
-  const entries = useMemo(() => {
-    const output = new Map();
-    return job.events.reduce((rows, event, index) => {
-      if (event.view !== "execution") return rows;
-      if (/^(?:Command output|Output) · /.test(event.label)) {
-        const existing = output.get(event.label);
-        if (existing) {
-          existing.text += event.text;
-          return rows;
-        }
-      }
-      const row = { ...event, index };
-      rows.push(row);
-      if (/^(?:Command output|Output) · /.test(event.label)) output.set(event.label, row);
-      return rows;
-    }, []);
-  }, [job.events]);
-  const term = filter.trim().toLowerCase();
-  const matching = term ? entries.filter((entry) => `${entry.label}\n${entry.text}`.toLowerCase().includes(term)) : entries;
-  const summary = [
-    "# Crossworld Operations session",
-    `- Session: ${job.sessionId}`,
-    `- Job: ${jobId}`,
-    `- Status: ${job.status}`,
-    `- Workspace: ${workspaceNames[job.workspace]}`,
-    `- Permissions: ${profileNames[job.profile || "read-only"]}`,
-    `- Model: ${job.model} (${job.effort})`,
-    job.error && `\nError: ${job.error}`,
-    answer && `\n${answer}`,
-  ].filter(Boolean).join("\n");
-
-  async function loadPrompt() {
-    setLoadingPrompt(true);
-    setPromptError("");
-    try { setPrompt((await api(`/jobs/${jobId}`)).prompt); }
-    catch (failure) { setPromptError(failure.message); }
-    finally { setLoadingPrompt(false); }
-  }
-
-  return <div className="operations__desk" data-view={mode.toLowerCase()}>
-    <section className="operations__pane" aria-label="Conversation" tabIndex={0}>
-      <h3>Conversation</h3>
-      <details onToggle={(event) => {
-        if (event.currentTarget.open && prompt === null && !loadingPrompt) loadPrompt();
-      }}>
-        <summary>Submitted prompt</summary>
-        {loadingPrompt && <p role="status">Loading prompt…</p>}
-        {promptError && <p role="alert">{promptError} <button type="button" onClick={loadPrompt}>Retry</button></p>}
-        {prompt !== null && <><button type="button" onClick={() => copy(prompt)}>Copy prompt</button><pre>{prompt}</pre></>}
-      </details>
-      {updates.length > 0 && <details open>
-        <summary>Agent updates ({updates.length})</summary>
-        {updates.length > updateCount && <button type="button" onClick={() => setUpdateCount((count) => count + 20)}>Show earlier updates</button>}
-        {updates.slice(-updateCount).map((event, index) => <div key={updates.length - Math.min(updates.length, updateCount) + index}>
-          <strong>{event.label}</strong>
-          <Markdown skipHtml disallowedElements={["img"]}>{event.text}</Markdown>
-        </div>)}
-      </details>}
-      <div className="operations__modes">
-        <button type="button" onClick={() => copy(summary)}>Copy session summary</button>
-        <button type="button" disabled={!answer} onClick={() => copy(answer)}>Copy response as Markdown</button>
-      </div>
-      {answer ? <div className="operations__response"><Markdown skipHtml disallowedElements={["img"]}>{answer}</Markdown></div>
-        : <p>No final response yet.</p>}
-      {composer}
-    </section>
-    <section className="operations__pane" aria-label="Execution" tabIndex={0}>
-      <h3>Execution</h3>
-      {children}
-      <label>Search execution output<input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} /></label>
-      {matching.length === 0 && <p>{term ? "No matching execution events." : "No execution events yet."}</p>}
-      {matching.length > visibleCount && <button type="button" onClick={() => setVisibleCount((count) => count + 80)}>Show earlier events</button>}
-      {matching.slice(-visibleCount).map((event) => <details key={event.index}>
-        <summary>{event.label}{event.at && <time dateTime={event.at}>{new Date(event.at).toLocaleTimeString()}</time>}</summary>
-        <button type="button" onClick={() => copy(event.text)}>Copy entry</button>
-        <pre>{event.text}</pre>
-      </details>)}
-    </section>
-  </div>;
-}
-
 export default function Operations() {
+  const [params, setParams] = useSearchParams();
+  const requestedId = params.get("job");
+  const jobId = jobIdPattern.test(requestedId || "") ? requestedId : "";
+  const page = workspaces.find(([slug]) => slug === params.get("workspace"))?.[1] || "Command Center";
+  const recordGroup = params.get("source");
+  const linkedRecord = sourcePages[recordGroup] === page ? { target: page, group: recordGroup, id: params.get("record") } : null;
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState("");
   const [relayError, setRelayError] = useState("");
   const [accessDenied, setAccessDenied] = useState(false);
-  const [jobId, setJobId] = useState(() => {
-    const id = new URLSearchParams(window.location.search).get("job");
-    return /^[a-f\d-]{36}$/.test(id || "") ? id : "";
-  });
   const [search, setSearch] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const [archived, setArchived] = useState(false);
+  const [history, setHistory] = useState(null);
   const [profile, setProfile] = useState("read-only");
   const [policyRole, setPolicyRole] = useState("direct");
   const [job, setJob] = useState(null);
-  const [page, setPage] = useState("Command Center");
   const [showApprovalInbox, setShowApprovalInbox] = useState(false);
-  const [linkedRecord, setLinkedRecord] = useState(null);
+  const historyDrawer = useRef(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [assignment, setAssignment] = useState(null);
+  const [includeProjectReferences, setIncludeProjectReferences] = useState(false);
+  const [outputScope, setOutputScope] = useState(null);
   const [assignees, setAssignees] = useState([]);
   const [employeeId, setEmployeeId] = useState("");
   const [mode, setMode] = useState(() => {
@@ -153,7 +97,7 @@ export default function Operations() {
       const preference = window.localStorage.getItem("cw_operations_desk_view");
       if (modes.includes(preference)) return preference;
     } catch { /* Browser storage is optional. */ }
-    return "Split";
+    return "Conversation";
   });
   const [scheduledTime, setScheduledTime] = useState("");
   const [repeatDays, setRepeatDays] = useState(0);
@@ -163,49 +107,153 @@ export default function Operations() {
   const [hostId, setHostId] = useState("");
   const [workspace, setWorkspace] = useState("development");
   const [effort, setEffort] = useState("medium");
-  const [draft, setDraft] = useState(() => {
-    try { return { prompt: loadPromptDraft(window.localStorage), error: "" }; }
-    catch { return { prompt: "", error: "Draft storage is unavailable in this browser." }; }
-  });
+  const session = job?._id === jobId ? job.sessionId : "";
+  const draftKey = session || (jobId ? null : "");
+  const [storedDrafts, setDrafts] = useState({});
+  const draft = storedDrafts[draftKey] ?? (draftKey === null ? { prompt: "", error: "" } : getDraft(draftKey));
   const { prompt } = draft;
   const [expanded, setExpanded] = useState(false);
   const [importing, setImporting] = useState(false);
   const [attachment, setAttachment] = useState({});
+  const [mediaDrafts, setMediaDrafts] = useState({});
+  const [uploadingDraft, setUploadingDraft] = useState(null);
   const [deviceName, setDeviceName] = useState("");
   const [credential, setCredential] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const pendingSubmit = useRef(null);
   const pendingSteer = useRef(null);
+  const eventBuffer = useRef(null);
+  const query = new URLSearchParams({ archived: String(archived), compact: "true" });
+  if (searchTerm) query.set("search", searchTerm);
+  const historyKey = query.toString();
+
+  useEffect(() => {
+    const debounce = setTimeout(() => setSearchTerm(search.trim()), 250);
+    return () => clearTimeout(debounce);
+  }, [search]);
+
+  async function loadOlder() {
+    const query = new URLSearchParams(historyKey);
+    const key = historyKey;
+    const current = history?.key === key ? history : null;
+    const latest = snapshot.jobs || [];
+    const cursor = current?.cursor || latest.at(-1)?._id;
+    if (!cursor || current?.loading) return;
+    query.set("before", cursor);
+    setHistory({ ...current, key, loading: true });
+    try {
+      const rows = await api(`/jobs?${query}`);
+      setHistory((previous) => previous?.key === key ? {
+        key, entries: [...(current?.entries || latest), ...rows],
+        cursor: rows.at(-1)?._id, end: rows.length < 50,
+      } : previous);
+    } catch (failure) {
+      setHistory((previous) => previous?.key === key ? { ...current, key, error: failure.message } : previous);
+    }
+  }
+
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const sync = () => {
+      if (viewport.scale === 1) document.documentElement.style.setProperty("--operations-viewport", `${viewport.height}px`);
+      else document.documentElement.style.removeProperty("--operations-viewport");
+      setKeyboardOpen(viewport.scale === 1 && window.innerHeight - viewport.height > 120 &&
+        ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName));
+    };
+    sync();
+    viewport.addEventListener("resize", sync);
+    return () => {
+      viewport.removeEventListener("resize", sync);
+      document.documentElement.style.removeProperty("--operations-viewport");
+    };
+  }, []);
+
+  useEffect(() => {
+    const reconnect = () => {
+      if (!document.hidden) setRefreshVersion((value) => value + 1);
+    };
+    window.addEventListener("online", reconnect);
+    document.addEventListener("visibilitychange", reconnect);
+    return () => {
+      window.removeEventListener("online", reconnect);
+      document.removeEventListener("visibilitychange", reconnect);
+    };
+  }, []);
 
   function openJob(id, view) {
     selectJob(id);
     changeMode(view);
-    setPage("Command Center");
   }
 
   function openSource(group, id) {
     if (group === "job") return openJob(id, "Conversation");
-    const target = { objective: "Objectives", "project-objectives": "Objectives", project: "Projects", knowledge: "Knowledge", employee: "Workforce" }[group];
-    setLinkedRecord({ target, id, group });
-    setPage(target);
+    if (sourcePages[group]) setPage(sourcePages[group], group, id);
   }
 
   function prepareAssignment(objective, projectWorkspace) {
     if (projectWorkspace) setWorkspace(projectWorkspace);
     setAssignment({ id: objective._id, title: objective.title });
+    setIncludeProjectReferences(false);
     setEmployeeId("");
     selectJob(null);
     changeMode("Conversation");
-    setPage("Command Center");
+  }
+
+  function setPage(target, group, id) {
+    const slug = workspaces.find(([, name]) => name === target)?.[0];
+    if (!slug) return;
+    const next = new URLSearchParams(params);
+    next.set("workspace", slug);
+    if (group && id) {
+      next.set("source", group);
+      next.set("record", id);
+    } else {
+      next.delete("source");
+      next.delete("record");
+    }
+    setParams(next);
   }
 
   function selectJob(id) {
-    const url = new URL(window.location.href);
-    url.searchParams.set("job", id);
-    window.history.replaceState(window.history.state, "", url);
-    setJobId(id);
+    setOutputScope(null);
+    const next = new URLSearchParams(params);
+    next.set("workspace", "command");
+    next.delete("source");
+    next.delete("record");
+    if (id) {
+      next.set("job", id);
+      setAssignment(null);
+      setIncludeProjectReferences(false);
+    }
+    else next.delete("job");
+    setParams(next);
     setRescheduleTime("");
+    setAttachment({});
+    setError("");
+    historyDrawer.current?.close();
+  }
+
+  function useReference(record) {
+    if (!record?.hostId || !record._id || !["image/png", "image/jpeg", "image/webp"].includes(record.mime) ||
+        !Number.isSafeInteger(record.size) || record.size > 12 * 1024 * 1024) {
+      setError("Select a supported image up to 12 MiB for Command Center.");
+      return;
+    }
+    const key = JSON.stringify(["", record.hostId]);
+    const items = mediaDrafts[key] || [];
+    if (!items.some((item) => item._id === record._id)) {
+      if (items.length >= 4) {
+        setError("The new conversation draft already has four images. Remove one before adding this reference.");
+        return;
+      }
+      setMediaDrafts((current) => ({ ...current, [key]: [...items, record] }));
+    }
+    setHostId(record.hostId);
+    setAssignment(null);
+    selectJob(null);
+    setNotice("Reference attached to your new conversation draft.");
   }
 
   function changeMode(value) {
@@ -218,7 +266,7 @@ export default function Operations() {
     if (!assignment) return;
     let current = true;
     api("/workforce").then(({ employees }) => {
-      if (current) setAssignees(employees.filter((entry) => ["worker", "lead"].includes(entry.role) && entry.status === "available"));
+      if (current) setAssignees(employees.filter((entry) => ["worker", "lead", "art-director"].includes(entry.role) && entry.status === "available"));
     }).catch((failure) => { if (current) setError(failure.message); });
     return () => { current = false; };
   }, [assignment]);
@@ -228,21 +276,29 @@ export default function Operations() {
     let timer;
     async function refresh() {
       try {
-        const query = new URLSearchParams({ search, archived: String(archived), compact: "true" });
+        const command = page === "Command Center";
+        const schedules = page === "Schedules";
+        const sharedApprovals = command || page === "Headquarters" || page === "Settings";
         const [hosts, jobs, approvals, schedule, dispatch, recurrence] = await Promise.all([
-          api("/hosts"), api(`/jobs?${query}`), api("/approvals").catch((failure) => {
+          api("/hosts"), command ? api(`/jobs?${historyKey}`) : null, sharedApprovals ? api("/approvals").catch((failure) => {
             if (failure.status === 404) return null;
             throw failure;
-          }), api("/schedule").catch((failure) => {
+          }) : null, (command || schedules) ? api("/schedule").catch((failure) => {
             if (failure.status === 404) return null;
             throw failure;
-          }), api("/dispatch").catch((failure) => {
+          }) : null, (command || page === "Settings") ? api("/dispatch").catch((failure) => {
             if (failure.status === 404) return null;
             throw failure;
-          }), api("/recurrence").catch(() => null),
+          }) : null, (command || schedules) ? api("/recurrence").catch(() => null) : null,
         ]);
         if (active) {
-          setSnapshot({ hosts, jobs, approvals, schedule, dispatch, recurrence });
+          setSnapshot((previous) => ({
+            ...previous, hosts,
+            ...(command ? { jobs, historyKey } : {}),
+            ...(command || schedules ? { schedule, recurrence } : {}),
+            ...(sharedApprovals ? { approvals } : {}),
+            ...(command || page === "Settings" ? { dispatch } : {}),
+          }));
           setRelayError("");
         }
       } catch (failure) {
@@ -254,25 +310,31 @@ export default function Operations() {
         }
         setRelayError(failure.message);
       }
-      if (active) timer = setTimeout(refresh, 2500);
+      if (active) timer = setTimeout(refresh, document.hidden ? 30_000 : page === "Command Center" ? 4000 : 15_000);
     }
     refresh();
     return () => { active = false; clearTimeout(timer); };
-  }, [search, archived, refreshVersion]);
+  }, [historyKey, refreshVersion, page]);
 
   useEffect(() => {
-    if (!jobId || accessDenied) return;
+    if (page !== "Command Center" || !jobId || accessDenied) return;
     let active = true;
     let timer;
-    const events = [];
+    if (eventBuffer.current?.id !== jobId) {
+      eventBuffer.current = { id: jobId, events: [], rendered: [] };
+    }
+    const buffer = eventBuffer.current;
     async function refresh() {
       try {
-        const detail = await api(`/jobs/${jobId}?offset=${events.length}&compact=true`);
+        const detail = await api(`/jobs/${jobId}?offset=${buffer.events.length}&compact=true`);
         if (!active) return;
-        events.push(...detail.events);
-        setJob({ ...detail, events: [...events] });
-        if (!running.includes(detail.status) && events.length >= detail.eventCount) return;
-        timer = setTimeout(refresh, events.length < detail.eventCount ? 0 : detail.status === "scheduled" ? 5000 : 900);
+        if (detail.events.length) {
+          buffer.events.push(...detail.events);
+          buffer.rendered = [...buffer.events];
+        }
+        setJob({ ...detail, events: buffer.rendered });
+        if (!running.includes(detail.status) && buffer.events.length >= detail.eventCount) return;
+        timer = setTimeout(refresh, buffer.events.length < detail.eventCount ? 0 : document.hidden ? 10_000 : detail.status === "scheduled" ? 5000 : 900);
       } catch (failure) {
         if (!active) return;
         setError(failure.message);
@@ -281,7 +343,7 @@ export default function Operations() {
     }
     refresh();
     return () => { active = false; clearTimeout(timer); };
-  }, [jobId, accessDenied, refreshVersion]);
+  }, [jobId, accessDenied, refreshVersion, page]);
 
   const host = snapshot?.hosts.find((entry) => entry._id === hostId && !entry.revokedAt) ||
     snapshot?.hosts.find((entry) => entry.online) || snapshot?.hosts.find((entry) => !entry.revokedAt);
@@ -289,11 +351,23 @@ export default function Operations() {
   const selectedJob = job?._id === jobId ? job : null;
   const hostOnline = !relayError && host?.online;
   const selectedHost = snapshot?.hosts.find((entry) => entry._id === selectedJob?.hostId);
+  const mediaHostId = jobId ? selectedJob?.hostId : host?._id;
+  const mediaKey = draftKey === null || !mediaHostId ? null : JSON.stringify([draftKey, mediaHostId]);
+  const mediaAttachments = mediaDrafts[mediaKey] || [];
+  const mediaUploading = mediaKey !== null && uploadingDraft === mediaKey;
   const selectedProfile = (profile === workspace || profile === "full-access") && host?.profiles?.includes(profile)
     ? profile : "read-only";
+  const canReturnMedia = !jobId && host?.mediaOutput && workspace === "workshop" && selectedProfile === "workshop";
+  const outputScopeKey = JSON.stringify([host?._id, assignment?.id, employeeId, params.toString()]);
+  const outputMedia = canReturnMedia && outputScope === outputScopeKey;
   const approval = selectedJob?.approval;
+  const activeHistory = snapshot?.historyKey === historyKey ? snapshot.jobs : [];
+  const older = history?.key === historyKey ? history : null;
   const sessions = new Map();
-  for (const entry of snapshot?.jobs || []) {
+  const seenTurns = new Set();
+  for (const entry of [...activeHistory, ...(older?.entries || [])]) {
+    if (seenTurns.has(entry._id)) continue;
+    seenTurns.add(entry._id);
     const id = entry.sessionId || entry._id;
     if (!sessions.has(id)) sessions.set(id, []);
     sessions.get(id).push(entry);
@@ -311,16 +385,17 @@ export default function Operations() {
   const editingLocked = busy || importing;
   const scheduleDate = localScheduleTime(scheduledTime);
   const workerOptions = assignees.filter((employee) => employee.workspace === workspace);
-  const validAssignment = !assignment || workerOptions.some((employee) => employee._id === employeeId);
+  const validAssignment = !assignment || (workerOptions.some((employee) => employee._id === employeeId) &&
+    (!includeProjectReferences || host?.media));
   const validRepeat = repeatDays === 0 || (snapshot?.recurrence && Number.isInteger(repeatCount) && repeatCount >= 2 && repeatCount <= 12);
   const schedulePreview = scheduleDate?.toLocaleString(undefined, { dateStyle: "long", timeStyle: "long" });
   const rescheduleDate = localScheduleTime(rescheduleTime);
 
   function updatePrompt(value) {
     let error = "";
-    try { savePromptDraft(window.localStorage, value, prompt); }
+    try { savePromptDraft(window.localStorage, value, prompt, draftKey); }
     catch { error = "This draft could not be saved in this browser. Keep a copy before refreshing."; }
-    setDraft({ prompt: value, error });
+    setDrafts((previous) => ({ ...previous, [draftKey]: { prompt: value, error } }));
   }
 
   async function attachFile(event) {
@@ -351,14 +426,19 @@ export default function Operations() {
   }
 
   function submit(parent, queue = false, scheduledAt) {
-    if (editingLocked || !validPrompt || (parent && assignment) || (!parent && !validAssignment) || (scheduledAt !== undefined && !validRepeat) || prompt.length > (parent ? continuationLimit : startLimit) ||
+    if (editingLocked || mediaUploading || !validPrompt || (parent && assignment) || (!parent && !validAssignment) ||
+        (scheduledAt !== undefined && (!validRepeat || mediaAttachments.length)) || prompt.length > (parent ? continuationLimit : startLimit) ||
         (!parent && profile === "full-access" && selectedProfile !== profile)) return;
     return action(async () => {
       const request = {
         prompt, model: "gpt-6.2-sol", effort: parent?.effort || selectedEffort, queue,
         profile: parent ? parent.profile || "read-only" : selectedProfile,
         workspace: parent?.workspace || workspace, hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
+        ...(mediaAttachments.length ? { attachmentIds: mediaAttachments.map((item) => item._id) } : {}),
         ...(!parent && assignment ? { objectiveId: assignment.id, employeeId } : {}),
+        ...(!parent && assignment && includeProjectReferences ? { includeProjectReferences: true } : {}),
+        ...(!parent && scheduledAt === undefined && canReturnMedia && outputMedia ? { outputMedia: true } : {}),
+        ...(scheduledAt === undefined && !assignment && (!parent || parent.studioTools === true) ? { studioTools: true } : {}),
         ...(scheduledAt !== undefined && snapshot.recurrence && repeatDays ? { repeat: { days: repeatDays, count: repeatCount } } : {}),
       };
       const signature = JSON.stringify(request);
@@ -368,11 +448,13 @@ export default function Operations() {
       const endpoint = request.repeat ? "/recurrence" : scheduledAt === undefined ? "/jobs" : "/schedule";
       const { _id, recurring } = await post(endpoint, { id: pendingSubmit.current.id, ...request });
       pendingSubmit.current = null;
+      setOutputScope(null);
       if (recurring) setNotice("Repeating schedule saved. Find it under Upcoming work.");
       else if (queue) setNotice("Follow-up queued. Open it from session history.");
       else selectJob(_id);
       if (!parent && assignment) setAssignment(null);
       clearSubmittedDraft();
+      if (mediaKey) setMediaDrafts((current) => ({ ...current, [mediaKey]: [] }));
       if (scheduledAt !== undefined) {
         setScheduledTime("");
         setRepeatDays(0);
@@ -383,7 +465,7 @@ export default function Operations() {
   }
 
   function steer() {
-    if (assignment || editingLocked || !validPrompt || prompt.length > continuationLimit) return;
+    if (assignment || editingLocked || mediaUploading || mediaAttachments.length || !validPrompt || prompt.length > continuationLimit) return;
     return action(async () => {
       const turnId = selectedJob.activeTurn.turnId;
       const signature = JSON.stringify([jobId, turnId, prompt]);
@@ -404,8 +486,26 @@ export default function Operations() {
   if (accessDenied) return <main className="operations"><h1>Crossworld Operations</h1><p>Private Operations access unavailable.</p></main>;
   if (!snapshot) return <main className="operations"><h1>Crossworld Operations</h1><p role="status">{relayError || "Checking Operations access…"}</p></main>;
 
+  const commonDisabled = !workerEnabled || editingLocked || mediaUploading || !validPrompt || !!relayError;
+  const canStart = !commonDisabled && hostOnline && selectedEffort && validAssignment && prompt.length <= startLimit &&
+    (profile !== "full-access" || selectedProfile === profile);
+  const canContinue = !commonDisabled && canAct && selectedJob?.codexThreadId &&
+    !running.includes(selectedJob.status) && prompt.length <= continuationLimit;
+  const canQueue = !commonDisabled && ["queued", "running"].includes(selectedJob?.status) && prompt.length <= continuationLimit;
+  const canSteer = !editingLocked && canAct && selectedJob?.activeTurn && selectedJob.status === "running" &&
+    !["pending", "sending"].includes(selectedJob.instruction?.state) && !mediaUploading && !mediaAttachments.length &&
+    validPrompt && prompt.length <= continuationLimit;
+  const send = !jobId ? { label: assignment ? "Start assignment" : "Send message", enabled: canStart, run: () => submit(null) }
+    : canQueue || ["queued", "running"].includes(selectedJob?.status)
+      ? { label: "Queue follow-up", enabled: canQueue, run: () => submit(selectedJob, true) }
+      : { label: "Send follow-up", enabled: canContinue, run: () => submit(selectedJob) };
+
   const composer = (
-  <form id="operations-composer" onSubmit={(event) => { event.preventDefault(); submit(null); }}>
+  <form id="operations-composer" onSubmit={(event) => {
+    event.preventDefault();
+    if (send.enabled) send.run();
+  }}>
+    <div className="operations__composer-body">
     {assignment && <section className="operations__panel operations__assignment" aria-label="Implementation assignment">
       <div className="operations__briefing-title">
         <strong>{assignment.title}</strong>
@@ -415,17 +515,29 @@ export default function Operations() {
         <option value="">{workerOptions.length ? "Select an employee" : "No available worker in this workspace"}</option>
         {workerOptions.map((employee) => <option key={employee._id} value={employee._id}>{employee.name}</option>)}
       </select></label>
+      <label className="operations__check">
+        <input type="checkbox" checked={includeProjectReferences}
+          disabled={editingLocked || (!host?.media && !includeProjectReferences)}
+          onChange={(event) => setIncludeProjectReferences(event.target.checked)} />
+        Include approved project images
+      </label>
+      {!host?.media && <p>Choose a host with media enabled to include project images.</p>}
       <p>The worker receives the task prompt with the objective criteria and saved project and employee instructions.</p>
     </section>}
+    {!jobId && <details className="operations__composer-options">
+    <summary>Execution settings <span>{workspaceNames[workspace]} · {profileNames[selectedProfile]}</span></summary>
     <div className="operations__selectors">
-      <label>Host<select value={host?._id || ""} onChange={(event) => setHostId(event.target.value)}>
+      <label>Host<select value={host?._id || ""} onChange={(event) => { setOutputScope(null); setHostId(event.target.value); }}>
         <option value="" disabled>Select host</option>
         {snapshot.hosts.filter((entry) => !entry.revokedAt).map((entry) => <option key={entry._id} value={entry._id}>{entry.label}</option>)}
       </select></label>
-      <label>Workspace<select value={workspace} onChange={(event) => setWorkspace(event.target.value)}>
+      <label>Workspace<select value={workspace} onChange={(event) => { setOutputScope(null); setWorkspace(event.target.value); }}>
         {Object.entries(workspaceNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
       </select></label>
-      <label>Permissions<select value={profile === "full-access" ? profile : selectedProfile} onChange={(event) => setProfile(event.target.value)}>
+      <label>Permissions<select value={profile === "full-access" ? profile : selectedProfile} onChange={(event) => {
+        setOutputScope(null);
+        setProfile(event.target.value);
+      }}>
         <option value="read-only">{profileNames["read-only"]}</option>
         {host?.profiles?.includes(workspace) && <option value={workspace}>{profileNames[workspace]}</option>}
         {host?.profiles?.includes("full-access") && <option value="full-access">Full Access</option>}
@@ -437,48 +549,52 @@ export default function Operations() {
         {host?.efforts?.map((entry) => <option key={entry}>{entry}</option>)}
       </select></label>
     </div>
+    {canReturnMedia && <label className="operations__check">
+      <input type="checkbox" checked={outputMedia} onChange={(event) => setOutputScope(event.target.checked ? outputScopeKey : null)} />
+      Allow this turn to return new images or videos
+    </label>}
     {selectedProfile === "full-access" && <p className="operations__access-warning">
       <strong>Full Access.</strong> Commands run with the Windows account’s access to files, applications, and the network.
       Codex approval prompts are disabled. Workspace selection sets the starting folder.
     </p>}
     {profile === "full-access" && selectedProfile !== profile && <p role="alert">Full Access is unavailable on this host. Select another permission profile.</p>}
+    </details>}
     <div className="operations__editor">
-      <label htmlFor="operations-prompt">Prompt</label>
-      <textarea id="operations-prompt" required readOnly={editingLocked} rows={expanded ? 20 : 6}
+      <label className="operations__sr-only" htmlFor="operations-prompt">Message</label>
+      <textarea id="operations-prompt" required readOnly={editingLocked || draftKey === null} rows={expanded ? 12 : 3}
         value={prompt} spellCheck={false} autoCapitalize="off"
+        placeholder={jobId ? "Write a follow-up" : "What would you like the studio to do?"}
         aria-invalid={!!promptError} aria-describedby="operations-prompt-count"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            if (send.enabled) send.run();
+          }
+        }}
         onChange={(event) => updatePrompt(event.target.value)} />
       <div className="operations__editor-tools">
-        <span id="operations-prompt-count">{prompt.length.toLocaleString()} / {PROMPT_LIMIT.toLocaleString()} characters</span>
+        <span id="operations-prompt-count">{prompt ? `${prompt.length.toLocaleString()} characters · ${draft.error ? "Draft unsaved" : "Draft saved"}` : "Ctrl / ⌘ + Enter to send"}</span>
         <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
           onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>
       </div>
-      <label>Attach a Markdown or text file
-        <input type="file" accept=".md,.markdown,.txt" disabled={editingLocked} onChange={attachFile} />
-      </label>
-      <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
       {host && startLimit < PROMPT_LIMIT && <p>The selected host supports {startLimit.toLocaleString()} characters for new sessions. Update and restart its worker for longer prompts.</p>}
       {selectedHost && selectedJob && continuationLimit < PROMPT_LIMIT && <p>The session host supports {continuationLimit.toLocaleString()} characters for continuations, queued follow-ups, and steering.</p>}
       {promptError && <p role="alert">{promptError}</p>}
       {attachment.error && <p role="alert">{attachment.error}</p>}
       {attachment.message && <p role="status">{attachment.message}</p>}
       {draft.error && <p role="alert">{draft.error}</p>}
-      {prompt && !draft.error && <p>Draft saved in this browser.</p>}
     </div>
-    <div className="operations__prompt-actions">
-      <button disabled={!workerEnabled || editingLocked || !hostOnline || !selectedEffort || !validPrompt || !validAssignment || prompt.length > startLimit ||
-        (profile === "full-access" && selectedProfile !== profile)}>{assignment ? "Start assignment" : "Start session"}</button>
-      <button type="button" disabled={!!assignment || !workerEnabled || editingLocked || !canAct || !selectedJob?.codexThreadId ||
-        running.includes(selectedJob.status) || !validPrompt || prompt.length > continuationLimit}
-        onClick={() => submit(selectedJob)}>Continue session</button>
-      <button type="button" disabled={!!assignment || !workerEnabled || editingLocked || !["queued", "running"].includes(selectedJob?.status) ||
-        !validPrompt || prompt.length > continuationLimit}
-        onClick={() => submit(selectedJob, true)}>Queue follow-up</button>
-      <button type="button" disabled={!!assignment || editingLocked || !canAct || !selectedJob?.activeTurn || selectedJob.status !== "running" ||
-        ["pending", "sending"].includes(selectedJob.instruction?.state) || !validPrompt || prompt.length > continuationLimit}
-        onClick={steer}>Steer current task</button>
-    </div>
-    {snapshot?.schedule && !assignment && <details className="operations__schedule">
+    <details className="operations__prompt-file">
+      <summary>Attachments{mediaAttachments.length ? ` (${mediaAttachments.length})` : ""}</summary>
+      {mediaKey && <MediaComposer key={mediaKey} hostId={mediaHostId} api={api} attachments={mediaAttachments} disabled={editingLocked}
+        onChange={(items) => setMediaDrafts((current) => ({ ...current, [mediaKey]: items }))}
+        onBusy={(next) => setUploadingDraft((current) => next ? mediaKey : current === mediaKey ? null : current)} />}
+      <label>Import Markdown or text into the prompt
+        <input type="file" accept=".md,.markdown,.txt" disabled={editingLocked || draftKey === null} onChange={attachFile} />
+      </label>
+      <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
+    </details>
+    {snapshot?.schedule && !assignment && !jobId && <details className="operations__schedule">
       <summary>Schedule a new session</summary>
       <label>Run at (local time)<input type="datetime-local" value={scheduledTime}
         onChange={(event) => setScheduledTime(event.target.value)} /></label>
@@ -495,51 +611,163 @@ export default function Operations() {
       {schedulePreview && <p>Dispatch time <strong>{schedulePreview}</strong></p>}
       {scheduledTime && !scheduleDate && <p role="alert">Choose a valid time in your current time zone.</p>}
       <p>Overdue sessions wait for the selected host to reconnect and become available.</p>
-      <button type="button" disabled={!workerEnabled || editingLocked || !!relayError || !host || !selectedEffort ||
+      {mediaAttachments.length > 0 && <p>Remove images before scheduling. Send them in a conversation or queued follow-up.</p>}
+      <button type="button" disabled={!workerEnabled || editingLocked || mediaUploading || !!mediaAttachments.length || !!relayError || !host || !selectedEffort ||
         !validPrompt || prompt.length > startLimit || !scheduleDate || !validRepeat || (profile === "full-access" && selectedProfile !== profile)}
         onClick={() => submit(null, false, +scheduleDate)}>{repeatDays > 0 ? "Schedule series" : "Schedule session"}</button>
     </details>}
+    </div>
+    <div className="operations__prompt-actions">
+      {selectedJob?.status === "running" && <button type="button" disabled={!canSteer}
+        onClick={steer}>Steer current task</button>}
+      <button className="operations__send" disabled={!send.enabled}>{send.label}</button>
+    </div>
   </form>
   );
 
-  return (
-    <main className="operations">
-      <header className="operations__hero">
-        <p className="operations__brand">Crossworld Creative</p>
-        <h1>Crossworld Operations</h1>
-        <p role="status">{relayError ? "Operations API unavailable" : hostOnline ? `${host.label} connected` : "Windows execution host offline"}</p>
-        {snapshot.dispatch && <div className="operations__dispatch">
-          <button type="button" disabled={busy || !!relayError} onClick={() => action(async () => {
-            await api("/dispatch", { method: "PATCH", body: { paused: !snapshot.dispatch.paused } });
-            setRefreshVersion((value) => value + 1);
-          })}>{snapshot.dispatch.paused ? "Resume future dispatch" : "Pause future dispatch"}</button>
-          <p>{snapshot.dispatch.paused ? "New and scheduled jobs are held. Claimed jobs can finish." :
-            "Pausing holds new and scheduled jobs. Claimed jobs can finish."}</p>
-        </div>}
-      </header>
-      <nav className="operations__modes" aria-label="Operations navigation">
-        {["Headquarters", "Command Center", "Projects", "Objectives", "Workforce", "Office", "Knowledge", "Activity"].map((entry) => <button key={entry} type="button"
-          aria-pressed={page === entry} onClick={() => { setLinkedRecord(null); setPage(entry); }}>{entry}</button>)}
-      </nav>
+  const historyList = <>
+          <h2 id="operations-history-title">Conversations</h2>
+          <label>Search sessions<input type="search" maxLength={120} value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+          <label className="operations__check"><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> Archived sessions</label>
+          {sessions.size === 0 && <p>{snapshot.historyKey === historyKey ? "No matching conversations." : "Searching conversations…"}</p>}
+          <ul>{Array.from(sessions, ([id, turns]) => {
+            const latest = turns[0];
+            const label = latest.title || turns.find((entry) => !entry.parentId)?.prompt || latest.prompt;
+            return <li key={id}>{turns.length === 1
+              ? <button type="button" aria-pressed={jobId === latest._id} onClick={() => selectJob(latest._id)}>
+                {label}<small>{latest.status}{latest.parentId ? " · Follow-up" : ""}</small>
+              </button>
+              : <details open={turns.some((entry) => entry._id === jobId) || undefined}>
+                <summary>{label} · {turns.length} turns</summary>
+                <ul>{turns.map((entry) => <li key={entry._id}>
+                  <button type="button" aria-pressed={jobId === entry._id} onClick={() => selectJob(entry._id)}>
+                    {entry.prompt}<small>{entry.status}{entry.parentId ? " · Follow-up" : " · First turn"}</small>
+                  </button>
+                </li>)}</ul>
+              </details>}
+            </li>;
+          })}</ul>
+          {older?.error && <p role="alert">{older.error}</p>}
+          {!older?.end && activeHistory.length === 50 && <button type="button" disabled={older?.loading}
+            onClick={loadOlder}>{older?.loading ? "Loading history…" : "Load older turns"}</button>}
+  </>;
+  const scheduledWork = <>
+          <h2>Upcoming work</h2>
+          {snapshot.schedule?.length === 0 && !snapshot.recurrence?.some((entry) => entry.state === "active") && <p>No scheduled sessions.</p>}
+          <ul>{snapshot.schedule?.map((entry) => <li key={entry._id}>
+            <button type="button" aria-pressed={jobId === entry._id} onClick={() => openJob(entry._id, "Conversation")}>
+              <time dateTime={entry.scheduledAt}>{new Date(entry.scheduledAt).toLocaleString()}</time>
+              <small>{workspaceNames[entry.workspace]}</small>
+            </button>
+          </li>)}</ul>
+          {snapshot.recurrence?.length > 0 && <details>
+            <summary>Repeating schedules</summary>
+            <p>Stopping a series holds future occurrences. A turn the host already claimed can finish.</p>
+            <ul>{snapshot.recurrence.map((entry) => <li key={entry._id}>
+              <strong>{workspaceNames[entry.workspace]}</strong>
+              <small>Every {entry.repeatDays === 1 ? "24 hours" : "7 days"} · {entry.state} · {entry.remaining} of {entry.total} runs left</small>
+              {entry.state === "active" && <small><time dateTime={entry.nextAt}>{new Date(entry.nextAt).toLocaleString()}</time></small>}
+              {entry.stopReason && <small>{entry.stopReason}</small>}
+              {entry.occurrenceStatus && <button type="button" onClick={() => openJob(entry.occurrenceId, "Conversation")}>{entry.occurrenceStatus} turn</button>}
+              {entry.state === "active" && <button type="button" disabled={busy} onClick={() => action(async () => {
+                await api("/recurrence/" + entry._id, { method: "DELETE" });
+                setRefreshVersion((value) => value + 1);
+              })}>Stop series</button>}
+            </li>)}</ul>
+          </details>}
+  </>;
+  const devices = <>
+          <details>
+            <summary>Manage devices</summary>
+            <p>Register your Windows PC, then open <strong>Start Crossworld Operations.cmd</strong> on that PC.</p>
+            <form onSubmit={(event) => {
+              event.preventDefault();
+              action(async () => {
+                const result = await post("/hosts", { label: deviceName });
+                setCredential(result.token);
+                setDeviceName("");
+              });
+            }}>
+              <label>Device name<input required maxLength={80} value={deviceName} onChange={(event) => setDeviceName(event.target.value)} /></label>
+              <button disabled={busy}>Register device</button>
+            </form>
+            {credential && <div>
+              <p>Save this credential on the Windows host. It is displayed once.</p>
+              <code className="operations__credential">{credential}</code>
+              <button type="button" onClick={() => copy(credential)}>Copy credential</button>{" "}
+              <button type="button" onClick={() => setCredential("")}>Hide</button>
+            </div>}
+            <ul>{snapshot.hosts.filter((entry) => !entry.revokedAt).map((entry) => <li key={entry._id}>
+              {entry.label} · {entry.online ? "Online" : "Offline"}{" "}
+              <button type="button" disabled={busy} onClick={() => {
+                if (window.confirm(`Revoke ${entry.label} and interrupt its jobs?`)) {
+                  action(() => api(`/hosts/${entry._id}`, { method: "DELETE" }));
+                }
+              }}>Revoke</button>
+            </li>)}</ul>
+          </details>
+  </>;
+  const pendingApprovalCount = governance?.requests.filter((request) => request.state === "pending").length || 0;
+
+  return <OperationsShell page={page} navigate={setPage} keyboardOpen={keyboardOpen} paused={snapshot.dispatch?.paused} health={{
+    online: !!hostOnline,
+    label: relayError ? "API unavailable" : hostOnline ? "Relay online" : "Relay offline",
+  }}>
+      <Suspense fallback={<p role="status">Loading workspace…</p>}>
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
+        openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
-        openGovernance={() => { setShowApprovalInbox(true); setPage("Command Center"); }} openJob={openJob} />}
+        openGovernance={() => setShowApprovalInbox(true)} openJob={openJob} />}
       {page === "Projects" && <Projects api={api} initialId={linkedRecord?.group === "project" ? linkedRecord.id : null}
         openObjectives={(id) => openSource("project-objectives", id)} />}
       {page === "Objectives" && <Objectives api={api} openJob={openJob} assignObjective={prepareAssignment}
         openProject={(id) => openSource("project", id)}
         initialId={linkedRecord?.group === "objective" ? linkedRecord.id : null}
         initialProjectId={linkedRecord?.group === "project-objectives" ? linkedRecord.id : null} />}
-      {page === "Workforce" && <Workforce api={api} openJob={openJob} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
+      {page === "Workforce" && <Workforce api={api} openJob={openJob} openRecord={openSource} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
       {page === "Office" && <VirtualOffice api={api} openJob={openJob}
         openEmployee={(id) => openSource("employee", id)} openHeadquarters={() => setPage("Headquarters")} />}
       {page === "Activity" && <Activity api={api} openSource={openSource} />}
-      {page === "Knowledge" && <Knowledge api={api} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
-      {page === "Command Center" && <>
-      {error && <p role="alert">{error}</p>}
-      <p role="status">{notice}</p>
-      {governance && <details className="operations__panel operations__approvals" open={showApprovalInbox} onToggle={(event) => setShowApprovalInbox(event.currentTarget.open)}>
-        <summary>Operation approvals and policy ({governance.requests.filter((request) => request.state === "pending").length} pending)</summary>
+      {page === "Knowledge" && <Knowledge key={linkedRecord?.id ?? "library"} api={api} initialId={linkedRecord?.id} />}
+      {page === "Art Department" && <ArtDepartment api={api} openSource={openSource} />}
+      {page === "Finance" && <Finance request={api} />}
+      {page === "Engineering" && <Engineering request={api} />}
+      {page === "Schedules" && <section className="operations__panel">
+        <button type="button" onClick={() => { setAssignment(null); selectJob(null); }}>Open scheduling composer</button>
+        {error && <p role="alert">{error}</p>}
+        {scheduledWork}
+      </section>}
+      {page === "References" && <>
+        {error && <p role="alert">{error}</p>}
+        <ReferenceLibrary request={api} onUse={useReference} />
+        <section className="operations__panel operations__raw-media">
+          <h2>Media uploads</h2>
+          <MediaLibrary api={api} />
+        </section>
+      </>}
+      {page === "Settings" && <section className="operations__panel">
+        <h2>Relay and execution</h2>
+        <p>{relayError || (hostOnline ? host.label + " is connected." : "No Windows execution host is connected.")}</p>
+        {snapshot.dispatch && <p><button type="button" disabled={busy || !!relayError} onClick={() => action(async () => {
+          await api("/dispatch", { method: "PATCH", body: { paused: !snapshot.dispatch.paused } });
+          setRefreshVersion((value) => value + 1);
+        })}>{snapshot.dispatch.paused ? "Resume future dispatch" : "Pause future dispatch"}</button></p>}
+        <p>Pausing holds new and scheduled work. Claimed jobs can finish.</p>
+        {governance && <button type="button" onClick={() => setShowApprovalInbox(true)}>Operation policies and approvals</button>}
+        {error && <p role="alert">{error}</p>}
+        {notice && <p role="status">{notice}</p>}
+        {devices}
+        <OrganizationSetup api={api} />
+        <Infrastructure request={api} />
+      </section>}
+      {page === "Help" && <OperationsHelp navigate={setPage} />}
+      </Suspense>
+      {showApprovalInbox && <dialog className="operations__dialog" aria-labelledby="operations-approval-title"
+        ref={(node) => { if (node && !node.open) node.showModal(); }}
+        onClose={() => setShowApprovalInbox(false)}>
+        <form method="dialog"><button>Close approvals</button></form>
+      {governance && <section className="operations__approval-inbox">
+        <h2 id="operations-approval-title">Operation approvals and policy</h2>
         {!governance.githubEnabled && <p>Use an editing session for instructed Git operations. Review any command approval in that session.</p>}
         {!governance.toolsEnabled && <p>Editing sessions can use installed app commands and the worker’s selected MCP inspection tools.</p>}
         <details>
@@ -601,89 +829,46 @@ export default function Operations() {
             {choice === "approve" ? "Approve once" : "Deny"}
           </button>)}
         </details>)}
-      </details>}
-      <a className="operations__history-link" href="#operations-history">Jump to session history</a>
-      <div className="operations__layout">
-        <aside id="operations-history" className="operations__panel">
-          <h2>Session history</h2>
-          <label>Search sessions<input type="search" maxLength={120} value={search} onChange={(event) => setSearch(event.target.value)} /></label>
-          <label><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> Archived sessions</label>
-          {snapshot.jobs.length === 0 && <p>No jobs yet.</p>}
-          <ul>{Array.from(sessions, ([id, turns]) => {
-            const latest = turns[0];
-            const label = latest.title || turns.find((entry) => !entry.parentId)?.prompt || latest.prompt;
-            return <li key={id}>{turns.length === 1
-              ? <button type="button" aria-pressed={jobId === latest._id} onClick={() => selectJob(latest._id)}>
-                {label}<small>{latest.status}{latest.parentId ? " · Follow-up" : ""}</small>
-              </button>
-              : <details open={turns.some((entry) => entry._id === jobId) || undefined}>
-                <summary>{label} · {turns.length} turns</summary>
-                <ul>{turns.map((entry) => <li key={entry._id}>
-                  <button type="button" aria-pressed={jobId === entry._id} onClick={() => selectJob(entry._id)}>
-                    {entry.prompt}<small>{entry.status}{entry.parentId ? " · Follow-up" : " · First turn"}</small>
-                  </button>
-                </li>)}</ul>
-              </details>}
-            </li>;
-          })}</ul>
-          <h2>Upcoming work</h2>
-          {snapshot.schedule?.length === 0 && !snapshot.recurrence?.some((entry) => entry.state === "active") && <p>No scheduled sessions.</p>}
-          <ul>{snapshot.schedule?.map((entry) => <li key={entry._id}>
-            <button type="button" aria-pressed={jobId === entry._id} onClick={() => selectJob(entry._id)}>
-              <time dateTime={entry.scheduledAt}>{new Date(entry.scheduledAt).toLocaleString()}</time>
-              <small>{workspaceNames[entry.workspace]}</small>
-            </button>
-          </li>)}</ul>
-          {snapshot.recurrence?.length > 0 && <details>
-            <summary>Repeating schedules</summary>
-            <p>Stopping a series holds future occurrences. A turn the host already claimed can finish.</p>
-            <ul>{snapshot.recurrence.map((entry) => <li key={entry._id}>
-              <strong>{workspaceNames[entry.workspace]}</strong>
-              <small>Every {entry.repeatDays === 1 ? "24 hours" : "7 days"} · {entry.state} · {entry.remaining} of {entry.total} runs left</small>
-              {entry.state === "active" && <small><time dateTime={entry.nextAt}>{new Date(entry.nextAt).toLocaleString()}</time></small>}
-              {entry.stopReason && <small>{entry.stopReason}</small>}
-              {entry.occurrenceStatus && <button type="button" onClick={() => selectJob(entry.occurrenceId)}>{entry.occurrenceStatus} turn</button>}
-              {entry.state === "active" && <button type="button" disabled={busy} onClick={() => action(async () => {
-                await api("/recurrence/" + entry._id, { method: "DELETE" });
-                setRefreshVersion((value) => value + 1);
-              })}>Stop series</button>}
-            </li>)}</ul>
-          </details>}
-          <details>
-            <summary>Manage devices</summary>
-            <p>Register your Windows PC, then open <strong>Start Crossworld Operations.cmd</strong> on that PC.</p>
-            <form onSubmit={(event) => {
-              event.preventDefault();
-              action(async () => {
-                const result = await post("/hosts", { label: deviceName });
-                setCredential(result.token);
-                setDeviceName("");
-              });
-            }}>
-              <label>Device name<input required maxLength={80} value={deviceName} onChange={(event) => setDeviceName(event.target.value)} /></label>
-              <button disabled={busy}>Register device</button>
-            </form>
-            {credential && <div>
-              <p>Save this credential on the Windows host. It is displayed once.</p>
-              <code className="operations__credential">{credential}</code>
-              <button type="button" onClick={() => copy(credential)}>Copy credential</button>{" "}
-              <button type="button" onClick={() => setCredential("")}>Hide</button>
-            </div>}
-            <ul>{snapshot.hosts.filter((entry) => !entry.revokedAt).map((entry) => <li key={entry._id}>
-              {entry.label} · {entry.online ? "Online" : "Offline"}{" "}
-              <button type="button" disabled={busy} onClick={() => {
-                if (window.confirm(`Revoke ${entry.label} and interrupt its jobs?`)) {
-                  action(() => api(`/hosts/${entry._id}`, { method: "DELETE" }));
-                }
-              }}>Revoke</button>
-            </li>)}</ul>
-          </details>
+      </section>}
+        {error && <p role="alert">{error}</p>}
+      </dialog>}
+      {page === "Command Center" && <>
+      <div className="operations__commandbar">
+        <button className="operations__history-button" type="button" onClick={() => {
+          historyDrawer.current?.showModal();
+          setHistoryOpen(true);
+        }}>History</button>
+        <button type="button" aria-label="New conversation" onClick={() => { setAssignment(null); selectJob(null); }}>
+          New<span className="operations__desktop-label"> conversation</span>
+        </button>
+        {governance && <button type="button" onClick={() => setShowApprovalInbox(true)}>
+          Approvals{pendingApprovalCount > 0 && ` (${pendingApprovalCount})`}
+        </button>}
+      </div>
+      <dialog ref={historyDrawer} className="operations__dialog operations__drawer" aria-labelledby="operations-history-title"
+        onClose={() => setHistoryOpen(false)}>
+        <form method="dialog"><button>Close history</button></form>
+        {historyOpen && historyList}
+        <button type="button" onClick={() => { historyDrawer.current?.close(); setPage("Schedules"); }}>Open schedules</button>
+      </dialog>
+      {error && <p className="operations__message-error" role="alert">{error}</p>}
+      {notice && <p className="operations__message-notice" role="status">{notice}</p>}
+      <div className="operations__layout operations__command-layout">
+        <aside className="operations__panel operations__history" aria-label="Conversation history">{!historyOpen && historyList}
+          <button type="button" onClick={() => setPage("Schedules")}>Open schedules</button>
         </aside>
-        <div className="operations__panel">
-          {!selectedJob && composer}
+        <div className="operations__channel">
+          {!jobId && <div className="operations__welcome">
+            <h1>Command Center</h1>
+            <p>Send a message to start a conversation, or open one from history.</p>
+          </div>}
+          {jobId && !selectedJob && !error && <p className="operations__loading" role="status">Loading conversation…</p>}
           {selectedJob && <section className="operations__transcript">
             <header>
-              <h2>{selectedJob.title || "Session"} · {awaitingApproval ? "Waiting for approval" : selectedJob.status}</h2>
+              <div className="operations__conversation-title">
+                <h1>{selectedJob.title || "Conversation"}</h1>
+                <span role="status">{executionStatus(selectedJob)}</span>
+              </div>
               {running.includes(selectedJob.status) && <button type="button" disabled={busy || selectedJob.status === "cancelling"}
                 onClick={() => action(async () => {
                   if (selectedJob.status === "scheduled") {
@@ -695,18 +880,27 @@ export default function Operations() {
                 })}>{selectedJob.status === "scheduled" ? "Cancel schedule" :
                   selectedJob.status === "waiting" ? "Cancel follow-up" : "Cancel current task"}</button>}
               {awaitingApproval && <button type="button" onClick={() => changeMode("Execution")}>Review approval</button>}
+              <details className="operations__conversation-actions">
+                <summary>Actions</summary>
+                <div>
               <button type="button" disabled={busy} onClick={() => {
                 const title = window.prompt("Session name", selectedJob.title || "");
                 if (title?.trim()) action(async () => {
                   await api(`/sessions/${selectedJob.sessionId}`, { method: "PATCH", body: { title } });
                   setJob((previous) => previous?._id === jobId ? { ...previous, title: title.trim() } : previous);
+                setHistory(null);
+                setRefreshVersion((value) => value + 1);
                 });
               }}>Rename session</button>
               <button type="button" disabled={busy} onClick={() => action(async () => {
                 const archivedAt = selectedJob.archivedAt ? null : new Date().toISOString();
                 await api(`/sessions/${selectedJob.sessionId}`, { method: "PATCH", body: { archived: !!archivedAt } });
                 setJob((previous) => previous?._id === jobId ? { ...previous, archivedAt } : previous);
+                setHistory(null);
+                setRefreshVersion((value) => value + 1);
               })}>{selectedJob.archivedAt ? "Restore from archive" : "Archive session"}</button>
+                </div>
+              </details>
             </header>
             {selectedJob.error && <p role="alert">{selectedJob.error}</p>}
             {selectedJob.profile === "full-access" && <p className="operations__access-warning">
@@ -731,7 +925,13 @@ export default function Operations() {
                 key={entry} type="button" aria-pressed={mode === entry}
                 onClick={() => changeMode(entry)}>{entry}</button>)}
             </div>
-            <JobTranscript key={jobId} job={selectedJob} jobId={jobId} mode={mode} copy={copy} composer={composer}>
+            <Suspense fallback={<p role="status">Loading transcript…</p>}>
+            <JobTranscript api={api} key={jobId} job={selectedJob} jobId={jobId} mode={mode} copy={copy} selectJob={selectJob}
+              promptPreview={sessions.get(selectedJob.sessionId)?.find((turn) => turn._id === jobId)?.prompt}
+              proposal={<Suspense fallback={null}>
+                <ObjectiveProposal key={jobId} request={api} jobId={jobId} jobStatus={selectedJob.status}
+                  openObjective={(id) => openSource("objective", id)} />
+              </Suspense>}>
             {approval && <section aria-label="Approval request">
               <h3>Approval request · {approval.state}</h3>
               <dl>
@@ -748,10 +948,11 @@ export default function Operations() {
               </button>)}
             </section>}
             </JobTranscript>
+            </Suspense>
           </section>}
+          {composer}
         </div>
       </div>
       </>}
-    </main>
-  );
+    </OperationsShell>;
 }

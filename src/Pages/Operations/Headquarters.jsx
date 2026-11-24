@@ -18,9 +18,12 @@ function Usage({ observation, resumesAt }) {
   </details>;
 }
 
-export default function Headquarters({ api, openJob, openObjectives, openWorkforce, pendingGovernance, openGovernance }) {
+export default function Headquarters({ api, openJob, openObjectives, openWorkforce, openProject, openFinance, pendingGovernance, openGovernance }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [attentionError, setAttentionError] = useState("");
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [readLocally, setReadLocally] = useState([]);
 
   useEffect(() => {
     let mounted = true;
@@ -35,7 +38,7 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
       } catch (failure) {
         if (mounted) setError(failure.message);
       }
-      if (mounted) timer = setTimeout(refresh, 5000);
+      if (mounted) timer = setTimeout(refresh, document.hidden ? 30000 : 10000);
     }
     refresh();
     return () => { mounted = false; clearTimeout(timer); };
@@ -43,8 +46,27 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
 
   if (!data) return <p role={error ? "alert" : "status"}>{error || "Loading headquarters…"}</p>;
 
-  const { hosts, jobs, approvals, recent, workforce = [], next = [], objectives = {} } = data;
+  const { hosts, jobs, approvals, recent, workforce = [], next = [], objectives = {}, activeProjects, finance } = data;
   const incidents = recent.filter((entry) => ["failed", "interrupted"].includes(entry.status));
+  const read = new Set([...(data.attentionRead ?? []), ...readLocally]);
+  const visibleIncidents = unreadOnly ? incidents.filter(entry => !read.has("incident:" + entry._id)) : incidents;
+  const visibleApprovals = unreadOnly ? approvals.filter(entry => !read.has("approval:" + entry.approval.id)) : approvals;
+  async function markRead(kind, id) {
+    try {
+      await api("/headquarters/attention", { method: "POST", body: { kind, id } });
+      setReadLocally(value => [...value, kind + ":" + id]);
+      setAttentionError("");
+    } catch (failure) {
+      setAttentionError(failure.message);
+    }
+  }
+
+  function receipt(kind, id) {
+    if (!id) return null;
+    return read.has(kind + ":" + id)
+      ? <small>Read</small>
+      : <button type="button" className="operations__source" onClick={() => markRead(kind, id)}>Mark read</button>;
+  }
   const open = (job, view = "Conversation") => (
     <button className="operations__source" type="button" onClick={() => openJob(job._id, view)}>
       {job.title || job.workspace}
@@ -82,23 +104,48 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
       </li>)}</ul>
     </section>
     <section className="operations__panel operations__attention">
-      <h2>Attention</h2>
-      {approvals.length === 0 && incidents.length === 0 && !pendingGovernance && <p>No approvals or recent failures.</p>}
+      <div className="operations__briefing-title">
+        <h2>Attention</h2>
+        <label><input type="checkbox" checked={unreadOnly} onChange={event => setUnreadOnly(event.target.checked)} /> Unread only</label>
+      </div>
+      {attentionError && <p role="alert">{attentionError}</p>}
+      {visibleApprovals.length === 0 && visibleIncidents.length === 0 && !pendingGovernance &&
+        <p>{unreadOnly ? "No unread approvals or recent failures." : "No approvals or recent failures."}</p>}
       <ul className="operations__feed">
         {pendingGovernance > 0 && <li>
           <strong>{pendingGovernance} governance {pendingGovernance === 1 ? "request" : "requests"}</strong>
           <button type="button" className="operations__source" onClick={openGovernance}>Open approval inbox</button>
         </li>}
-        {approvals.map((entry) => <li key={entry._id}>
+        {visibleApprovals.map((entry) => <li key={entry._id}>
           <strong>{entry.approval.operation} approval</strong>
           {open(entry, "Execution")}
           <small>Expires {time(new Date(entry.approval.expiresAt).toISOString())}</small>
+          {receipt("approval", entry.approval.id)}
         </li>)}
-        {incidents.map((entry) => <li key={entry._id}>
+        {visibleIncidents.map((entry) => <li key={entry._id}>
           <strong>{entry.status}</strong>{open(entry, "Execution")}<small>{time(entry.finishedAt)}</small>
+          {receipt("incident", entry._id)}
         </li>)}
       </ul>
     </section>
+    {activeProjects && <section className="operations__panel" aria-label="Active projects">
+      <h2>Active projects</h2>
+      {activeProjects.length === 0 && <p>No active projects. Use Settings to review the studio foundation.</p>}
+      <ul className="operations__feed">{activeProjects.map(project => <li key={project._id}>
+        <button type="button" className="operations__source" onClick={() => openProject(project._id)}>{project.name}</button>
+        <small>{project.workspace}</small>
+      </li>)}</ul>
+    </section>}
+    {finance && <section className="operations__panel" aria-label="Studio expenses">
+      <div className="operations__briefing-title">
+        <h2>Studio expenses</h2>
+        <button type="button" className="operations__source" onClick={openFinance}>Open Finance</button>
+      </div>
+      <small>{finance.month} · Recorded expenses · Cloud bills unavailable</small>
+      {finance.expenses.length ? <ul className="operations__feed">{finance.expenses.map(item => <li key={item.currency}>
+        <strong>{new Intl.NumberFormat(undefined, { style: "currency", currency: item.currency }).format(item.amount / 100)}</strong>
+      </li>)}</ul> : <p>No manual expenses recorded this month.</p>}
+    </section>}
     <section className="operations__panel">
       <h2>Schedule</h2>
       {next.length === 0 && <p>No scheduled turns.</p>}

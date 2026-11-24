@@ -62,6 +62,20 @@ async function request(
 
 export { request as requestJson };
 
+export async function requestPrivateMedia(path, { method = "GET", body, signal } = {}) {
+  const token = getToken();
+  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  if (body) headers["Content-Type"] = "application/octet-stream";
+  const response = await fetch(`${API_BASE}/operations/media${path}`, {
+    method, headers, body, signal, cache: "no-store", redirect: "error",
+  });
+  if (!response.ok) {
+    const message = await response.json().catch(() => null);
+    throw Object.assign(new Error(message?.message || `Media transfer failed (${response.status}).`), { status: response.status });
+  }
+  return response;
+}
+
 export const api = {
   signup: ({ name, avatar, email, password }) =>
     request("/auth/signup", {

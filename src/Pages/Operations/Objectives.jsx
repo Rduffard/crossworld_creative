@@ -76,6 +76,15 @@ export default function Objectives({ api, openJob, initialId, initialProjectId, 
     });
   }
 
+  function activateClothing() {
+    const { _id, revision } = selected;
+    update(async () => {
+      await api("/organization/clothing/activate", { method: "POST", body: { id: _id, revision } });
+      await inspect(_id);
+      setRecords(await api("/objectives" + projectFilter));
+    });
+  }
+
   const selectedProject = projects.find((project) => project._id === selected?.projectId);
 
   return <section className="operations__layout" aria-label="Objectives">
@@ -114,7 +123,13 @@ export default function Objectives({ api, openJob, initialId, initialProjectId, 
           {selectedProject?.name || "Open project"}
         </button>}
         {selected.status === "active" && (!selected.projectId || selectedProject?.status === "active") && <p><button type="button" onClick={() => assignObjective(selected, selectedProject?.workspace)}>Assign implementation</button></p>}
-        <p>{selected.status === "completed" ? "All criteria accepted" : "Awaiting owner validation"}</p>
+        <p>{selected.status === "completed" ? "All criteria accepted"
+          : selected.status === "paused" ? "Paused for owner direction" : "Awaiting owner validation"}</p>
+        {selected.foundationKey === "objective-character-clothing" && selected.status === "paused" && <details>
+          <summary>Activate clothing objective</summary>
+          <p>This makes the objective available for explicit assignments.</p>
+          <button type="button" disabled={busy} onClick={activateClothing}>Activate objective</button>
+        </details>}
         <pre>{selected.instruction}</pre>
         <ObjectiveReviews api={api} objective={selected} openJob={openJob} />
         <h3>Acceptance criteria</h3>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 const roles = {
-  worker: "Worker", lead: "Department lead", "first-mate": "First Mate", qa: "Quality assurance", air: "AIR",
+  worker: "Worker", lead: "Department lead", "first-mate": "First Mate", "art-director": "Art Director", qa: "Quality assurance", air: "AIR",
 };
 
 function EmployeeForm({ employee, departments, save, pending }) {
@@ -36,7 +36,7 @@ function EmployeeForm({ employee, departments, save, pending }) {
   </form>;
 }
 
-export default function Workforce({ api, openJob, initialId }) {
+export default function Workforce({ api, openJob, openRecord, initialId }) {
   const [directory, setDirectory] = useState(null);
   const [selection, setSelection] = useState(initialId || null);
   const [pending, setPending] = useState(false);
@@ -67,9 +67,12 @@ export default function Workforce({ api, openJob, initialId }) {
   }
 
   if (!directory) return <p role={error ? "alert" : "status"}>{error || "Loading workforce…"}</p>;
-  const { departments, employees, observedRuns = [] } = directory;
+  const { departments, employees, observedRuns = [], projectAssignments = [], roles: positions = [] } = directory;
   const employee = employees.find((entry) => entry._id === selection);
   const assignments = observedRuns.filter((run) => run.employeeId === employee?._id);
+  const projects = projectAssignments.filter((assignment) => assignment.employeeId === employee?._id);
+  const position = positions.find((entry) => entry.key === employee?.role);
+  const supervisor = employees.find((entry) => entry._id === employee?.supervisorId);
   const employeeList = (members) => <ul className="operations__feed">{members.map((entry) => <li key={entry._id}>
     <button type="button" aria-pressed={selection === entry._id} onClick={() => setSelection(entry._id)}>{entry.name}</button>
     <small>{roles[entry.role]} · {entry.status}</small>
@@ -92,9 +95,22 @@ export default function Workforce({ api, openJob, initialId }) {
     <section className="operations__panel">
       <h2>{employee?.name || (selection === "department" ? "Add department" : "Employee profile")}</h2>
       {error && <p role="alert">{error}</p>}
+      {position && <p><strong>{position.name}</strong>{supervisor && <> · Reports to{" "}
+        <button className="operations__source" type="button" onClick={() => setSelection(supervisor._id)}>{supervisor.name}</button>
+      </>}</p>}
       {(employee || selection === "employee") && <EmployeeForm key={employee ? employee._id + "/" + employee.revision : "new"}
         employee={employee} departments={departments} save={save} pending={pending} />}
       {employee && <section>
+        {projects.length > 0 && <>
+          <h3>Project responsibilities</h3>
+          <ul className="operations__feed">{projects.map((assignment) => <li key={assignment._id}>
+            {openRecord ? <>
+              <button className="operations__source" type="button" onClick={() => openRecord("project", assignment.projectId)}>{assignment.projectName}</button>
+              <button className="operations__source" type="button" onClick={() => openRecord("objective", assignment.objectiveId)}>Open assigned objective</button>
+            </> : <strong>{assignment.projectName}</strong>}
+            <small>{assignment.status}</small>
+          </li>)}</ul>
+        </>}
         <h3>Recent assigned turns</h3>
         {assignments.length === 0 && <p>No recent turns recorded for {employee.name}.</p>}
         <ul className="operations__feed">{assignments.map((run) => <li key={run._id}>

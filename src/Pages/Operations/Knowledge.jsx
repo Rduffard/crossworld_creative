@@ -5,12 +5,12 @@ const kinds = [
   ["procedure", "Procedure"], ["research", "Research"], ["decision", "Decision"],
   ["handover", "Handover"], ["handbook", "Handbook"], ["qa", "QA report"], ["air", "AIR report"],
 ];
-const provenance = ["untested", "external", "experimental", "validated", "deprecated", "failed"];
+const provenance = ["untested", "external", "experimental", "validated", "owner-approved", "deprecated", "failed"];
 const fields = [
-  ["title", "Title", 120, true], ["project", "Project", 100], ["author", "Author", 100, true],
+  ["title", "Title", 120, true], ["project", "Project label", 100], ["author", "Author", 100, true],
   ["source", "Source reference", 500, true], ["summary", "Summary", 400, true],
   ["body", "Record", 8000, true], ["evidence", "Validation evidence", 2000],
-  ["limitations", "Limitations", 2000],
+  ["limitations", "Limitations", 2000], ["license", "License", 300],
 ];
 
 export default function Knowledge({ api, initialId }) {
@@ -24,8 +24,17 @@ export default function Knowledge({ api, initialId }) {
   const [pending, setPending] = useState(false);
   const [version, setVersion] = useState(0);
   const [status, setStatus] = useState("untested");
+  const [projects, setProjects] = useState([]);
   const loadKey = version + ":" + filter;
   const listed = result?.key === loadKey ? result : null;
+
+  useEffect(() => {
+    let current = true;
+    api("/projects").then(value => {
+      if (current) setProjects(value);
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [api]);
 
   useEffect(() => {
     let current = true;
@@ -107,6 +116,7 @@ export default function Knowledge({ api, initialId }) {
           <dt>Provenance</dt><dd>{detail.status}</dd>
           <dt>Source</dt><dd>{detail.source}</dd>
           <dt>Author</dt><dd>{detail.author}</dd>
+          {detail.license && <><dt>License</dt><dd>{detail.license}</dd></>}
           <dt>Recorded</dt><dd><time dateTime={detail.createdAt}>{new Date(detail.createdAt).toLocaleString()}</time></dd>
         </dl>
         <p className="operations__knowledge-text">{detail.body}</p>
@@ -122,9 +132,14 @@ export default function Knowledge({ api, initialId }) {
           <label>Provenance <select name="status" value={status} onChange={(event) => setStatus(event.target.value)}>
             {provenance.map((value) => <option key={value}>{value}</option>)}
           </select></label>
+          <label>Linked project <select name="projectId">
+            <option value="">No link</option>
+            {projects.map(project => <option key={project._id} value={project._id}>{project.name}</option>)}
+          </select></label>
           {fields.map(([key, label, maxLength, required]) => <label key={key}>{label}
             {maxLength > 500
-              ? <textarea name={key} maxLength={maxLength} required={required || (key === "evidence" && status === "validated")} rows={4} />
+              ? <textarea name={key} maxLength={maxLength} required={required ||
+                (key === "evidence" && ["validated", "owner-approved"].includes(status))} rows={4} />
               : <input name={key} maxLength={maxLength} required={required} />}
           </label>)}
           {saveError && <p role="alert">{saveError}</p>}

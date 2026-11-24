@@ -1,0 +1,13 @@
+.operations-finance { display: grid; gap: 1rem; align-content: start; }
+.operations-finance__toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; justify-content: space-between; }
+.operations-finance__toolbar input { margin-inline-start: .5rem; }
+.operations-finance summary { cursor: pointer; padding-block: .65rem; }
+.operations-finance__form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); gap: .75rem; align-items: end; }
+.operations-finance__form label { display: grid; min-width: 0; gap: .3rem; }
+.operations-finance__form input, .operations-finance__form select, .operations-finance__form button { min-height: 2.75rem; }
+.operations-finance__totals dl { display: flex; gap: 1rem 2rem; flex-wrap: wrap; }
+.operations-finance__totals dd { margin: .3rem 0 0; font-weight: 650; }
+.operations-finance__entries { list-style: none; padding: 0; margin: 0; }
+.operations-finance__entries li { display: flex; gap: 1rem; justify-content: space-between; padding-block: .75rem; border-bottom: 1px solid color-mix(in srgb, currentColor 20%, transparent); }
+.operations-finance__entries strong, .operations-finance__entries small { display: block; overflow-wrap: anywhere; }
+.operations-finance__entries span { white-space: nowrap; font-variant-numeric: tabular-nums; }
