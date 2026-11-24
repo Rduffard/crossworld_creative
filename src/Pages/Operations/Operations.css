@@ -32,4 +32,8 @@
 .operations__transcript { margin-top: 20px; }
 .operations__transcript header, .operations__modes { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
 .operations__modes { margin: 12px 0; }
+.operations__response { overflow-wrap: anywhere; }
+.operations__response ul { list-style: disc; padding-inline-start: 24px; }
+.operations__response li { margin: 0; }
+.operations__response pre { padding: 12px; border: 1px solid var(--cw-panel-border-hero); border-radius: 8px; }
 @media (max-width: 760px) { .operations__layout { grid-template-columns: minmax(0, 1fr); } }

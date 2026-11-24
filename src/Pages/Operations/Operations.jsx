@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState } from "react";
+import Markdown from "react-markdown";
 import { requestJson } from "../../utils/api";
 import "./Operations.css";
 
 const api = (path, options) => requestJson(`/operations${path}`, { auth: true, ...options });
 const post = (path, body) => api(path, { method: "POST", body });
-const running = ["queued", "running", "cancelling"];
+const running = ["waiting", "queued", "running", "cancelling"];
+const profileNames = { "read-only": "Read-only inspection", development: "Development repository editing", workshop: "Workshop editing" };
+const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
 const workspaceNames = { development: "C: · Development", workshop: "D: · Art Workshop" };
 const modes = ["Activity", "Execution", "Summary"];
 
@@ -17,6 +20,7 @@ function Transcript({ job, mode, copy }) {
       `- Job: ${job._id}`,
       `- Status: ${job.status}`,
       `- Workspace: ${workspaceNames[job.workspace]}`,
+      `- Permissions: ${profileNames[job.profile || "read-only"]}`,
       `- Model: ${job.model} (${job.effort})`,
       job.error && `\nError: ${job.error}`,
       answer && `\n${answer}`,
@@ -24,7 +28,8 @@ function Transcript({ job, mode, copy }) {
     return <>
       <button type="button" onClick={() => copy(summary)}>Copy session summary</button>{" "}
       <button type="button" disabled={!answer} onClick={() => copy(answer)}>Copy response as Markdown</button>
-      <pre>{answer || "No final response yet."}</pre>
+      {answer ? <div className="operations__response"><Markdown skipHtml disallowedElements={["img"]}>{answer}</Markdown></div>
+        : <p>No final response yet.</p>}
     </>;
   }
   const events = job.events.map((event, index) => ({ ...event, index }))
@@ -32,7 +37,7 @@ function Transcript({ job, mode, copy }) {
   if (!events.length) return <p>No {mode.toLowerCase()} events yet.</p>;
   const commandOutput = new Map();
   const visible = events.filter((event) => {
-    if (!event.label.startsWith("Command output · ")) return true;
+    if (!event.label.startsWith("Output · ") && !event.label.startsWith("Command output · ")) return true;
     const first = !commandOutput.has(event.label);
     commandOutput.set(event.label, (commandOutput.get(event.label) || "") + event.text);
     return first;
@@ -53,7 +58,14 @@ export default function Operations() {
   const [error, setError] = useState("");
   const [relayError, setRelayError] = useState("");
   const [accessDenied, setAccessDenied] = useState(false);
-  const [jobId, setJobId] = useState("");
+  const [jobId, setJobId] = useState(() => {
+    const id = new URLSearchParams(window.location.search).get("job");
+    return /^[a-f\d-]{36}$/.test(id || "") ? id : "";
+  });
+  const [search, setSearch] = useState("");
+  const [archived, setArchived] = useState(false);
+  const [profile, setProfile] = useState("read-only");
+  const [policyRole, setPolicyRole] = useState("direct");
   const [job, setJob] = useState(null);
   const [mode, setMode] = useState("Activity");
   const [hostId, setHostId] = useState("");
@@ -65,15 +77,30 @@ export default function Operations() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const pendingSubmit = useRef(null);
+  const pendingSteer = useRef(null);
+
+  function selectJob(id) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("job", id);
+    window.history.replaceState(window.history.state, "", url);
+    setJobId(id);
+    setMode("Activity");
+  }
 
   useEffect(() => {
     let active = true;
     let timer;
     async function refresh() {
       try {
-        const [hosts, jobs] = await Promise.all([api("/hosts"), api("/jobs")]);
+        const query = new URLSearchParams({ search, archived: String(archived) });
+        const [hosts, jobs, approvals] = await Promise.all([
+          api("/hosts"), api(`/jobs?${query}`), api("/approvals").catch((failure) => {
+            if (failure.status === 404) return null;
+            throw failure;
+          }),
+        ]);
         if (active) {
-          setSnapshot({ hosts, jobs });
+          setSnapshot({ hosts, jobs, approvals });
           setRelayError("");
         }
       } catch (failure) {
@@ -89,7 +116,7 @@ export default function Operations() {
     }
     refresh();
     return () => { active = false; clearTimeout(timer); };
-  }, []);
+  }, [search, archived]);
 
   useEffect(() => {
     if (!jobId || accessDenied) return;
@@ -119,6 +146,13 @@ export default function Operations() {
   const selectedEffort = host?.efforts?.includes(effort) ? effort : host?.efforts?.[0] || "";
   const selectedJob = job?._id === jobId ? job : null;
   const hostOnline = !relayError && host?.online;
+  const selectedHost = snapshot?.hosts.find((entry) => entry._id === selectedJob?.hostId);
+  const selectedProfile = profile === workspace && host?.profiles?.includes(profile) ? profile : "read-only";
+  const approval = selectedJob?.approval;
+  const awaitingApproval = selectedJob?.status === "running" && approval?.state === "pending";
+  const canAct = !busy && !relayError && !!selectedHost?.online;
+  const governance = snapshot?.approvals;
+  const workerEnabled = governance?.workerEnabled !== false;
 
   async function action(callback) {
     setBusy(true);
@@ -127,10 +161,11 @@ export default function Operations() {
     finally { setBusy(false); }
   }
 
-  function submit(parent) {
+  function submit(parent, queue = false) {
     return action(async () => {
       const request = {
-        prompt, model: "gpt-6.2-sol", effort: selectedEffort,
+        prompt, model: "gpt-6.2-sol", effort: parent?.effort || selectedEffort, queue,
+        profile: parent ? parent.profile || "read-only" : selectedProfile,
         workspace: parent?.workspace || workspace, hostId: parent?.hostId || host?._id, parentId: parent?._id,
       };
       const signature = JSON.stringify(request);
@@ -139,9 +174,21 @@ export default function Operations() {
       }
       const { _id } = await post("/jobs", { id: pendingSubmit.current.id, ...request });
       pendingSubmit.current = null;
-      setJobId(_id);
+      if (queue) setNotice("Follow-up queued. Open it from session history.");
+      else selectJob(_id);
       setPrompt("");
       setMode("Activity");
+    });
+  }
+
+  function steer() {
+    return action(async () => {
+      const turnId = selectedJob.activeTurn.turnId;
+      const signature = JSON.stringify([jobId, turnId, prompt]);
+      if (pendingSteer.current?.signature !== signature) pendingSteer.current = { signature, id: crypto.randomUUID() };
+      await post(`/jobs/${jobId}/steer`, { id: pendingSteer.current.id, turnId, input: prompt });
+      pendingSteer.current = null;
+      setPrompt("");
     });
   }
 
@@ -159,17 +206,83 @@ export default function Operations() {
     <main className="operations">
       <header className="operations__hero">
         <h1>Crossworld Operations</h1>
-        <p role="status">{relayError ? "Operations API unavailable" : hostOnline ? `${host.label} connected` : "Windows execution host offline"} · Read-only execution</p>
+        <p role="status">{relayError ? "Operations API unavailable" : hostOnline ? `${host.label} connected` : "Windows execution host offline"}</p>
       </header>
       {error && <p role="alert">{error}</p>}
       <p role="status">{notice}</p>
+      {governance && <section className="operations__panel" aria-label="Operation approvals">
+        <h2>Operation approvals</h2>
+        {!governance.githubEnabled && <p>Use an editing session for instructed Git operations. Review any command approval in that session.</p>}
+        {!governance.toolsEnabled && <p>Editing sessions can use installed app commands and the worker’s selected MCP inspection tools.</p>}
+        <details>
+          <summary>Operation policies</summary>
+          {Object.entries(governance.policy.modes).map(([operation, mode]) => <label key={operation}>
+            {operation}
+            <select value={mode} disabled={busy} onChange={(event) => {
+              const next = event.target.value;
+              action(() => api("/approvals/policy", {
+                method: "PATCH",
+                body: { revision: governance.policy.revision, modes: { ...governance.policy.modes, [operation]: next } },
+              }));
+            }}>
+              {localPolicyOperations.includes(operation) && <option value="allow">Allow</option>}
+              <option value="ask">Ask for approval</option>
+              <option value="block">Block</option>
+            </select>
+          </label>)}
+          <p>Always blocked · {governance.policy.immutableBlocks.join(", ")}</p>
+        </details>
+        <details>
+          <summary>Brokered tool policies</summary>
+          <label>Worker role<input value={policyRole} maxLength={32} onChange={(event) => setPolicyRole(event.target.value)} /></label>
+          {Object.entries(governance.policy.catalog || {}).flatMap(([tool, definition]) => definition.workspaces.map((scope) => {
+            const key = `${policyRole}:${scope}:${tool}`;
+            return <label key={key}>{tool} · {workspaceNames[scope]}
+              <select value={governance.policy.toolModes[key] || "block"}
+                disabled={busy || !/^[a-z][a-z0-9-]{0,31}$/.test(policyRole)}
+                onChange={(event) => action(() => api("/approvals/policy", {
+                  method: "PATCH", body: { revision: governance.policy.revision, modes: governance.policy.modes,
+                    toolModes: { ...governance.policy.toolModes, [key]: event.target.value } },
+                }))}>
+                <option value="allow">Allow</option><option value="ask">Ask for approval</option><option value="block">Block</option>
+              </select>
+            </label>;
+          }))}
+        </details>
+        {governance.requests.length === 0 && <p>No operation requests.</p>}
+        {governance.requests.map((request) => <details key={request._id} open={request.state === "pending" || undefined}>
+          <summary>{request.intent.tool || request.intent.operation} · {request.intent.repository || request.intent.workspace} · {request.state}</summary>
+          <dl>
+            <dt>Worker and session</dt><dd>{request.worker.label} · {request.sessionId}</dd>
+            {request.intent.operation === "mcpTool" ? <>
+              <dt>Workspace and role</dt><dd>{workspaceNames[request.intent.workspace]} · {request.intent.role}</dd>
+              <dt>Tool arguments</dt><dd><pre>{JSON.stringify(request.intent.arguments, null, 2)}</pre></dd>
+            </> : <>
+            <dt>Branch and target</dt><dd>{request.intent.branch} {request.intent.target && `· ${request.intent.target}`}</dd>
+            <dt>Reviewed commits</dt><dd><code>{request.intent.headSha}</code>{request.intent.baseSha && <> · <code>{request.intent.baseSha}</code></>}</dd>
+            <dt>Submitted changes</dt><dd><pre>{request.intent.changes}</pre></dd>
+            {request.intent.diff && <><dt>Submitted diff</dt><dd><pre>{request.intent.diff}</pre></dd></>}
+            <dt>Submitted test results</dt><dd><pre>{request.intent.tests}</pre></dd>
+            </>}
+            <dt>Consequences</dt><dd>{request.consequences}</dd>
+            <dt>Expires</dt><dd>{new Date(request.expiresAt).toLocaleString()}</dd>
+          </dl>
+          {request.state === "pending" && ["approve", "deny"].map((choice) => <button key={choice} type="button"
+            disabled={busy || (choice === "approve" && !(request.intent.operation === "mcpTool" ? governance.toolsEnabled : governance.githubEnabled))} onClick={() => action(() =>
+              post(`/jobs/${request.jobId}/approval`, { id: request._id, choice, fingerprint: request.fingerprint }))}>
+            {choice === "approve" ? "Approve once" : "Deny"}
+          </button>)}
+        </details>)}
+      </section>}
       <div className="operations__layout">
         <aside className="operations__panel">
           <h2>Session history</h2>
+          <label>Search sessions<input type="search" maxLength={120} value={search} onChange={(event) => setSearch(event.target.value)} /></label>
+          <label><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> Archived sessions</label>
           {snapshot.jobs.length === 0 && <p>No jobs yet.</p>}
           <ul>{snapshot.jobs.map((entry) => <li key={entry._id}>
-            <button type="button" aria-pressed={jobId === entry._id} onClick={() => { setJobId(entry._id); setMode("Activity"); }}>
-              {entry.prompt.slice(0, 55)} <small>{entry.status}{entry.parentId ? " · Follow-up" : ""}</small>
+            <button type="button" aria-pressed={jobId === entry._id} onClick={() => selectJob(entry._id)}>
+              {entry.title ? `${entry.title} · ` : ""}{entry.prompt.slice(0, 55)} <small>{entry.status}{entry.parentId ? " · Follow-up" : ""}</small>
             </button>
           </li>)}</ul>
           <details>
@@ -212,6 +325,10 @@ export default function Operations() {
               <label>Workspace<select value={workspace} onChange={(event) => setWorkspace(event.target.value)}>
                 {Object.entries(workspaceNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
               </select></label>
+              <label>Permissions<select value={selectedProfile} onChange={(event) => setProfile(event.target.value)}>
+                <option value="read-only">{profileNames["read-only"]}</option>
+                {host?.profiles?.includes(workspace) && <option value={workspace}>{profileNames[workspace]}</option>}
+              </select></label>
               <label>Model<select defaultValue="gpt-6.2-sol"><option value="gpt-6.2-sol">GPT-6.2 Sol</option></select></label>
               <label>Reasoning effort<select value={selectedEffort} onChange={(event) => setEffort(event.target.value)}>
                 {!selectedEffort && <option value="">Awaiting host</option>}
@@ -219,17 +336,50 @@ export default function Operations() {
               </select></label>
             </div>
             <label>Prompt<textarea required maxLength={12000} rows={4} value={prompt} onChange={(event) => setPrompt(event.target.value)} /></label>
-            <button disabled={busy || !hostOnline || !selectedEffort || !prompt.trim()}>Start session</button>{" "}
-            <button type="button" disabled={busy || !selectedJob?.codexThreadId || running.includes(selectedJob.status) ||
-              selectedJob.hostId !== host?._id || !hostOnline || !prompt.trim()} onClick={() => submit(selectedJob)}>Send follow-up</button>
+            <button disabled={!workerEnabled || busy || !hostOnline || !selectedEffort || !prompt.trim()}>Start session</button>{" "}
+            <button type="button" disabled={!workerEnabled || !canAct || !selectedJob?.codexThreadId ||
+              running.includes(selectedJob.status) || !prompt.trim()}
+              onClick={() => submit(selectedJob)}>Continue session</button>{" "}
+            <button type="button" disabled={!workerEnabled || busy || !["queued", "running"].includes(selectedJob?.status) || !prompt.trim()}
+              onClick={() => submit(selectedJob, true)}>Queue follow-up</button>{" "}
+            <button type="button" disabled={!canAct || !selectedJob?.activeTurn || selectedJob.status !== "running" ||
+              ["pending", "sending"].includes(selectedJob.instruction?.state) || !prompt.trim()} onClick={steer}>Steer current task</button>
           </form>
           {selectedJob && <section className="operations__transcript">
             <header>
-              <h2>Job status · {selectedJob.status}</h2>
+              <h2>{selectedJob.title || "Session"} · {awaitingApproval ? "Waiting for approval" : selectedJob.status}</h2>
               {running.includes(selectedJob.status) && <button type="button" disabled={busy || selectedJob.status === "cancelling"}
-                onClick={() => action(() => post(`/jobs/${jobId}/cancel`))}>Cancel job</button>}
+                onClick={() => action(() => post(`/jobs/${jobId}/cancel`))}>{selectedJob.status === "waiting" ? "Cancel follow-up" : "Cancel current task"}</button>}
+              <button type="button" disabled={busy} onClick={() => {
+                const title = window.prompt("Session name", selectedJob.title || "");
+                if (title?.trim()) action(async () => {
+                  await api(`/sessions/${selectedJob.sessionId}`, { method: "PATCH", body: { title } });
+                  setJob((previous) => previous?._id === jobId ? { ...previous, title: title.trim() } : previous);
+                });
+              }}>Rename session</button>
+              <button type="button" disabled={busy} onClick={() => action(async () => {
+                const archivedAt = selectedJob.archivedAt ? null : new Date().toISOString();
+                await api(`/sessions/${selectedJob.sessionId}`, { method: "PATCH", body: { archived: !!archivedAt } });
+                setJob((previous) => previous?._id === jobId ? { ...previous, archivedAt } : previous);
+              })}>{selectedJob.archivedAt ? "Restore from archive" : "Archive session"}</button>
             </header>
             {selectedJob.error && <p role="alert">{selectedJob.error}</p>}
+            {selectedJob.instruction && <p role="status">Steering · {selectedJob.instruction.state}</p>}
+            {approval && <section aria-label="Approval request">
+              <h3>Approval request · {approval.state}</h3>
+              <dl>
+                <dt>Requesting session</dt><dd>{selectedJob.title || selectedJob.sessionId}</dd>
+                <dt>Operation</dt><dd><pre>{approval.operation}</pre></dd>
+                <dt>Affected paths</dt><dd><pre>{approval.paths || "Codex did not provide paths."}</pre></dd>
+                <dt>Reason</dt><dd>{approval.reason || "Codex did not provide a reason."}</dd>
+              </dl>
+              {awaitingApproval && !approval.canApprove && <p>This request exceeds the selected permission profile.</p>}
+              {awaitingApproval && ["approve", "deny"].map((choice) => <button key={choice} type="button"
+                disabled={!canAct || selectedJob.decision?.id === approval.id || (choice === "approve" && !approval.canApprove)}
+                onClick={() => action(() => post(`/jobs/${jobId}/approval`, { id: approval.id, choice }))}>
+                {choice === "approve" ? "Approve for this turn" : "Deny"}
+              </button>)}
+            </section>}
             <div className="operations__modes" aria-label="Execution views">
               {modes.map((entry) => <button key={entry} type="button" aria-pressed={mode === entry} onClick={() => setMode(entry)}>{entry}</button>)}
             </div>
