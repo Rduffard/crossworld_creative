@@ -73,11 +73,9 @@ function ProjectBrief({ api, record, openObjectives, openWorkflow, openRecord, o
 
 export default function Projects({ api, initialId, openObjectives, openWorkflow, openRecord, openJob }) {
   const [records, setRecords] = useState(null);
-  const [creating, setCreating] = useState(false);
-  const selection = creating ? "new" : initialId;
+  const selection = initialId;
 
   function selectProject(id) {
-    setCreating(false);
     setError("");
     openRecord("project", id);
   }
@@ -89,9 +87,10 @@ export default function Projects({ api, initialId, openObjectives, openWorkflow,
   useEffect(() => {
     let current = true;
     const detailRequest = selection && selection !== "new" ? api("/projects/" + selection) : Promise.resolve(null);
-    Promise.all([api("/projects"), detailRequest]).then(([list, record]) => {
-      if (current) { setRecords(list); setDetail(record); }
-    }).catch((failure) => { if (current) setError(failure.message); });
+    api("/projects").then(list => { if (current) setRecords(list); })
+      .catch(failure => { if (current) setError(failure.message); });
+    detailRequest.then(record => { if (current) setDetail(record); })
+      .catch(failure => { if (current) setError(failure.message); });
     return () => { current = false; };
   }, [api, selection, version]);
 
@@ -125,7 +124,7 @@ export default function Projects({ api, initialId, openObjectives, openWorkflow,
         <button type="button" aria-pressed={selection === entry._id} onClick={() => selectProject(entry._id)}>{entry.name}</button>
         <small>{entry.workspace} · {entry.status}</small>
       </li>)}</ul>
-      <button type="button" onClick={() => { setError(""); setCreating(true); }}>Add project</button>
+      <button type="button" onClick={() => selectProject("new")}>Add project</button>
     </section>
     <section className="operations__panel">
       {!record && <h2>{selection === "new" ? "New project" : "Project details"}</h2>}

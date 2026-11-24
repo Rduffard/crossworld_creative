@@ -38,6 +38,16 @@ async function post(path, body) {
     throw failure;
   }
 }
+const directPermissionKey = "cw_operations_direct_development_permission";
+
+function loadDirectPermission() {
+  try {
+    return window.localStorage.getItem(directPermissionKey) === "full-access" ? "full-access" : "read-only";
+  } catch {
+    return "read-only";
+  }
+}
+
 const running = ["scheduled", "waiting", "queued", "running", "cancelling"];
 function executionStatus(job, host) {
   if (job.status === "waiting") return "Waiting for previous turn";
@@ -105,7 +115,9 @@ export default function Operations() {
   const [searchTerm, setSearchTerm] = useState("");
   const [archived, setArchived] = useState(false);
   const [history, setHistory] = useState(null);
-  const [profile, setProfile] = useState("read-only");
+  const [profileChoice, setProfileChoice] = useState(null);
+  const [directPermission, setDirectPermission] = useState(loadDirectPermission);
+  const [permissionError, setPermissionError] = useState("");
   const [policyRole, setPolicyRole] = useState("direct");
   const [job, setJob] = useState(null);
   const [showApprovalInbox, setShowApprovalInbox] = useState(false);
@@ -256,6 +268,7 @@ export default function Operations() {
   }
 
   function selectJob(id, employee, compose) {
+    setProfileChoice(null);
     setOutputScope(null);
     const next = new URLSearchParams(params);
     next.set("workspace", "command");
@@ -411,6 +424,10 @@ export default function Operations() {
   const mediaKey = draftKey === null || !mediaHostId ? null : JSON.stringify([draftKey, mediaHostId]);
   const mediaAttachments = mediaDrafts[mediaKey] || [];
   const mediaUploading = mediaKey !== null && uploadingDraft === mediaKey;
+  const directDevelopment = !jobId && !recipientId && !assignment && !scheduling && workspace === "development";
+  const permissionContext = JSON.stringify([workspace, assignment?.id, recipientId, scheduling]);
+  const profile = profileChoice?.context === permissionContext ? profileChoice.value
+    : directDevelopment ? directPermission : "read-only";
   const selectedProfile = !recipientId && (profile === workspace || profile === "full-access") && host?.profiles?.includes(profile)
     ? profile : "read-only";
   const canReturnMedia = !jobId && host?.mediaOutput && workspace === "workshop" && selectedProfile === "workshop";
@@ -491,7 +508,7 @@ export default function Operations() {
   }
 
   function submit(parent, queue = false, scheduledAt) {
-    if (editingLocked || mediaUploading || !validPrompt || (parent && assignment) || (!parent && !validAssignment) ||
+    if ((scheduledAt !== undefined && !scheduling) || editingLocked || mediaUploading || !validPrompt || (parent && assignment) || (!parent && !validAssignment) ||
         (scheduledAt !== undefined && (!validRepeat || mediaAttachments.length)) || prompt.length > (parent ? continuationLimit : startLimit) ||
         (!parent && !recipientId && profile === "full-access" && selectedProfile !== profile)) return;
     return action(async () => {
@@ -572,7 +589,7 @@ export default function Operations() {
   const composer = (
   <form id="operations-composer" onSubmit={(event) => {
     event.preventDefault();
-    if (send.enabled) send.run();
+    if (!scheduling && send.enabled) send.run();
   }}>
     <div className="operations__composer-body">
     {assignment && <section className="operations__panel operations__assignment" aria-label="Implementation assignment">
@@ -603,9 +620,7 @@ export default function Operations() {
     </label>}
     {recipientId && host && !host.employeeConversations && <p role="status">Choose a relay that supports employee conversations.</p>}
     {!jobId && <details className="operations__composer-options">
-    <summary>Execution settings <span className={selectedProfile === "full-access" ? "operations__access-warning" : undefined}>
-      {profileNames[selectedProfile]} · gpt-6.2-sol · {selectedEffort || "Effort unavailable"}
-    </span></summary>
+    <summary>Execution settings <span>GPT-6.2 Sol / {selectedEffort || "Effort unavailable"}</span></summary>
     <div className="operations__selectors">
       <label>Host<select value={host?._id || ""} onChange={(event) => { setOutputScope(null); setHostId(event.target.value); }}>
         <option value="" disabled>Select host</option>
@@ -616,7 +631,7 @@ export default function Operations() {
       </select></label>
       <label>Permissions<select value={profile === "full-access" ? profile : selectedProfile} onChange={(event) => {
         setOutputScope(null);
-        setProfile(event.target.value);
+        setProfileChoice({ context: permissionContext, value: event.target.value });
       }}>
         <option value="read-only">{profileNames["read-only"]}</option>
         {host?.profiles?.includes(workspace) && <option value={workspace}>{profileNames[workspace]}</option>}
@@ -638,8 +653,13 @@ export default function Operations() {
       <strong>Full Access.</strong> Commands run with the Windows account’s access to files, applications, and the network.
       Codex approval prompts are disabled. Workspace selection sets the starting folder.
     </p>}
-    {!recipientId && profile === "full-access" && selectedProfile !== profile && <p role="alert">Full Access is unavailable on this host. Select another permission profile.</p>}
     </details>}
+    {!jobId && <p role="status" className={profile === "full-access" ? "operations__access-warning" : undefined}>
+      <strong>Effective permissions</strong>{" "}
+      {profile === "full-access" && selectedProfile !== profile
+        ? "Full Access unavailable on the selected host. Select an available profile."
+        : profileNames[selectedProfile]}
+    </p>}
     <div className="operations__editor">
       <label className="operations__sr-only" htmlFor="operations-prompt">Message</label>
       <textarea id="operations-prompt" required readOnly={editingLocked || draftKey === null} rows={expanded ? 12 : 3}
@@ -649,7 +669,7 @@ export default function Operations() {
         onKeyDown={(event) => {
           if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) {
             event.preventDefault();
-            if (send.enabled) send.run();
+            if (!scheduling && send.enabled) send.run();
           }
         }}
         onChange={(event) => updatePrompt(event.target.value)} />
@@ -679,7 +699,9 @@ export default function Operations() {
       </label>
       <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
     </details>
-    {snapshot?.schedule && !assignment && !jobId && !recipientId && <details className="operations__schedule" open={scheduling || undefined}>
+    {snapshot?.schedule && !assignment && !jobId && !recipientId && !scheduling && <button type="button"
+      onClick={() => selectJob(null, null, "schedule")}>Schedule a new session</button>}
+    {scheduling && snapshot?.schedule && !assignment && !jobId && !recipientId && <details className="operations__schedule" open>
       <summary ref={scheduleSummary}>Schedule a new session</summary>
       <label>Run at (local time)<input type="datetime-local" value={scheduledTime}
         onChange={(event) => setScheduledTime(event.target.value)} /></label>
@@ -705,7 +727,8 @@ export default function Operations() {
     <div className="operations__prompt-actions">
       {selectedJob?.status === "running" && <button type="button" disabled={!canSteer}
         onClick={steer}>Steer current task</button>}
-      <button className="operations__send" disabled={!send.enabled}>{send.label}</button>
+      {scheduling ? <button type="button" onClick={() => selectJob(null)}>Return to conversation</button>
+        : <button className="operations__send" disabled={!send.enabled}>{send.label}</button>}
     </div>
   </form>
   );
@@ -857,6 +880,23 @@ export default function Operations() {
       </>}
       {page === "Settings" && <section className="operations__panel">
         <h2>Relay and execution</h2>
+        <label>Default permissions for direct development on this browser
+          <select value={directPermission} onChange={event => {
+            const value = event.target.value;
+            try {
+              window.localStorage.setItem(directPermissionKey, value);
+              setDirectPermission(value);
+              setProfileChoice(null);
+              setPermissionError("");
+            } catch {
+              setPermissionError("This browser could not save the permission preference.");
+            }
+          }}>
+            <option value="read-only">Read-only inspection</option>
+            <option value="full-access">Full Access</option>
+          </select>
+        </label>
+        {permissionError && <p role="alert">{permissionError}</p>}
         <p>{relayError || (hostOnline ? host.label + " is connected." : "No Windows execution host is connected.")}</p>
         {snapshot.dispatch && <p><button type="button" disabled={busy || !!relayError} onClick={() => action(async () => {
           await api("/dispatch", { method: "PATCH", body: { paused: !snapshot.dispatch.paused } });
