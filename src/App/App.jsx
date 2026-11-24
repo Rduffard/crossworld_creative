@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
 
 import DashboardShell from "../components/DashboadShell/DashboardShell.jsx";
 import ProtectedRoute from "../components/ProtectedRoute/ProtectedRoute";
@@ -13,9 +14,10 @@ import Community from "../Pages/Community/Community";
 import CommunitySpace from "../Pages/Community/CommunitySpace";
 import Profile from "../Pages/Profile/Profile";
 import Settings from "../Pages/Settings/Settings";
-import Operations from "../Pages/Operations/Operations";
 
 import "./App.css";
+
+const Operations = lazy(() => import("../Pages/Operations/Operations"));
 
 function App() {
   return (
@@ -43,7 +45,9 @@ function App() {
           }
         >
           <Route path="/settings" element={<Settings />} />
-          <Route path="/operations" element={<Operations />} />
+          <Route path="/operations" element={<Suspense fallback={<p role="status">Loading Operations…</p>}>
+            <Operations />
+          </Suspense>} />
         </Route>
 
         {/* Account-only pages */}

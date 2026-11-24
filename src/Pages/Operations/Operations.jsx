@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Markdown from "react-markdown";
 import { requestJson } from "../../utils/api";
+import Objectives from "./Objectives";
+import Headquarters from "./Headquarters";
 import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
 } from "./promptEditor";
@@ -15,58 +17,110 @@ async function post(path, body) {
     throw failure;
   }
 }
-const running = ["waiting", "queued", "running", "cancelling"];
-const profileNames = { "read-only": "Read-only inspection", development: "Development repository editing", workshop: "Workshop editing" };
+const running = ["scheduled", "waiting", "queued", "running", "cancelling"];
+const profileNames = {
+  "read-only": "Read-only inspection", development: "Development repository editing",
+  workshop: "Workshop editing", "full-access": "Full Access",
+};
 const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
 const workspaceNames = { development: "C: · Development", workshop: "D: · Art Workshop" };
-const modes = ["Activity", "Execution", "Summary"];
+const modes = ["Split", "Conversation", "Execution"];
 
-function Transcript({ job, mode, copy }) {
+function localScheduleTime(value) {
+  const date = new Date(value);
+  if (!Number.isFinite(+date)) return null;
+  const wallTime = new Date(+date - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  return wallTime === value ? date : null;
+}
+
+function JobTranscript({ job, copy, jobId, mode, composer, children }) {
+  const answer = useMemo(() => job.events.filter((event) => event.view === "response").map((event) => event.text).join(""), [job.events]);
+  const updates = useMemo(() => job.events.filter((event) => event.view === "activity" && event.label !== "Command started"), [job.events]);
+  const [updateCount, setUpdateCount] = useState(20);
   const [visibleCount, setVisibleCount] = useState(80);
-  const answer = job.events.filter((event) => event.view === "response").map((event) => event.text).join("");
-  if (mode === "Summary") {
-    const summary = [
-      `# Crossworld Operations session`,
-      `- Session: ${job.sessionId}`,
-      `- Job: ${job._id}`,
-      `- Status: ${job.status}`,
-      `- Workspace: ${workspaceNames[job.workspace]}`,
-      `- Permissions: ${profileNames[job.profile || "read-only"]}`,
-      `- Model: ${job.model} (${job.effort})`,
-      job.error && `\nError: ${job.error}`,
-      answer && `\n${answer}`,
-    ].filter(Boolean).join("\n");
-    return <>
-      <button type="button" onClick={() => copy(summary)}>Copy session summary</button>{" "}
-      <button type="button" disabled={!answer} onClick={() => copy(answer)}>Copy response as Markdown</button>
+  const [filter, setFilter] = useState("");
+  const [prompt, setPrompt] = useState(null);
+  const [loadingPrompt, setLoadingPrompt] = useState(false);
+  const [promptError, setPromptError] = useState("");
+  const entries = useMemo(() => {
+    const output = new Map();
+    return job.events.reduce((rows, event, index) => {
+      if (event.view !== "execution") return rows;
+      if (/^(?:Command output|Output) · /.test(event.label)) {
+        const existing = output.get(event.label);
+        if (existing) {
+          existing.text += event.text;
+          return rows;
+        }
+      }
+      const row = { ...event, index };
+      rows.push(row);
+      if (/^(?:Command output|Output) · /.test(event.label)) output.set(event.label, row);
+      return rows;
+    }, []);
+  }, [job.events]);
+  const term = filter.trim().toLowerCase();
+  const matching = term ? entries.filter((entry) => `${entry.label}\n${entry.text}`.toLowerCase().includes(term)) : entries;
+  const summary = [
+    "# Crossworld Operations session",
+    `- Session: ${job.sessionId}`,
+    `- Job: ${jobId}`,
+    `- Status: ${job.status}`,
+    `- Workspace: ${workspaceNames[job.workspace]}`,
+    `- Permissions: ${profileNames[job.profile || "read-only"]}`,
+    `- Model: ${job.model} (${job.effort})`,
+    job.error && `\nError: ${job.error}`,
+    answer && `\n${answer}`,
+  ].filter(Boolean).join("\n");
+
+  async function loadPrompt() {
+    setLoadingPrompt(true);
+    setPromptError("");
+    try { setPrompt((await api(`/jobs/${jobId}`)).prompt); }
+    catch (failure) { setPromptError(failure.message); }
+    finally { setLoadingPrompt(false); }
+  }
+
+  return <div className="operations__desk" data-view={mode.toLowerCase()}>
+    <section className="operations__pane" aria-label="Conversation" tabIndex={0}>
+      <h3>Conversation</h3>
+      <details onToggle={(event) => {
+        if (event.currentTarget.open && prompt === null && !loadingPrompt) loadPrompt();
+      }}>
+        <summary>Submitted prompt</summary>
+        {loadingPrompt && <p role="status">Loading prompt…</p>}
+        {promptError && <p role="alert">{promptError} <button type="button" onClick={loadPrompt}>Retry</button></p>}
+        {prompt !== null && <><button type="button" onClick={() => copy(prompt)}>Copy prompt</button><pre>{prompt}</pre></>}
+      </details>
+      {updates.length > 0 && <details open>
+        <summary>Agent updates ({updates.length})</summary>
+        {updates.length > updateCount && <button type="button" onClick={() => setUpdateCount((count) => count + 20)}>Show earlier updates</button>}
+        {updates.slice(-updateCount).map((event, index) => <div key={updates.length - Math.min(updates.length, updateCount) + index}>
+          <strong>{event.label}</strong>
+          <Markdown skipHtml disallowedElements={["img"]}>{event.text}</Markdown>
+        </div>)}
+      </details>}
+      <div className="operations__modes">
+        <button type="button" onClick={() => copy(summary)}>Copy session summary</button>
+        <button type="button" disabled={!answer} onClick={() => copy(answer)}>Copy response as Markdown</button>
+      </div>
       {answer ? <div className="operations__response"><Markdown skipHtml disallowedElements={["img"]}>{answer}</Markdown></div>
         : <p>No final response yet.</p>}
-    </>;
-  }
-  const events = job.events.map((event, index) => ({ ...event, index }))
-    .filter((event) => event.view === mode.toLowerCase());
-  if (!events.length) return <p>No {mode.toLowerCase()} events yet.</p>;
-  const commandOutput = new Map();
-  const visible = events.filter((event) => {
-    if (!event.label.startsWith("Output · ") && !event.label.startsWith("Command output · ")) return true;
-    const first = !commandOutput.has(event.label);
-    commandOutput.set(event.label, (commandOutput.get(event.label) || "") + event.text);
-    return first;
-  });
-  return <>
-    {visible.length > visibleCount && <button type="button" onClick={() => setVisibleCount((count) => count + 80)}>
-      Show earlier {mode.toLowerCase()} events
-    </button>}
-    {visible.slice(-visibleCount).map((event) => mode === "Execution" ? (
-    <details key={event.index}>
-      <summary>{event.label}</summary>
-      <button type="button" onClick={() => copy(commandOutput.get(event.label) ?? event.text)}>Copy output</button>
-      <pre>{commandOutput.get(event.label) ?? event.text}</pre>
-    </details>
-  ) : (
-    <p key={event.index}><strong>{event.label}</strong> {event.text}</p>
-    ))}
-  </>;
+      {composer}
+    </section>
+    <section className="operations__pane" aria-label="Execution" tabIndex={0}>
+      <h3>Execution</h3>
+      {children}
+      <label>Search execution output<input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} /></label>
+      {matching.length === 0 && <p>{term ? "No matching execution events." : "No execution events yet."}</p>}
+      {matching.length > visibleCount && <button type="button" onClick={() => setVisibleCount((count) => count + 80)}>Show earlier events</button>}
+      {matching.slice(-visibleCount).map((event) => <details key={event.index}>
+        <summary>{event.label}{event.at && <time dateTime={event.at}>{new Date(event.at).toLocaleTimeString()}</time>}</summary>
+        <button type="button" onClick={() => copy(event.text)}>Copy entry</button>
+        <pre>{event.text}</pre>
+      </details>)}
+    </section>
+  </div>;
 }
 
 export default function Operations() {
@@ -83,7 +137,17 @@ export default function Operations() {
   const [profile, setProfile] = useState("read-only");
   const [policyRole, setPolicyRole] = useState("direct");
   const [job, setJob] = useState(null);
-  const [mode, setMode] = useState("Activity");
+  const [page, setPage] = useState("Command Center");
+  const [mode, setMode] = useState(() => {
+    try {
+      const preference = window.localStorage.getItem("cw_operations_desk_view");
+      if (modes.includes(preference)) return preference;
+    } catch { /* Browser storage is optional. */ }
+    return "Split";
+  });
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [rescheduleTime, setRescheduleTime] = useState("");
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const [hostId, setHostId] = useState("");
   const [workspace, setWorkspace] = useState("development");
   const [effort, setEffort] = useState("medium");
@@ -107,7 +171,13 @@ export default function Operations() {
     url.searchParams.set("job", id);
     window.history.replaceState(window.history.state, "", url);
     setJobId(id);
-    setMode("Activity");
+    setRescheduleTime("");
+  }
+
+  function changeMode(value) {
+    setMode(value);
+    try { window.localStorage.setItem("cw_operations_desk_view", value); }
+    catch { /* Browser storage is optional. */ }
   }
 
   useEffect(() => {
@@ -116,14 +186,20 @@ export default function Operations() {
     async function refresh() {
       try {
         const query = new URLSearchParams({ search, archived: String(archived), compact: "true" });
-        const [hosts, jobs, approvals] = await Promise.all([
+        const [hosts, jobs, approvals, schedule, dispatch] = await Promise.all([
           api("/hosts"), api(`/jobs?${query}`), api("/approvals").catch((failure) => {
+            if (failure.status === 404) return null;
+            throw failure;
+          }), api("/schedule").catch((failure) => {
+            if (failure.status === 404) return null;
+            throw failure;
+          }), api("/dispatch").catch((failure) => {
             if (failure.status === 404) return null;
             throw failure;
           }),
         ]);
         if (active) {
-          setSnapshot({ hosts, jobs, approvals });
+          setSnapshot({ hosts, jobs, approvals, schedule, dispatch });
           setRelayError("");
         }
       } catch (failure) {
@@ -139,7 +215,7 @@ export default function Operations() {
     }
     refresh();
     return () => { active = false; clearTimeout(timer); };
-  }, [search, archived]);
+  }, [search, archived, refreshVersion]);
 
   useEffect(() => {
     if (!jobId || accessDenied) return;
@@ -153,7 +229,7 @@ export default function Operations() {
         events.push(...detail.events);
         setJob({ ...detail, events: [...events] });
         if (!running.includes(detail.status) && events.length >= detail.eventCount) return;
-        timer = setTimeout(refresh, events.length < detail.eventCount ? 0 : 900);
+        timer = setTimeout(refresh, events.length < detail.eventCount ? 0 : detail.status === "scheduled" ? 5000 : 900);
       } catch (failure) {
         if (!active) return;
         setError(failure.message);
@@ -162,16 +238,23 @@ export default function Operations() {
     }
     refresh();
     return () => { active = false; clearTimeout(timer); };
-  }, [jobId, accessDenied]);
+  }, [jobId, accessDenied, refreshVersion]);
 
-  const host = snapshot?.hosts.find((entry) => entry._id === hostId) ||
-    snapshot?.hosts.find((entry) => entry.online);
+  const host = snapshot?.hosts.find((entry) => entry._id === hostId && !entry.revokedAt) ||
+    snapshot?.hosts.find((entry) => entry.online) || snapshot?.hosts.find((entry) => !entry.revokedAt);
   const selectedEffort = host?.efforts?.includes(effort) ? effort : host?.efforts?.[0] || "";
   const selectedJob = job?._id === jobId ? job : null;
   const hostOnline = !relayError && host?.online;
   const selectedHost = snapshot?.hosts.find((entry) => entry._id === selectedJob?.hostId);
-  const selectedProfile = profile === workspace && host?.profiles?.includes(profile) ? profile : "read-only";
+  const selectedProfile = (profile === workspace || profile === "full-access") && host?.profiles?.includes(profile)
+    ? profile : "read-only";
   const approval = selectedJob?.approval;
+  const sessions = new Map();
+  for (const entry of snapshot?.jobs || []) {
+    const id = entry.sessionId || entry._id;
+    if (!sessions.has(id)) sessions.set(id, []);
+    sessions.get(id).push(entry);
+  }
   const awaitingApproval = selectedJob?.status === "running" && approval?.state === "pending";
   const canAct = !busy && !relayError && !!selectedHost?.online;
   const governance = snapshot?.approvals;
@@ -183,6 +266,9 @@ export default function Operations() {
   const promptError = prompt.length > PROMPT_LIMIT ? "The prompt exceeds 120,000 characters."
     : !prompt.isWellFormed() ? "The prompt contains invalid Unicode." : "";
   const editingLocked = busy || importing;
+  const scheduleDate = localScheduleTime(scheduledTime);
+  const schedulePreview = scheduleDate?.toLocaleString(undefined, { dateStyle: "long", timeStyle: "long" });
+  const rescheduleDate = localScheduleTime(rescheduleTime);
 
   function updatePrompt(value) {
     let error = "";
@@ -218,24 +304,27 @@ export default function Operations() {
     finally { setBusy(false); }
   }
 
-  function submit(parent, queue = false) {
-    if (editingLocked || !validPrompt || prompt.length > (parent ? continuationLimit : startLimit)) return;
+  function submit(parent, queue = false, scheduledAt) {
+    if (editingLocked || !validPrompt || prompt.length > (parent ? continuationLimit : startLimit) ||
+        (!parent && profile === "full-access" && selectedProfile !== profile)) return;
     return action(async () => {
       const request = {
         prompt, model: "gpt-6.2-sol", effort: parent?.effort || selectedEffort, queue,
         profile: parent ? parent.profile || "read-only" : selectedProfile,
-        workspace: parent?.workspace || workspace, hostId: parent?.hostId || host?._id, parentId: parent?._id,
+        workspace: parent?.workspace || workspace, hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
       };
       const signature = JSON.stringify(request);
       if (pendingSubmit.current?.signature !== signature) {
         pendingSubmit.current = { signature, id: crypto.randomUUID() };
       }
-      const { _id } = await post("/jobs", { id: pendingSubmit.current.id, ...request });
+      const { _id } = await post(scheduledAt === undefined ? "/jobs" : "/schedule", { id: pendingSubmit.current.id, ...request });
       pendingSubmit.current = null;
       if (queue) setNotice("Follow-up queued. Open it from session history.");
       else selectJob(_id);
       clearSubmittedDraft();
-      setMode("Activity");
+      if (scheduledAt !== undefined) setScheduledTime("");
+      if (scheduledAt !== undefined) setRefreshVersion((value) => value + 1);
+      if (mode === "Execution") changeMode("Conversation");
     });
   }
 
@@ -261,16 +350,113 @@ export default function Operations() {
   if (accessDenied) return <main className="operations"><h1>Crossworld Operations</h1><p>Private Operations access unavailable.</p></main>;
   if (!snapshot) return <main className="operations"><h1>Crossworld Operations</h1><p role="status">{relayError || "Checking Operations access…"}</p></main>;
 
+  const composer = (
+  <form id="operations-composer" onSubmit={(event) => { event.preventDefault(); submit(null); }}>
+    <div className="operations__selectors">
+      <label>Host<select value={host?._id || ""} onChange={(event) => setHostId(event.target.value)}>
+        <option value="" disabled>Select host</option>
+        {snapshot.hosts.filter((entry) => !entry.revokedAt).map((entry) => <option key={entry._id} value={entry._id}>{entry.label}</option>)}
+      </select></label>
+      <label>Workspace<select value={workspace} onChange={(event) => setWorkspace(event.target.value)}>
+        {Object.entries(workspaceNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select></label>
+      <label>Permissions<select value={profile === "full-access" ? profile : selectedProfile} onChange={(event) => setProfile(event.target.value)}>
+        <option value="read-only">{profileNames["read-only"]}</option>
+        {host?.profiles?.includes(workspace) && <option value={workspace}>{profileNames[workspace]}</option>}
+        {host?.profiles?.includes("full-access") && <option value="full-access">Full Access</option>}
+        {profile === "full-access" && selectedProfile !== profile && <option value="full-access" disabled>Full Access unavailable</option>}
+      </select></label>
+      <label>Model<select defaultValue="gpt-6.2-sol"><option value="gpt-6.2-sol">GPT-6.2 Sol</option></select></label>
+      <label>Reasoning effort<select value={selectedEffort} onChange={(event) => setEffort(event.target.value)}>
+        {!selectedEffort && <option value="">Awaiting host</option>}
+        {host?.efforts?.map((entry) => <option key={entry}>{entry}</option>)}
+      </select></label>
+    </div>
+    {selectedProfile === "full-access" && <p className="operations__access-warning">
+      <strong>Full Access.</strong> Commands run with the Windows account’s access to files, applications, and the network.
+      Codex approval prompts are disabled. Workspace selection sets the starting folder.
+    </p>}
+    {profile === "full-access" && selectedProfile !== profile && <p role="alert">Full Access is unavailable on this host. Select another permission profile.</p>}
+    <div className="operations__editor">
+      <label htmlFor="operations-prompt">Prompt</label>
+      <textarea id="operations-prompt" required readOnly={editingLocked} rows={expanded ? 20 : 6}
+        value={prompt} spellCheck={false} autoCapitalize="off"
+        aria-invalid={!!promptError} aria-describedby="operations-prompt-count"
+        onChange={(event) => updatePrompt(event.target.value)} />
+      <div className="operations__editor-tools">
+        <span id="operations-prompt-count">{prompt.length.toLocaleString()} / {PROMPT_LIMIT.toLocaleString()} characters</span>
+        <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
+          onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>
+      </div>
+      <label>Attach a Markdown or text file
+        <input type="file" accept=".md,.markdown,.txt" disabled={editingLocked} onChange={attachFile} />
+      </label>
+      <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
+      {host && startLimit < PROMPT_LIMIT && <p>The selected host supports {startLimit.toLocaleString()} characters for new sessions. Update and restart its worker for longer prompts.</p>}
+      {selectedHost && selectedJob && continuationLimit < PROMPT_LIMIT && <p>The session host supports {continuationLimit.toLocaleString()} characters for continuations, queued follow-ups, and steering.</p>}
+      {promptError && <p role="alert">{promptError}</p>}
+      {attachment.error && <p role="alert">{attachment.error}</p>}
+      {attachment.message && <p role="status">{attachment.message}</p>}
+      {draft.error && <p role="alert">{draft.error}</p>}
+      {prompt && !draft.error && <p>Draft saved in this browser.</p>}
+    </div>
+    <div className="operations__prompt-actions">
+      <button disabled={!workerEnabled || editingLocked || !hostOnline || !selectedEffort || !validPrompt || prompt.length > startLimit ||
+        (profile === "full-access" && selectedProfile !== profile)}>Start session</button>
+      <button type="button" disabled={!workerEnabled || editingLocked || !canAct || !selectedJob?.codexThreadId ||
+        running.includes(selectedJob.status) || !validPrompt || prompt.length > continuationLimit}
+        onClick={() => submit(selectedJob)}>Continue session</button>
+      <button type="button" disabled={!workerEnabled || editingLocked || !["queued", "running"].includes(selectedJob?.status) ||
+        !validPrompt || prompt.length > continuationLimit}
+        onClick={() => submit(selectedJob, true)}>Queue follow-up</button>
+      <button type="button" disabled={editingLocked || !canAct || !selectedJob?.activeTurn || selectedJob.status !== "running" ||
+        ["pending", "sending"].includes(selectedJob.instruction?.state) || !validPrompt || prompt.length > continuationLimit}
+        onClick={steer}>Steer current task</button>
+    </div>
+    {snapshot?.schedule && <details className="operations__schedule">
+      <summary>Schedule a new session</summary>
+      <label>Run at (local time)<input type="datetime-local" value={scheduledTime}
+        onChange={(event) => setScheduledTime(event.target.value)} /></label>
+      {schedulePreview && <p>Dispatch time <strong>{schedulePreview}</strong></p>}
+      {scheduledTime && !scheduleDate && <p role="alert">Choose a valid time in your current time zone.</p>}
+      <p>Overdue sessions wait for the selected host to reconnect and become available.</p>
+      <button type="button" disabled={!workerEnabled || editingLocked || !!relayError || !host || !selectedEffort ||
+        !validPrompt || prompt.length > startLimit || !scheduleDate || (profile === "full-access" && selectedProfile !== profile)}
+        onClick={() => submit(null, false, +scheduleDate)}>Schedule session</button>
+    </details>}
+  </form>
+  );
+
   return (
     <main className="operations">
       <header className="operations__hero">
+        <p className="operations__brand">Crossworld Creative</p>
         <h1>Crossworld Operations</h1>
         <p role="status">{relayError ? "Operations API unavailable" : hostOnline ? `${host.label} connected` : "Windows execution host offline"}</p>
+        {snapshot.dispatch && <div className="operations__dispatch">
+          <button type="button" disabled={busy || !!relayError} onClick={() => action(async () => {
+            await api("/dispatch", { method: "PATCH", body: { paused: !snapshot.dispatch.paused } });
+            setRefreshVersion((value) => value + 1);
+          })}>{snapshot.dispatch.paused ? "Resume future dispatch" : "Pause future dispatch"}</button>
+          <p>{snapshot.dispatch.paused ? "New and scheduled jobs are held. Claimed jobs can finish." :
+            "Pausing holds new and scheduled jobs. Claimed jobs can finish."}</p>
+        </div>}
       </header>
+      <nav className="operations__modes" aria-label="Operations navigation">
+        {["Headquarters", "Command Center", "Objectives"].map((entry) => <button key={entry} type="button"
+          aria-pressed={page === entry} onClick={() => setPage(entry)}>{entry}</button>)}
+      </nav>
+      {page === "Headquarters" && <Headquarters api={api} openJob={(id, view) => {
+        selectJob(id);
+        changeMode(view);
+        setPage("Command Center");
+      }} />}
+      {page === "Objectives" && <Objectives api={api} />}
+      {page === "Command Center" && <>
       {error && <p role="alert">{error}</p>}
       <p role="status">{notice}</p>
-      {governance && <section className="operations__panel" aria-label="Operation approvals">
-        <h2>Operation approvals</h2>
+      {governance && <details className="operations__panel operations__approvals">
+        <summary>Operation approvals and policy ({governance.requests.filter((request) => request.state === "pending").length} pending)</summary>
         {!governance.githubEnabled && <p>Use an editing session for instructed Git operations. Review any command approval in that session.</p>}
         {!governance.toolsEnabled && <p>Editing sessions can use installed app commands and the worker’s selected MCP inspection tools.</p>}
         <details>
@@ -332,16 +518,37 @@ export default function Operations() {
             {choice === "approve" ? "Approve once" : "Deny"}
           </button>)}
         </details>)}
-      </section>}
+      </details>}
+      <a className="operations__history-link" href="#operations-history">Jump to session history</a>
       <div className="operations__layout">
-        <aside className="operations__panel">
+        <aside id="operations-history" className="operations__panel">
           <h2>Session history</h2>
           <label>Search sessions<input type="search" maxLength={120} value={search} onChange={(event) => setSearch(event.target.value)} /></label>
           <label><input type="checkbox" checked={archived} onChange={(event) => setArchived(event.target.checked)} /> Archived sessions</label>
           {snapshot.jobs.length === 0 && <p>No jobs yet.</p>}
-          <ul>{snapshot.jobs.map((entry) => <li key={entry._id}>
+          <ul>{Array.from(sessions, ([id, turns]) => {
+            const latest = turns[0];
+            const label = latest.title || turns.find((entry) => !entry.parentId)?.prompt || latest.prompt;
+            return <li key={id}>{turns.length === 1
+              ? <button type="button" aria-pressed={jobId === latest._id} onClick={() => selectJob(latest._id)}>
+                {label}<small>{latest.status}{latest.parentId ? " · Follow-up" : ""}</small>
+              </button>
+              : <details open={turns.some((entry) => entry._id === jobId) || undefined}>
+                <summary>{label} · {turns.length} turns</summary>
+                <ul>{turns.map((entry) => <li key={entry._id}>
+                  <button type="button" aria-pressed={jobId === entry._id} onClick={() => selectJob(entry._id)}>
+                    {entry.prompt}<small>{entry.status}{entry.parentId ? " · Follow-up" : " · First turn"}</small>
+                  </button>
+                </li>)}</ul>
+              </details>}
+            </li>;
+          })}</ul>
+          <h2>Upcoming work</h2>
+          {snapshot.schedule?.length === 0 && <p>No scheduled sessions.</p>}
+          <ul>{snapshot.schedule?.map((entry) => <li key={entry._id}>
             <button type="button" aria-pressed={jobId === entry._id} onClick={() => selectJob(entry._id)}>
-              {entry.title ? `${entry.title} · ` : ""}{entry.prompt.slice(0, 55)} <small>{entry.status}{entry.parentId ? " · Follow-up" : ""}</small>
+              <time dateTime={entry.scheduledAt}>{new Date(entry.scheduledAt).toLocaleString()}</time>
+              <small>{workspaceNames[entry.workspace]}</small>
             </button>
           </li>)}</ul>
           <details>
@@ -375,66 +582,21 @@ export default function Operations() {
           </details>
         </aside>
         <div className="operations__panel">
-          <form onSubmit={(event) => { event.preventDefault(); submit(null); }}>
-            <div className="operations__selectors">
-              <label>Host<select value={host?._id || ""} onChange={(event) => setHostId(event.target.value)}>
-                <option value="" disabled>Select host</option>
-                {snapshot.hosts.filter((entry) => !entry.revokedAt).map((entry) => <option key={entry._id} value={entry._id}>{entry.label}</option>)}
-              </select></label>
-              <label>Workspace<select value={workspace} onChange={(event) => setWorkspace(event.target.value)}>
-                {Object.entries(workspaceNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-              </select></label>
-              <label>Permissions<select value={selectedProfile} onChange={(event) => setProfile(event.target.value)}>
-                <option value="read-only">{profileNames["read-only"]}</option>
-                {host?.profiles?.includes(workspace) && <option value={workspace}>{profileNames[workspace]}</option>}
-              </select></label>
-              <label>Model<select defaultValue="gpt-6.2-sol"><option value="gpt-6.2-sol">GPT-6.2 Sol</option></select></label>
-              <label>Reasoning effort<select value={selectedEffort} onChange={(event) => setEffort(event.target.value)}>
-                {!selectedEffort && <option value="">Awaiting host</option>}
-                {host?.efforts?.map((entry) => <option key={entry}>{entry}</option>)}
-              </select></label>
-            </div>
-            <div className="operations__editor">
-              <label htmlFor="operations-prompt">Prompt</label>
-              <textarea id="operations-prompt" required readOnly={editingLocked} rows={expanded ? 20 : 6}
-                value={prompt} spellCheck={false} autoCapitalize="off"
-                aria-invalid={!!promptError} aria-describedby="operations-prompt-count"
-                onChange={(event) => updatePrompt(event.target.value)} />
-              <div className="operations__editor-tools">
-                <span id="operations-prompt-count">{prompt.length.toLocaleString()} / {PROMPT_LIMIT.toLocaleString()} characters</span>
-                <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
-                  onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>
-              </div>
-              <label>Attach a Markdown or text file
-                <input type="file" accept=".md,.markdown,.txt" disabled={editingLocked} onChange={attachFile} />
-              </label>
-              <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
-              {host && startLimit < PROMPT_LIMIT && <p>The selected host supports {startLimit.toLocaleString()} characters for new sessions. Update and restart its worker for longer prompts.</p>}
-              {selectedHost && selectedJob && continuationLimit < PROMPT_LIMIT && <p>The session host supports {continuationLimit.toLocaleString()} characters for continuations, queued follow-ups, and steering.</p>}
-              {promptError && <p role="alert">{promptError}</p>}
-              {attachment.error && <p role="alert">{attachment.error}</p>}
-              {attachment.message && <p role="status">{attachment.message}</p>}
-              {draft.error && <p role="alert">{draft.error}</p>}
-              {prompt && !draft.error && <p>Draft saved in this browser.</p>}
-            </div>
-            <div className="operations__prompt-actions">
-              <button disabled={!workerEnabled || editingLocked || !hostOnline || !selectedEffort || !validPrompt || prompt.length > startLimit}>Start session</button>
-              <button type="button" disabled={!workerEnabled || editingLocked || !canAct || !selectedJob?.codexThreadId ||
-                running.includes(selectedJob.status) || !validPrompt || prompt.length > continuationLimit}
-                onClick={() => submit(selectedJob)}>Continue session</button>
-              <button type="button" disabled={!workerEnabled || editingLocked || !["queued", "running"].includes(selectedJob?.status) ||
-                !validPrompt || prompt.length > continuationLimit}
-                onClick={() => submit(selectedJob, true)}>Queue follow-up</button>
-              <button type="button" disabled={editingLocked || !canAct || !selectedJob?.activeTurn || selectedJob.status !== "running" ||
-                ["pending", "sending"].includes(selectedJob.instruction?.state) || !validPrompt || prompt.length > continuationLimit}
-                onClick={steer}>Steer current task</button>
-            </div>
-          </form>
+          {!selectedJob && composer}
           {selectedJob && <section className="operations__transcript">
             <header>
               <h2>{selectedJob.title || "Session"} · {awaitingApproval ? "Waiting for approval" : selectedJob.status}</h2>
               {running.includes(selectedJob.status) && <button type="button" disabled={busy || selectedJob.status === "cancelling"}
-                onClick={() => action(() => post(`/jobs/${jobId}/cancel`))}>{selectedJob.status === "waiting" ? "Cancel follow-up" : "Cancel current task"}</button>}
+                onClick={() => action(async () => {
+                  if (selectedJob.status === "scheduled") {
+                    try { await api(`/schedule/${jobId}`, { method: "DELETE" }); }
+                    finally { setRefreshVersion((value) => value + 1); }
+                  } else {
+                    await post(`/jobs/${jobId}/cancel`);
+                  }
+                })}>{selectedJob.status === "scheduled" ? "Cancel schedule" :
+                  selectedJob.status === "waiting" ? "Cancel follow-up" : "Cancel current task"}</button>}
+              {awaitingApproval && <button type="button" onClick={() => changeMode("Execution")}>Review approval</button>}
               <button type="button" disabled={busy} onClick={() => {
                 const title = window.prompt("Session name", selectedJob.title || "");
                 if (title?.trim()) action(async () => {
@@ -449,7 +611,29 @@ export default function Operations() {
               })}>{selectedJob.archivedAt ? "Restore from archive" : "Archive session"}</button>
             </header>
             {selectedJob.error && <p role="alert">{selectedJob.error}</p>}
+            {selectedJob.profile === "full-access" && <p className="operations__access-warning">
+              Full Access session · follow-ups inherit unrestricted access.
+            </p>}
+            {selectedJob.scheduledAt && <p>Scheduled for <time dateTime={selectedJob.scheduledAt}>
+              {new Date(selectedJob.scheduledAt).toLocaleString()}</time></p>}
+            {selectedJob.status === "scheduled" && <details>
+              <summary>Reschedule</summary>
+              <label>New run time (local)<input type="datetime-local" value={rescheduleTime}
+                onChange={(event) => setRescheduleTime(event.target.value)} /></label>
+              {rescheduleDate && <p>{rescheduleDate.toLocaleString(undefined, { dateStyle: "long", timeStyle: "long" })}</p>}
+              <button type="button" disabled={busy || !!relayError || !rescheduleDate} onClick={() => action(async () => {
+                await api(`/schedule/${jobId}`, { method: "PATCH", body: { scheduledAt: +rescheduleDate } });
+                setRescheduleTime("");
+                setRefreshVersion((value) => value + 1);
+              })}>Save time</button>
+            </details>}
             {selectedJob.instruction && <p role="status">Steering · {selectedJob.instruction.state}</p>}
+            <div className="operations__modes" aria-label="Command Center layout">
+              {modes.map((entry) => <button className={entry === "Split" ? "operations__split" : undefined}
+                key={entry} type="button" aria-pressed={mode === entry}
+                onClick={() => changeMode(entry)}>{entry}</button>)}
+            </div>
+            <JobTranscript key={jobId} job={selectedJob} jobId={jobId} mode={mode} copy={copy} composer={composer}>
             {approval && <section aria-label="Approval request">
               <h3>Approval request · {approval.state}</h3>
               <dl>
@@ -465,13 +649,11 @@ export default function Operations() {
                 {choice === "approve" ? "Approve for this turn" : "Deny"}
               </button>)}
             </section>}
-            <div className="operations__modes" aria-label="Execution views">
-              {modes.map((entry) => <button key={entry} type="button" aria-pressed={mode === entry} onClick={() => setMode(entry)}>{entry}</button>)}
-            </div>
-            <Transcript key={`${jobId}:${mode}`} job={selectedJob} mode={mode} copy={copy} />
+            </JobTranscript>
           </section>}
         </div>
       </div>
+      </>}
     </main>
   );
 }
