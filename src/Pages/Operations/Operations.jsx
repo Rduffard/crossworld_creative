@@ -446,7 +446,7 @@ export default function Operations() {
         {["Headquarters", "Command Center", "Objectives"].map((entry) => <button key={entry} type="button"
           aria-pressed={page === entry} onClick={() => setPage(entry)}>{entry}</button>)}
       </nav>
-      {page === "Headquarters" && <Headquarters api={api} openJob={(id, view) => {
+      {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openJob={(id, view) => {
         selectJob(id);
         changeMode(view);
         setPage("Command Center");
