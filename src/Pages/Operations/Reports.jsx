@@ -27,7 +27,7 @@ function summaryFor(report) {
   ].filter(line => line !== false && line != null).join("\n");
 }
 
-export default function Reports({ api, reportId, openRecord, openJob, copy }) {
+export default function Reports({ api, reportId, openRecord, openJob, openWorkflow, copy }) {
   const [data, setData] = useState({ reports: [], before: null });
   const [detail, setDetail] = useState(null);
   const [search, setSearch] = useState("");
@@ -135,15 +135,18 @@ export default function Reports({ api, reportId, openRecord, openJob, copy }) {
     <div className="operations__modes">
       <button type="button" onClick={() => copy(summary)}>Copy summary</button>
       <button type="button" onClick={() => copy(technical)}>Copy full report</button>
+      <details><summary>Download report</summary>
       <button type="button" onClick={() => downloadText(file + ".md", "text/markdown;charset=utf-8", technical)}>Download Markdown</button>
       <button type="button" onClick={() => downloadText(file + ".txt", "text/plain;charset=utf-8", technical)}>Download text</button>
       <button type="button" onClick={() => downloadText(file + ".json", "application/json", JSON.stringify(detail, null, 2))}>Download JSON</button>
+      </details>
     </div>
     <details><summary>Full technical report</summary>
       <Markdown skipHtml remarkPlugins={[remarkGfm]} disallowedElements={["img"]}>{technical}</Markdown>
     </details>
     <div className="operations__modes">
       <button type="button" onClick={() => openJob(detail._id, "Conversation")}>Execution transcript</button>
+      <button type="button" onClick={() => openWorkflow(detail._id)}>View assignment workflow</button>
       {detail.objective && <button type="button" onClick={() => openRecord("objective", detail.objectiveId)}>Objective and acceptance</button>}
       {detail.delegatedBy && <button type="button" onClick={() => openJob(detail.delegatedBy.sourceTurnId, "Conversation")}>First Mate handoff</button>}
     </div>

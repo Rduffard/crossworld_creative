@@ -25,6 +25,7 @@ const Projects = lazy(() => import("./Projects"));
 const ReferenceLibrary = lazy(() => import("./ReferenceLibrary"));
 const VirtualOffice = lazy(() => import("./VirtualOffice"));
 const Reports = lazy(() => import("./Reports"));
+const Workflow = lazy(() => import("./Workflow"));
 const Workforce = lazy(() => import("./Workforce"));
 
 const api = (path, options) => requestJson(`/operations${path}`, { auth: true, ...options });
@@ -67,7 +68,9 @@ function ExecutionElapsed({ startedAt, finishedAt, active }) {
 const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
 const modes = ["Split", "Conversation", "Execution"];
 const jobIdPattern = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
-const sourcePages = { report: "Reports", objective: "Objectives", "project-objectives": "Objectives", project: "Projects", knowledge: "Knowledge", employee: "Workforce" };
+const sourcePages = {
+  "workflow-job": "Workflow", "workflow-project": "Workflow", "workflow-objective": "Workflow", "workflow-employee": "Workflow",
+  report: "Reports", objective: "Objectives", "project-objectives": "Objectives", project: "Projects", knowledge: "Knowledge", employee: "Workforce" };
 
 function getDraft(session) {
   try { return { prompt: loadPromptDraft(window.localStorage, session), error: "" }; }
@@ -699,8 +702,8 @@ export default function Operations() {
             return <li key={id}>
               <button type="button" aria-pressed={active} onClick={() => selectJob(latest._id)}>
                 {label || "Conversation"}
-                <small>{employee ? employee + " ? " : ""}{latest.status}
-                  {latest.createdAt && <> ? <time dateTime={latest.createdAt}>{new Date(latest.createdAt).toLocaleDateString()}</time></>}
+                <small>{employee ? employee + " \u00b7 " : ""}{latest.status}
+                  {latest.createdAt && <>{" \u00b7 "}<time dateTime={latest.createdAt}>{new Date(latest.createdAt).toLocaleDateString()}</time></>}
                 </small>
               </button>
             </li>;
@@ -773,17 +776,20 @@ export default function Operations() {
   }}>
       <Suspense fallback={<p role="status">Loading workspace…</p>}>
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
-        openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
+        openProject={(id) => openSource("project", id)} openWorkflow={(id) => openSource("workflow-objective", id)} openFinance={() => setPage("Finance")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
         openGovernance={() => setShowApprovalInbox(true)} openJob={openJob} />}
+      {page === "Workflow" && <Workflow key={linkedRecord?.id || "studio"} api={api} scope={linkedRecord?.group} recordId={linkedRecord?.id}
+        openRecord={openSource} openJob={openJob} />}
       {page === "Projects" && <Projects api={api} initialId={linkedRecord?.group === "project" ? linkedRecord.id : null}
-        openObjectives={(id) => openSource("project-objectives", id)} />}
+        openObjectives={(id) => openSource("project-objectives", id)} openWorkflow={(id) => openSource("workflow-project", id)} />}
       {page === "Objectives" && <Objectives api={api} openJob={openJob} assignObjective={prepareAssignment}
         openProject={(id) => openSource("project", id)}
         initialId={linkedRecord?.group === "objective" ? linkedRecord.id : null}
         initialProjectId={linkedRecord?.group === "project-objectives" ? linkedRecord.id : null} />}
-      {page === "Reports" && <Reports key={linkedRecord?.id || "list"} api={api} reportId={linkedRecord?.id} openRecord={openSource} openJob={openJob} copy={copy} />}
-      {page === "Workforce" && <Workforce api={api} openJob={openJob} openRecord={openSource} messageEmployee={messageEmployee} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
+      {page === "Reports" && <Reports key={linkedRecord?.id || "list"} api={api} reportId={linkedRecord?.id} openRecord={openSource} openJob={openJob} copy={copy} openWorkflow={(id) => openSource("workflow-job", id)} />}
+      {page === "Workforce" && <Workforce api={api} openJob={openJob} openRecord={openSource} openWorkflow={(id) => openSource("workflow-employee", id)} messageEmployee={messageEmployee} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
+      {page === "Office" && <button type="button" onClick={() => setPage("Workflow")}>View live workflow</button>}
       {page === "Office" && <VirtualOffice api={api} openJob={openJob}
         openEmployee={(id) => openSource("employee", id)} openHeadquarters={() => setPage("Headquarters")} />}
       {page === "Activity" && <Activity api={api} openSource={openSource} />}
@@ -946,6 +952,7 @@ export default function Operations() {
               <details className="operations__conversation-actions">
                 <summary>Actions</summary>
                 <div>
+              <button type="button" onClick={() => openSource("workflow-job", jobId)}>View execution workflow</button>
               <button type="button" disabled={busy} onClick={() => {
                 const title = window.prompt("Session name", selectedJob.title || "");
                 if (title?.trim()) action(async () => {
@@ -970,7 +977,7 @@ export default function Operations() {
             {selectedJob.delegatedReview && <p>
               <button type="button" className="operations__source" onClick={() => openJob(selectedJob.delegatedReview._id, "Conversation")}>
                 {selectedJob.delegatedReview.title}
-              </button>{" "}<span>{selectedJob.delegatedReview.assigneeName} ? {executionStatus(selectedJob.delegatedReview)}</span>
+              </button>{" "}<span>{selectedJob.delegatedReview.assigneeName} {"\u00b7"} {executionStatus(selectedJob.delegatedReview)}</span>
               {selectedJob.delegatedReview.status === "completed" && <button type="button" className="operations__source"
                 onClick={() => openSource("report", selectedJob.delegatedReview._id)}>View Final Report</button>}
             </p>}

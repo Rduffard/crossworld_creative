@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-export default function Projects({ api, initialId, openObjectives }) {
+export default function Projects({ api, initialId, openObjectives, openWorkflow }) {
   const [records, setRecords] = useState(null);
   const [selection, setSelection] = useState(initialId || null);
   const [detail, setDetail] = useState(null);
@@ -53,6 +53,7 @@ export default function Projects({ api, initialId, openObjectives }) {
       <h2>{record?.name || (selection === "new" ? "New project" : "Project details")}</h2>
       {error && <p role="alert">{error}</p>}
       {record && <button type="button" onClick={() => openObjectives(record._id)}>View project objectives</button>}
+      {record && <button type="button" onClick={() => openWorkflow(record._id)}>View project workflow</button>}
       {(record || selection === "new") && <form key={record ? record._id + "/" + record.revision : "new"} onSubmit={save}>
         <label>Name <input name="name" required maxLength={100} defaultValue={record?.name} /></label>
         <label>Description <textarea name="description" required maxLength={1500} defaultValue={record?.description} /></label>

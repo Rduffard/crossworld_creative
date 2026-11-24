@@ -1,14 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import { Link } from "react-router-dom";
 import { groups } from "./workspaces";
 
+function WorkspaceLinks({ page, navigate }) {
+  return groups.map(([group, entries]) => <div key={group}>
+    <span>{group}</span>
+    {entries.map(([, name]) => <button type="button" key={name} aria-current={page === name ? "page" : undefined}
+      onClick={() => navigate(name)}>{name}</button>)}
+  </div>);
+}
+
 export default function OperationsShell({ page, navigate, health, paused, keyboardOpen, children }) {
-  const current = useRef(null);
-  useEffect(() => {
-    if (window.matchMedia("(max-width: 900px)").matches) {
-      current.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
-  }, [page]);
+  const workspaces = useRef(null);
+  const workspace = useRef(null);
+
+  function navigateMobile(name) {
+    workspaces.current?.close();
+    navigate(name);
+    requestAnimationFrame(() => workspace.current?.focus());
+  }
 
   return <main className="operations operations--shell" data-workspace={page} data-keyboard={keyboardOpen}>
     <a className="operations__skip" href="#operations-workspace">Skip to workspace</a>
@@ -21,13 +31,20 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
       </div>
     </header>
     <nav className="operations__navigation" aria-label="Operations workspaces">
-      {groups.map(([group, entries]) => <div key={group}>
-        <span>{group}</span>
-        {entries.map(([, name]) => <button type="button" key={name} ref={page === name ? current : null} aria-current={page === name ? "page" : undefined}
-          onClick={() => navigate(name)}>{name}</button>)}
-      </div>)}
+      <WorkspaceLinks page={page} navigate={navigate} />
     </nav>
-    <div id="operations-workspace" className="operations__workspace" tabIndex={-1}>
+    <div className="operations__mobile-nav">
+      <span>{page}{paused && <small>Dispatch paused</small>}</span>
+      <button type="button" aria-haspopup="dialog" onClick={() => workspaces.current?.showModal()}>Workspaces</button>
+    </div>
+    <dialog ref={workspaces} className="operations__dialog operations__workspace-menu" aria-labelledby="operations-workspace-menu-title">
+      <div className="operations__briefing-title">
+        <h2 id="operations-workspace-menu-title">Workspaces</h2>
+        <form method="dialog"><button>Close</button></form>
+      </div>
+      <nav aria-label="Available workspaces"><WorkspaceLinks page={page} navigate={navigateMobile} /></nav>
+    </dialog>
+    <div ref={workspace} id="operations-workspace" className="operations__workspace" tabIndex={-1}>
       {page !== "Command Center" && <h1>{page}</h1>}
       {children}
     </div>

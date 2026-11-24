@@ -74,9 +74,9 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
           <div>
             <strong>{host.label}</strong>
             <small>{host.state}</small>
-            {host.job && <button type="button" className="operations__source" onClick={() => openJob(host.job._id, "Execution")}>
-              {host.job.title || "Open assigned turn"}
-            </button>}
+            {(host.jobs || (host.job ? [host.job] : [])).map(job => <button key={job._id} type="button" className="operations__source" onClick={() => openJob(job._id, "Execution")}>
+              {job.title || (job.slot === "background review" ? "Open background review" : "Open assigned turn")}
+            </button>)}
           </div>
         </li>)}</ul>
       </section>

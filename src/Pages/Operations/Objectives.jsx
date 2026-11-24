@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import ObjectiveReviews from "./ObjectiveReviews";
 
-export default function Objectives({ api, openJob, initialId, initialProjectId, openProject, assignObjective }) {
+export default function Objectives({ api, openJob, initialId, initialProjectId, openProject, assignObjective, openWorkflow }) {
   const [records, setRecords] = useState(null);
   const [projects, setProjects] = useState([]);
   const projectFilter = initialProjectId ? "?projectId=" + initialProjectId : "";
@@ -119,6 +119,7 @@ export default function Objectives({ api, openJob, initialId, initialProjectId, 
       </details>
       {selected && <article key={selected._id} className="operations__objective">
         <h2>{selected.title}</h2>
+        <button type="button" onClick={() => openWorkflow(selected._id)}>View objective workflow</button>
         {selected.projectId && <button type="button" className="operations__source" onClick={() => openProject(selected.projectId)}>
           {selectedProject?.name || "Open project"}
         </button>}

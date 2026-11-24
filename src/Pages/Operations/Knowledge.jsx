@@ -5,6 +5,7 @@ const kinds = [
   ["procedure", "Procedure"], ["research", "Research"], ["decision", "Decision"],
   ["handover", "Handover"], ["handbook", "Handbook"], ["qa", "QA report"], ["air", "AIR report"],
 ];
+const memoryKinds = [["decision", "Decision"], ["preference", "Owner preference"], ["policy", "Operating policy"]];
 const provenance = ["untested", "external", "experimental", "validated", "owner-approved", "deprecated", "failed"];
 const fields = [
   ["title", "Title", 120, true], ["project", "Project label", 100], ["author", "Author", 100, true],
@@ -23,6 +24,7 @@ export default function Knowledge({ api, initialId }) {
   const [detailError, setDetailError] = useState(null);
   const [pending, setPending] = useState(false);
   const [version, setVersion] = useState(0);
+  const [kind, setKind] = useState("procedure");
   const [status, setStatus] = useState("untested");
   const [projects, setProjects] = useState([]);
   const loadKey = version + ":" + filter;
@@ -67,9 +69,26 @@ export default function Knowledge({ api, initialId }) {
         method: "POST", body: Object.fromEntries(new FormData(form)),
       });
       form.reset();
+      setKind("procedure");
       setStatus("untested");
       setSelection(_id);
       setVersion((value) => value + 1);
+    } catch (failure) {
+      setSaveError(failure.message);
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function saveDecision(action, values = {}) {
+    setPending(true);
+    setSaveError("");
+    try {
+      await api("/knowledge/" + detail._id + "/decision", {
+        method: "PATCH", body: { ...values, action, revision: detail.revision ?? 0 },
+      });
+      setDetail(await api("/knowledge/" + detail._id));
+      setVersion(value => value + 1);
     } catch (failure) {
       setSaveError(failure.message);
     } finally {
@@ -122,13 +141,44 @@ export default function Knowledge({ api, initialId }) {
         <p className="operations__knowledge-text">{detail.body}</p>
         {detail.evidence && <><h3>Validation evidence</h3><p className="operations__knowledge-text">{detail.evidence}</p></>}
         {detail.limitations && <><h3>Limitations</h3><p className="operations__knowledge-text">{detail.limitations}</p></>}
+        {detail.kind === "decision" && detail.status === "owner-approved" && <details>
+          <summary>Revise owner-approved memory</summary>
+          <form key={detail.revision ?? 0} onSubmit={event => {
+            event.preventDefault();
+            saveDecision("revise", Object.fromEntries(new FormData(event.currentTarget)));
+          }}>
+            <label>Memory type<select name="memoryKind" defaultValue={detail.memoryKind || "decision"}>
+              {memoryKinds.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select></label>
+            {fields.filter(([field]) => ["title", "summary", "body", "source", "evidence"].includes(field))
+              .map(([field, label, limit]) => <label key={field}>{label}
+                <textarea name={field} defaultValue={detail[field]} maxLength={limit} required rows={field === "body" ? 5 : 2} />
+              </label>)}
+            <button type="submit" disabled={pending}>Supersede previous version</button>
+            <button type="button" disabled={pending} onClick={() => saveDecision("retire")}>Retire this decision</button>
+          </form>
+        </details>}
+        {detail.decisionHistory?.length > 0 && <details>
+          <summary>Decision history</summary>
+          <ul>{detail.decisionHistory.slice().reverse().map(version => <li key={version.revision}>
+            <strong>{version.title}</strong>
+            <p>{version.summary}</p>
+            <p>{version.source}</p>
+            <p>{version.body}</p>
+            <time dateTime={version.replacedAt}>{new Date(version.replacedAt).toLocaleString()}</time>
+          </li>)}</ul>
+        </details>}
       </article> : detailError?.id === selection ? <p role="alert">{detailError.message}</p> : <p role="status">Loading record…</p>)}
+      {saveError && <p role="alert">{saveError}</p>}
       <details open={!selection}>
         <summary>Add a record</summary>
         <form onSubmit={create}>
-          <label>Record type <select name="kind">
+          <label>Record type <select name="kind" value={kind} onChange={event => setKind(event.target.value)}>
             {kinds.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </select></label>
+          {kind === "decision" && <label>Memory type<select name="memoryKind">
+            {memoryKinds.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select></label>}
           <label>Provenance <select name="status" value={status} onChange={(event) => setStatus(event.target.value)}>
             {provenance.map((value) => <option key={value}>{value}</option>)}
           </select></label>
@@ -142,7 +192,6 @@ export default function Knowledge({ api, initialId }) {
                 (key === "evidence" && ["validated", "owner-approved"].includes(status))} rows={4} />
               : <input name={key} maxLength={maxLength} required={required} />}
           </label>)}
-          {saveError && <p role="alert">{saveError}</p>}
           <button type="submit" disabled={pending}>{pending ? "Saving…" : "Save record"}</button>
         </form>
       </details>

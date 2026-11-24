@@ -77,7 +77,7 @@ function PreviousConversation({ api, sessionId, jobId, copy }) {
 
   return <>
     {next && <button type="button" disabled={loading} onClick={() => setBefore(next)}>Load older messages</button>}
-    {loading && <p role="status">Loading earlier messages?</p>}
+    {loading && <p role="status">Loading earlier messages</p>}
     {failure && <p role="alert">{failure}</p>}
     {messages.map(turn => <div key={turn.id}>
       <article className="operations__message operations__message--owner">
@@ -174,7 +174,7 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
     try {
       const turn = await readTurn(api, jobId, true);
       await copy(redactExport(turn.activity.map(event =>
-        [event.at, turn.actor, event.label, "\n" + event.text].filter(Boolean).join(" ? ")).join("\n\n")));
+        [event.at, turn.actor, event.label, "\n" + event.text].filter(Boolean).join(" \u00b7 ")).join("\n\n")));
     } catch (failure) {
       setExportFailure(failure.message);
     } finally {
@@ -219,7 +219,7 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
         {job.createdAt && <time dateTime={job.createdAt}>{new Date(job.createdAt).toLocaleString()}</time>}
       </div>
       {prompt == null && promptPreview && <p className="operations__prompt-preview">{promptPreview}</p>}
-      {loadingPrompt && !promptPreview && <p role="status">Loading message?</p>}
+      {loadingPrompt && !promptPreview && <p role="status">Loading message</p>}
       {promptError && <p role="alert">{promptError} <button type="button" onClick={() => retryPrompt(value => value + 1)}>Retry</button></p>}
       {prompt != null && (prompt.length > 8000 ? <details>
         <summary>Read full message</summary><pre>{prompt}</pre>
@@ -244,16 +244,16 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
       </section>}
       <div className="operations__modes">
         {answer && job.events.length >= job.eventCount && <button type="button" onClick={() => copy(answer)}>Copy message</button>}
-        <button type="button" onClick={() => copy(summary)}>Copy turn summary</button>
-        <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("copy")}>Copy conversation</button>
-        <details><summary>Export conversation</summary>
+        <details><summary>Conversation actions</summary>
+          <button type="button" onClick={() => copy(summary)}>Copy turn summary</button>
+          <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("copy")}>Copy conversation</button>
           <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("markdown")}>Download Markdown</button>
           <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("json")}>Download JSON</button>
           <button type="button" disabled={exportProgress !== null} onClick={() => exportConversation("text")}>Download text</button>
         </details>
       </div>
       </article>
-      {exportProgress !== null && <p role="status">Preparing export? {exportProgress || ""}</p>}
+      {exportProgress !== null && <p role="status">Preparing export {exportProgress || ""}</p>}
       {exportFailure && <p role="alert">{exportFailure}</p>}
       {proposal}
       {showLatest && <button type="button" className="operations__latest" onClick={goToLatest}>Back to latest</button>}
@@ -262,7 +262,7 @@ export default function JobTranscript({ api, job, copy, jobId, mode, selectJob, 
       <h3>Execution</h3>
       {children}
       {job.sessionId && <SessionTurns api={api} key={job.sessionId} sessionId={job.sessionId} jobId={jobId} selectJob={selectJob} />}
-      {entries[0] && <p>{actor} ? {entries[0].label}{entries[0].at && <> ? <time dateTime={entries[0].at}>{new Date(entries[0].at).toLocaleTimeString()}</time></>}</p>}
+      {entries[0] && <p>{actor} {"\u00b7"} {entries[0].label}{entries[0].at && <>{" \u00b7 "}<time dateTime={entries[0].at}>{new Date(entries[0].at).toLocaleTimeString()}</time></>}</p>}
       <button type="button" disabled={exportProgress !== null || !entries.length} onClick={copyActivity}>Copy execution activity</button>
       {mode === "Execution" && exportFailure && <p role="alert">{exportFailure}</p>}
       <label>Search execution output<input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} /></label>

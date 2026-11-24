@@ -36,7 +36,7 @@ function EmployeeForm({ employee, departments, save, pending }) {
   </form>;
 }
 
-export default function Workforce({ api, openJob, openRecord, messageEmployee, initialId }) {
+export default function Workforce({ api, openJob, openRecord, openWorkflow, messageEmployee, initialId }) {
   const [directory, setDirectory] = useState(null);
   const [selection, setSelection] = useState(initialId || null);
   const [pending, setPending] = useState(false);
@@ -102,6 +102,7 @@ export default function Workforce({ api, openJob, openRecord, messageEmployee, i
       {(employee || selection === "employee") && <EmployeeForm key={employee ? employee._id + "/" + employee.revision : "new"}
         employee={employee} departments={departments} save={save} pending={pending} />}
       {employee && <section>
+        <button type="button" onClick={() => openWorkflow(employee._id)}>View employee workflow</button>
         {projects.length > 0 && <>
           <h3>Project responsibilities</h3>
           <ul className="operations__feed">{projects.map((assignment) => <li key={assignment._id}>

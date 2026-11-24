@@ -97,7 +97,10 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
       <ul className="operations__stations">{workforce.map((host) => <li key={host._id} data-online={host.online} data-state={host.state}>
         <div className="operations__station-title"><strong>{host.label}</strong><span>{host.online ? "Connected" : "Offline"}</span></div>
         {(host.online || host.job) && <p className="operations__station-state">{host.state}</p>}
-        {host.job && <p>{open(host.job, "Execution")}</p>}
+        {(host.jobs || (host.job ? [host.job] : [])).map(job => <p key={job._id}>
+          {open(job, "Execution")}{job.employee && <small> {job.employee}</small>}
+          {job.slot === "background review" && <small> Background review</small>}
+        </p>}
         <small>{host.profiles?.join(" · ") || "Capabilities pending"}</small>
         <small>{time(host.lastSeen)}</small>
         <Usage observation={host.usage} resumesAt={host.usageResumesAt} />
