@@ -1,18 +1,22 @@
 import { useEffect, useState } from "react";
 import ObjectiveReviews from "./ObjectiveReviews";
 
-export default function Objectives({ api, openJob, initialId }) {
+export default function Objectives({ api, openJob, initialId, initialProjectId, openProject, assignObjective }) {
   const [records, setRecords] = useState(null);
+  const [projects, setProjects] = useState([]);
+  const projectFilter = initialProjectId ? "?projectId=" + initialProjectId : "";
   const [selected, setSelected] = useState(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    api("/objectives").then((result) => { if (mounted) setRecords(result); })
+    Promise.all([api("/objectives" + projectFilter), api("/projects").catch(() => [])]).then(([result, options]) => {
+      if (mounted) { setRecords(result); setProjects(options); }
+    })
       .catch((failure) => { if (mounted) setError(failure.message); });
     return () => { mounted = false; };
-  }, [api]);
+  }, [api, projectFilter]);
 
   useEffect(() => {
     if (!initialId) return;
@@ -38,15 +42,15 @@ export default function Objectives({ api, openJob, initialId }) {
   function create(event) {
     event.preventDefault();
     const form = event.currentTarget;
-    const { title, instruction, criteria, priority } = Object.fromEntries(new FormData(form));
+    const { title, instruction, criteria, priority, projectId } = Object.fromEntries(new FormData(form));
     update(async () => {
       const result = await api("/objectives", {
         method: "POST",
-        body: { title, instruction, priority, criteria: criteria.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) },
+        body: { title, instruction, priority, ...(projectId ? { projectId } : {}), criteria: criteria.split(/\r?\n/).map((line) => line.trim()).filter(Boolean) },
       });
       form.reset();
       await inspect(result._id);
-      setRecords(await api("/objectives"));
+      setRecords(await api("/objectives" + projectFilter));
     });
   }
 
@@ -68,9 +72,11 @@ export default function Objectives({ api, openJob, initialId }) {
       }
       form.reset();
       await inspect(id);
-      setRecords(await api("/objectives"));
+      setRecords(await api("/objectives" + projectFilter));
     });
   }
+
+  const selectedProject = projects.find((project) => project._id === selected?.projectId);
 
   return <section className="operations__layout" aria-label="Objectives">
     <aside className="operations__panel">
@@ -90,6 +96,10 @@ export default function Objectives({ api, openJob, initialId }) {
         <summary>New objective</summary>
         <form onSubmit={create}>
           <label>Title<input name="title" required maxLength={120} /></label>
+          {projects.length > 0 && <label>Project <select name="projectId" defaultValue={initialProjectId || ""}>
+            <option value="">Unassigned</option>
+            {projects.filter((project) => project.status === "active").map((project) => <option key={project._id} value={project._id}>{project.name}</option>)}
+          </select></label>}
           <label>Original instruction<textarea name="instruction" required maxLength={6000} rows={4} /></label>
           <label>Acceptance criteria, one per line<textarea name="criteria" required maxLength={4811} rows={4} /></label>
           <label>Priority<select name="priority" defaultValue="normal">
@@ -100,6 +110,10 @@ export default function Objectives({ api, openJob, initialId }) {
       </details>
       {selected && <article key={selected._id} className="operations__objective">
         <h2>{selected.title}</h2>
+        {selected.projectId && <button type="button" className="operations__source" onClick={() => openProject(selected.projectId)}>
+          {selectedProject?.name || "Open project"}
+        </button>}
+        {selected.status === "active" && (!selected.projectId || selectedProject?.status === "active") && <p><button type="button" onClick={() => assignObjective(selected, selectedProject?.workspace)}>Assign implementation</button></p>}
         <p>{selected.status === "completed" ? "All criteria accepted" : "Awaiting owner validation"}</p>
         <pre>{selected.instruction}</pre>
         <ObjectiveReviews api={api} objective={selected} openJob={openJob} />

@@ -4,6 +4,7 @@ const roles = { qa: "Independent QA", "first-mate": "First Mate", air: "AIR", co
 
 export default function ObjectiveReviews({ api, objective, openJob }) {
   const [reviews, setReviews] = useState([]);
+  const [assignments, setAssignments] = useState([]);
   const [jobs, setJobs] = useState([]);
   const [reviewers, setReviewers] = useState([]);
   const [sourceId, setSourceId] = useState("");
@@ -27,10 +28,13 @@ export default function ObjectiveReviews({ api, objective, openJob }) {
     let timer;
     async function refresh() {
       try {
-        const [entries, sources] = await Promise.all([api(endpoint), api("/jobs?compact=true")]);
+        const [entries, sources, assigned] = await Promise.all([
+          api(endpoint), api("/jobs?compact=true"), api("/objectives/" + objective._id + "/assignments").catch(() => []),
+        ]);
         if (current) {
           setReviews(entries);
           setJobs(sources);
+          setAssignments(assigned);
         }
       } catch (failure) {
         if (current) setError(failure.message);
@@ -39,7 +43,7 @@ export default function ObjectiveReviews({ api, objective, openJob }) {
     }
     refresh();
     return () => { current = false; clearTimeout(timer); };
-  }, [api, endpoint, version]);
+  }, [api, endpoint, objective._id, version]);
 
   async function queue(event) {
     event.preventDefault();
@@ -63,7 +67,9 @@ export default function ObjectiveReviews({ api, objective, openJob }) {
     }
   }
 
-  const sources = (role === "first-mate" || role === "correction" ? reviews : jobs).filter((job) => {
+  const sourcePool = [...new Map([...jobs, ...assignments].map((entry) => [entry._id, entry])).values()];
+  const sources = (role === "first-mate" || role === "correction" ? reviews : sourcePool).filter((job) => {
+    if (job.objectiveId && job.objectiveId !== objective._id) return false;
     if (role === "air") return job.workerRole !== "air";
     if (["failed", "cancelled", "interrupted", "cancelling"].includes(job.status)) return false;
     if (role === "first-mate") return job.workerRole === "qa";
@@ -74,6 +80,12 @@ export default function ObjectiveReviews({ api, objective, openJob }) {
   const eligible = reviewers.filter((reviewer) => reviewer.workspace === source?.workspace && reviewer.role === (role === "correction" ? "worker" : role));
 
   return <section aria-label="Objective runs">
+    {assignments.length > 0 && <>
+      <h3>Implementation assignments</h3>
+      <ul className="operations__feed">{assignments.map((entry) => <li key={entry._id}>
+        <button type="button" onClick={() => openJob(entry._id, "Conversation")}>{entry.assigneeName} · {entry.status}</button>
+      </li>)}</ul>
+    </>}
     <h3>Objective runs</h3>
     {error && <p role="alert">{error}</p>}
     {reviews.length === 0 && <p>No dependent turns recorded.</p>}

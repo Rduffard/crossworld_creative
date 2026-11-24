@@ -232,3 +232,5 @@
   .operations__occupant[data-state="running"] > span { animation: operations-host-indicator 2.2s ease-in-out infinite alternate; }
   @keyframes operations-host-indicator { from { box-shadow: 0 0 0 0 #efbe7500; } to { box-shadow: 0 0 0 3px #efbe7538; } }
 }
+
+.operations__assignment { margin-bottom: 12px; }

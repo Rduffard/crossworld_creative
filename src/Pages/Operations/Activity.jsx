@@ -14,6 +14,7 @@ export default function Activity({ api, openSource }) {
   const [result, setResult] = useState(null);
   const [version, setVersion] = useState(0);
   const [dateError, setDateError] = useState("");
+  const [projects, setProjects] = useState([]);
   const key = version + ":" + filter;
   const records = result?.key === key ? result : null;
 
@@ -27,12 +28,21 @@ export default function Activity({ api, openSource }) {
     return () => { current = false; };
   }, [api, filter, key]);
 
+  useEffect(() => {
+    let current = true;
+    api("/projects").then((options) => {
+      if (current) setProjects(options);
+    }).catch(() => {});
+    return () => { current = false; };
+  }, [api]);
+
   function search(event) {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
     const query = new URLSearchParams();
     setDateError("");
     if (values.get("type")) query.set("type", values.get("type"));
+    if (values.get("projectId")) query.set("projectId", values.get("projectId"));
     for (const bound of ["after", "before"]) {
       const value = values.get(bound);
       if (!value) continue;
@@ -54,6 +64,10 @@ export default function Activity({ api, openSource }) {
         <option value="">All events</option>
         {Object.entries(eventLabels).map(([type, label]) => <option key={type} value={type}>{label}</option>)}
       </select></label>
+      {projects.length > 0 && <label>Project <select name="projectId">
+        <option value="">All projects</option>
+        {projects.map((project) => <option key={project._id} value={project._id}>{project.name}</option>)}
+      </select></label>}
       <label>From date <input name="after" type="date" min="1900-01-01" max="9999-12-31" /></label>
       <label>Before date <input name="before" type="date" min="1900-01-01" max="9999-12-31" /></label>
       <button type="submit">Apply filters</button>
@@ -69,7 +83,7 @@ export default function Activity({ api, openSource }) {
         {entry.title || "Open source"}
       </button>
       <small><time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time>
-        {[entry.workspace, entry.role, entry.project].filter(Boolean).map((label) => " · " + label).join("")}
+        {[entry.workspace, entry.role, projects.find((project) => project._id === entry.projectId)?.name || entry.project].filter(Boolean).map((label) => " · " + label).join("")}
       </small>
     </li>)}</ul>
   </section>;

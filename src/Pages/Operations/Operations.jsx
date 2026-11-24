@@ -7,6 +7,7 @@ import Knowledge from "./Knowledge";
 import Workforce from "./Workforce";
 import Activity from "./Activity";
 import VirtualOffice from "./VirtualOffice";
+import Projects from "./Projects";
 import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
 } from "./promptEditor";
@@ -144,6 +145,9 @@ export default function Operations() {
   const [page, setPage] = useState("Command Center");
   const [showApprovalInbox, setShowApprovalInbox] = useState(false);
   const [linkedRecord, setLinkedRecord] = useState(null);
+  const [assignment, setAssignment] = useState(null);
+  const [assignees, setAssignees] = useState([]);
+  const [employeeId, setEmployeeId] = useState("");
   const [mode, setMode] = useState(() => {
     try {
       const preference = window.localStorage.getItem("cw_operations_desk_view");
@@ -182,9 +186,18 @@ export default function Operations() {
 
   function openSource(group, id) {
     if (group === "job") return openJob(id, "Conversation");
-    const target = { objective: "Objectives", knowledge: "Knowledge", employee: "Workforce" }[group];
-    setLinkedRecord({ target, id });
+    const target = { objective: "Objectives", "project-objectives": "Objectives", project: "Projects", knowledge: "Knowledge", employee: "Workforce" }[group];
+    setLinkedRecord({ target, id, group });
     setPage(target);
+  }
+
+  function prepareAssignment(objective, projectWorkspace) {
+    if (projectWorkspace) setWorkspace(projectWorkspace);
+    setAssignment({ id: objective._id, title: objective.title });
+    setEmployeeId("");
+    selectJob(null);
+    changeMode("Conversation");
+    setPage("Command Center");
   }
 
   function selectJob(id) {
@@ -200,6 +213,15 @@ export default function Operations() {
     try { window.localStorage.setItem("cw_operations_desk_view", value); }
     catch { /* Browser storage is optional. */ }
   }
+
+  useEffect(() => {
+    if (!assignment) return;
+    let current = true;
+    api("/workforce").then(({ employees }) => {
+      if (current) setAssignees(employees.filter((entry) => ["worker", "lead"].includes(entry.role) && entry.status === "available"));
+    }).catch((failure) => { if (current) setError(failure.message); });
+    return () => { current = false; };
+  }, [assignment]);
 
   useEffect(() => {
     let active = true;
@@ -288,6 +310,8 @@ export default function Operations() {
     : !prompt.isWellFormed() ? "The prompt contains invalid Unicode." : "";
   const editingLocked = busy || importing;
   const scheduleDate = localScheduleTime(scheduledTime);
+  const workerOptions = assignees.filter((employee) => employee.workspace === workspace);
+  const validAssignment = !assignment || workerOptions.some((employee) => employee._id === employeeId);
   const validRepeat = repeatDays === 0 || (snapshot?.recurrence && Number.isInteger(repeatCount) && repeatCount >= 2 && repeatCount <= 12);
   const schedulePreview = scheduleDate?.toLocaleString(undefined, { dateStyle: "long", timeStyle: "long" });
   const rescheduleDate = localScheduleTime(rescheduleTime);
@@ -327,13 +351,14 @@ export default function Operations() {
   }
 
   function submit(parent, queue = false, scheduledAt) {
-    if (editingLocked || !validPrompt || (scheduledAt !== undefined && !validRepeat) || prompt.length > (parent ? continuationLimit : startLimit) ||
+    if (editingLocked || !validPrompt || (parent && assignment) || (!parent && !validAssignment) || (scheduledAt !== undefined && !validRepeat) || prompt.length > (parent ? continuationLimit : startLimit) ||
         (!parent && profile === "full-access" && selectedProfile !== profile)) return;
     return action(async () => {
       const request = {
         prompt, model: "gpt-6.2-sol", effort: parent?.effort || selectedEffort, queue,
         profile: parent ? parent.profile || "read-only" : selectedProfile,
         workspace: parent?.workspace || workspace, hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
+        ...(!parent && assignment ? { objectiveId: assignment.id, employeeId } : {}),
         ...(scheduledAt !== undefined && snapshot.recurrence && repeatDays ? { repeat: { days: repeatDays, count: repeatCount } } : {}),
       };
       const signature = JSON.stringify(request);
@@ -346,6 +371,7 @@ export default function Operations() {
       if (recurring) setNotice("Repeating schedule saved. Find it under Upcoming work.");
       else if (queue) setNotice("Follow-up queued. Open it from session history.");
       else selectJob(_id);
+      if (!parent && assignment) setAssignment(null);
       clearSubmittedDraft();
       if (scheduledAt !== undefined) {
         setScheduledTime("");
@@ -357,7 +383,7 @@ export default function Operations() {
   }
 
   function steer() {
-    if (editingLocked || !validPrompt || prompt.length > continuationLimit) return;
+    if (assignment || editingLocked || !validPrompt || prompt.length > continuationLimit) return;
     return action(async () => {
       const turnId = selectedJob.activeTurn.turnId;
       const signature = JSON.stringify([jobId, turnId, prompt]);
@@ -380,6 +406,17 @@ export default function Operations() {
 
   const composer = (
   <form id="operations-composer" onSubmit={(event) => { event.preventDefault(); submit(null); }}>
+    {assignment && <section className="operations__panel operations__assignment" aria-label="Implementation assignment">
+      <div className="operations__briefing-title">
+        <strong>{assignment.title}</strong>
+        <button type="button" onClick={() => setAssignment(null)}>Remove objective</button>
+      </div>
+      <label>Assign to <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
+        <option value="">{workerOptions.length ? "Select an employee" : "No available worker in this workspace"}</option>
+        {workerOptions.map((employee) => <option key={employee._id} value={employee._id}>{employee.name}</option>)}
+      </select></label>
+      <p>The worker receives the task prompt with the objective criteria and saved project and employee instructions.</p>
+    </section>}
     <div className="operations__selectors">
       <label>Host<select value={host?._id || ""} onChange={(event) => setHostId(event.target.value)}>
         <option value="" disabled>Select host</option>
@@ -429,19 +466,19 @@ export default function Operations() {
       {prompt && !draft.error && <p>Draft saved in this browser.</p>}
     </div>
     <div className="operations__prompt-actions">
-      <button disabled={!workerEnabled || editingLocked || !hostOnline || !selectedEffort || !validPrompt || prompt.length > startLimit ||
-        (profile === "full-access" && selectedProfile !== profile)}>Start session</button>
-      <button type="button" disabled={!workerEnabled || editingLocked || !canAct || !selectedJob?.codexThreadId ||
+      <button disabled={!workerEnabled || editingLocked || !hostOnline || !selectedEffort || !validPrompt || !validAssignment || prompt.length > startLimit ||
+        (profile === "full-access" && selectedProfile !== profile)}>{assignment ? "Start assignment" : "Start session"}</button>
+      <button type="button" disabled={!!assignment || !workerEnabled || editingLocked || !canAct || !selectedJob?.codexThreadId ||
         running.includes(selectedJob.status) || !validPrompt || prompt.length > continuationLimit}
         onClick={() => submit(selectedJob)}>Continue session</button>
-      <button type="button" disabled={!workerEnabled || editingLocked || !["queued", "running"].includes(selectedJob?.status) ||
+      <button type="button" disabled={!!assignment || !workerEnabled || editingLocked || !["queued", "running"].includes(selectedJob?.status) ||
         !validPrompt || prompt.length > continuationLimit}
         onClick={() => submit(selectedJob, true)}>Queue follow-up</button>
-      <button type="button" disabled={editingLocked || !canAct || !selectedJob?.activeTurn || selectedJob.status !== "running" ||
+      <button type="button" disabled={!!assignment || editingLocked || !canAct || !selectedJob?.activeTurn || selectedJob.status !== "running" ||
         ["pending", "sending"].includes(selectedJob.instruction?.state) || !validPrompt || prompt.length > continuationLimit}
         onClick={steer}>Steer current task</button>
     </div>
-    {snapshot?.schedule && <details className="operations__schedule">
+    {snapshot?.schedule && !assignment && <details className="operations__schedule">
       <summary>Schedule a new session</summary>
       <label>Run at (local time)<input type="datetime-local" value={scheduledTime}
         onChange={(event) => setScheduledTime(event.target.value)} /></label>
@@ -481,13 +518,18 @@ export default function Operations() {
         </div>}
       </header>
       <nav className="operations__modes" aria-label="Operations navigation">
-        {["Headquarters", "Command Center", "Objectives", "Workforce", "Office", "Knowledge", "Activity"].map((entry) => <button key={entry} type="button"
+        {["Headquarters", "Command Center", "Projects", "Objectives", "Workforce", "Office", "Knowledge", "Activity"].map((entry) => <button key={entry} type="button"
           aria-pressed={page === entry} onClick={() => { setLinkedRecord(null); setPage(entry); }}>{entry}</button>)}
       </nav>
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
         openGovernance={() => { setShowApprovalInbox(true); setPage("Command Center"); }} openJob={openJob} />}
-      {page === "Objectives" && <Objectives api={api} openJob={openJob} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
+      {page === "Projects" && <Projects api={api} initialId={linkedRecord?.group === "project" ? linkedRecord.id : null}
+        openObjectives={(id) => openSource("project-objectives", id)} />}
+      {page === "Objectives" && <Objectives api={api} openJob={openJob} assignObjective={prepareAssignment}
+        openProject={(id) => openSource("project", id)}
+        initialId={linkedRecord?.group === "objective" ? linkedRecord.id : null}
+        initialProjectId={linkedRecord?.group === "project-objectives" ? linkedRecord.id : null} />}
       {page === "Workforce" && <Workforce api={api} openJob={openJob} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
       {page === "Office" && <VirtualOffice api={api} openJob={openJob}
         openEmployee={(id) => openSource("employee", id)} openHeadquarters={() => setPage("Headquarters")} />}
