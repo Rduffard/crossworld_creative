@@ -13,6 +13,7 @@ import Community from "../Pages/Community/Community";
 import CommunitySpace from "../Pages/Community/CommunitySpace";
 import Profile from "../Pages/Profile/Profile";
 import Settings from "../Pages/Settings/Settings";
+import Operations from "../Pages/Operations/Operations";
 
 import "./App.css";
 
@@ -42,6 +43,7 @@ function App() {
           }
         >
           <Route path="/settings" element={<Settings />} />
+          <Route path="/operations" element={<Operations />} />
         </Route>
 
         {/* Account-only pages */}

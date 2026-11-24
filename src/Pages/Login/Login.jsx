@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../hooks/useAuth.js";
 
 import Landing from "./components/Landing/Landing.jsx";
@@ -23,6 +23,7 @@ function Login() {
 
   const { login, signup, isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const isLandingMounted =
     phase === "landing" || phase === "opening" || phase === "closing";
@@ -87,7 +88,7 @@ function Login() {
 
     try {
       await login({ email, password });
-      beginExitTo("/dashboard");
+      beginExitTo(location.state?.from?.pathname === "/operations" ? "/operations" : "/dashboard");
     } catch (error) {
       setAuthError(error.message || "Invalid email or password.");
     }
