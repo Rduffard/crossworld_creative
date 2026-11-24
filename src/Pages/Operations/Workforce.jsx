@@ -36,9 +36,9 @@ function EmployeeForm({ employee, departments, save, pending }) {
   </form>;
 }
 
-export default function Workforce({ api, openJob }) {
+export default function Workforce({ api, openJob, initialId }) {
   const [directory, setDirectory] = useState(null);
-  const [selection, setSelection] = useState(null);
+  const [selection, setSelection] = useState(initialId || null);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);

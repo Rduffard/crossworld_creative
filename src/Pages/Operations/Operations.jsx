@@ -6,6 +6,7 @@ import Headquarters from "./Headquarters";
 import Knowledge from "./Knowledge";
 import Workforce from "./Workforce";
 import Activity from "./Activity";
+import VirtualOffice from "./VirtualOffice";
 import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
 } from "./promptEditor";
@@ -151,6 +152,8 @@ export default function Operations() {
     return "Split";
   });
   const [scheduledTime, setScheduledTime] = useState("");
+  const [repeatDays, setRepeatDays] = useState(0);
+  const [repeatCount, setRepeatCount] = useState(3);
   const [rescheduleTime, setRescheduleTime] = useState("");
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [hostId, setHostId] = useState("");
@@ -179,7 +182,7 @@ export default function Operations() {
 
   function openSource(group, id) {
     if (group === "job") return openJob(id, "Conversation");
-    const target = group === "objective" ? "Objectives" : "Knowledge";
+    const target = { objective: "Objectives", knowledge: "Knowledge", employee: "Workforce" }[group];
     setLinkedRecord({ target, id });
     setPage(target);
   }
@@ -204,7 +207,7 @@ export default function Operations() {
     async function refresh() {
       try {
         const query = new URLSearchParams({ search, archived: String(archived), compact: "true" });
-        const [hosts, jobs, approvals, schedule, dispatch] = await Promise.all([
+        const [hosts, jobs, approvals, schedule, dispatch, recurrence] = await Promise.all([
           api("/hosts"), api(`/jobs?${query}`), api("/approvals").catch((failure) => {
             if (failure.status === 404) return null;
             throw failure;
@@ -214,10 +217,10 @@ export default function Operations() {
           }), api("/dispatch").catch((failure) => {
             if (failure.status === 404) return null;
             throw failure;
-          }),
+          }), api("/recurrence").catch(() => null),
         ]);
         if (active) {
-          setSnapshot({ hosts, jobs, approvals, schedule, dispatch });
+          setSnapshot({ hosts, jobs, approvals, schedule, dispatch, recurrence });
           setRelayError("");
         }
       } catch (failure) {
@@ -285,6 +288,7 @@ export default function Operations() {
     : !prompt.isWellFormed() ? "The prompt contains invalid Unicode." : "";
   const editingLocked = busy || importing;
   const scheduleDate = localScheduleTime(scheduledTime);
+  const validRepeat = repeatDays === 0 || (snapshot?.recurrence && Number.isInteger(repeatCount) && repeatCount >= 2 && repeatCount <= 12);
   const schedulePreview = scheduleDate?.toLocaleString(undefined, { dateStyle: "long", timeStyle: "long" });
   const rescheduleDate = localScheduleTime(rescheduleTime);
 
@@ -323,24 +327,30 @@ export default function Operations() {
   }
 
   function submit(parent, queue = false, scheduledAt) {
-    if (editingLocked || !validPrompt || prompt.length > (parent ? continuationLimit : startLimit) ||
+    if (editingLocked || !validPrompt || (scheduledAt !== undefined && !validRepeat) || prompt.length > (parent ? continuationLimit : startLimit) ||
         (!parent && profile === "full-access" && selectedProfile !== profile)) return;
     return action(async () => {
       const request = {
         prompt, model: "gpt-6.2-sol", effort: parent?.effort || selectedEffort, queue,
         profile: parent ? parent.profile || "read-only" : selectedProfile,
         workspace: parent?.workspace || workspace, hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
+        ...(scheduledAt !== undefined && snapshot.recurrence && repeatDays ? { repeat: { days: repeatDays, count: repeatCount } } : {}),
       };
       const signature = JSON.stringify(request);
       if (pendingSubmit.current?.signature !== signature) {
         pendingSubmit.current = { signature, id: crypto.randomUUID() };
       }
-      const { _id } = await post(scheduledAt === undefined ? "/jobs" : "/schedule", { id: pendingSubmit.current.id, ...request });
+      const endpoint = request.repeat ? "/recurrence" : scheduledAt === undefined ? "/jobs" : "/schedule";
+      const { _id, recurring } = await post(endpoint, { id: pendingSubmit.current.id, ...request });
       pendingSubmit.current = null;
-      if (queue) setNotice("Follow-up queued. Open it from session history.");
+      if (recurring) setNotice("Repeating schedule saved. Find it under Upcoming work.");
+      else if (queue) setNotice("Follow-up queued. Open it from session history.");
       else selectJob(_id);
       clearSubmittedDraft();
-      if (scheduledAt !== undefined) setScheduledTime("");
+      if (scheduledAt !== undefined) {
+        setScheduledTime("");
+        setRepeatDays(0);
+      }
       if (scheduledAt !== undefined) setRefreshVersion((value) => value + 1);
       if (mode === "Execution") changeMode("Conversation");
     });
@@ -435,12 +445,22 @@ export default function Operations() {
       <summary>Schedule a new session</summary>
       <label>Run at (local time)<input type="datetime-local" value={scheduledTime}
         onChange={(event) => setScheduledTime(event.target.value)} /></label>
+      {snapshot.recurrence && <>
+        <label>Repeat <select value={repeatDays} onChange={(event) => setRepeatDays(Number(event.target.value))}>
+          <option value={0}>Once</option><option value={1}>Every 24 hours</option><option value={7}>Every 7 days</option>
+        </select></label>
+        {repeatDays > 0 && <>
+          <label>Total runs <input type="number" min={2} max={12} value={repeatCount}
+            onChange={(event) => setRepeatCount(Number(event.target.value))} /></label>
+          <p>If the host misses multiple intervals, the series runs once when available. A failed or cancelled turn ends the series.</p>
+        </>}
+      </>}
       {schedulePreview && <p>Dispatch time <strong>{schedulePreview}</strong></p>}
       {scheduledTime && !scheduleDate && <p role="alert">Choose a valid time in your current time zone.</p>}
       <p>Overdue sessions wait for the selected host to reconnect and become available.</p>
       <button type="button" disabled={!workerEnabled || editingLocked || !!relayError || !host || !selectedEffort ||
-        !validPrompt || prompt.length > startLimit || !scheduleDate || (profile === "full-access" && selectedProfile !== profile)}
-        onClick={() => submit(null, false, +scheduleDate)}>Schedule session</button>
+        !validPrompt || prompt.length > startLimit || !scheduleDate || !validRepeat || (profile === "full-access" && selectedProfile !== profile)}
+        onClick={() => submit(null, false, +scheduleDate)}>{repeatDays > 0 ? "Schedule series" : "Schedule session"}</button>
     </details>}
   </form>
   );
@@ -461,14 +481,16 @@ export default function Operations() {
         </div>}
       </header>
       <nav className="operations__modes" aria-label="Operations navigation">
-        {["Headquarters", "Command Center", "Objectives", "Workforce", "Knowledge", "Activity"].map((entry) => <button key={entry} type="button"
+        {["Headquarters", "Command Center", "Objectives", "Workforce", "Office", "Knowledge", "Activity"].map((entry) => <button key={entry} type="button"
           aria-pressed={page === entry} onClick={() => { setLinkedRecord(null); setPage(entry); }}>{entry}</button>)}
       </nav>
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
         openGovernance={() => { setShowApprovalInbox(true); setPage("Command Center"); }} openJob={openJob} />}
       {page === "Objectives" && <Objectives api={api} openJob={openJob} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
-      {page === "Workforce" && <Workforce api={api} openJob={openJob} />}
+      {page === "Workforce" && <Workforce api={api} openJob={openJob} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
+      {page === "Office" && <VirtualOffice api={api} openJob={openJob}
+        openEmployee={(id) => openSource("employee", id)} openHeadquarters={() => setPage("Headquarters")} />}
       {page === "Activity" && <Activity api={api} openSource={openSource} />}
       {page === "Knowledge" && <Knowledge api={api} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
       {page === "Command Center" && <>
@@ -563,13 +585,28 @@ export default function Operations() {
             </li>;
           })}</ul>
           <h2>Upcoming work</h2>
-          {snapshot.schedule?.length === 0 && <p>No scheduled sessions.</p>}
+          {snapshot.schedule?.length === 0 && !snapshot.recurrence?.some((entry) => entry.state === "active") && <p>No scheduled sessions.</p>}
           <ul>{snapshot.schedule?.map((entry) => <li key={entry._id}>
             <button type="button" aria-pressed={jobId === entry._id} onClick={() => selectJob(entry._id)}>
               <time dateTime={entry.scheduledAt}>{new Date(entry.scheduledAt).toLocaleString()}</time>
               <small>{workspaceNames[entry.workspace]}</small>
             </button>
           </li>)}</ul>
+          {snapshot.recurrence?.length > 0 && <details>
+            <summary>Repeating schedules</summary>
+            <p>Stopping a series holds future occurrences. A turn the host already claimed can finish.</p>
+            <ul>{snapshot.recurrence.map((entry) => <li key={entry._id}>
+              <strong>{workspaceNames[entry.workspace]}</strong>
+              <small>Every {entry.repeatDays === 1 ? "24 hours" : "7 days"} · {entry.state} · {entry.remaining} of {entry.total} runs left</small>
+              {entry.state === "active" && <small><time dateTime={entry.nextAt}>{new Date(entry.nextAt).toLocaleString()}</time></small>}
+              {entry.stopReason && <small>{entry.stopReason}</small>}
+              {entry.occurrenceStatus && <button type="button" onClick={() => selectJob(entry.occurrenceId)}>{entry.occurrenceStatus} turn</button>}
+              {entry.state === "active" && <button type="button" disabled={busy} onClick={() => action(async () => {
+                await api("/recurrence/" + entry._id, { method: "DELETE" });
+                setRefreshVersion((value) => value + 1);
+              })}>Stop series</button>}
+            </li>)}</ul>
+          </details>}
           <details>
             <summary>Manage devices</summary>
             <p>Register your Windows PC, then open <strong>Start Crossworld Operations.cmd</strong> on that PC.</p>
@@ -635,7 +672,7 @@ export default function Operations() {
             </p>}
             {selectedJob.scheduledAt && <p>Scheduled for <time dateTime={selectedJob.scheduledAt}>
               {new Date(selectedJob.scheduledAt).toLocaleString()}</time></p>}
-            {selectedJob.status === "scheduled" && <details>
+            {selectedJob.status === "scheduled" && !selectedJob.seriesId && <details>
               <summary>Reschedule</summary>
               <label>New run time (local)<input type="datetime-local" value={rescheduleTime}
                 onChange={(event) => setRescheduleTime(event.target.value)} /></label>

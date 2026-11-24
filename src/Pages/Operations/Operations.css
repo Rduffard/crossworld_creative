@@ -172,3 +172,63 @@
 .operations__stations > li[data-state="approval required"] { border-top-color: #ffbf6b; }
 .operations__stations > li[data-state="lease expired"] { border-top-color: #f29284; }
 .operations__station-usage { margin-top: 8px; border-top: 1px solid var(--ops-border); }
+
+.operations__office-map { background: var(--ops-deep); }
+.operations__floorplan {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 275px), 1fr));
+  align-items: start;
+  gap: 18px;
+  margin-top: 16px;
+  padding: clamp(8px, 3vw, 28px);
+  border: 1px solid var(--ops-border);
+  background-color: #132426;
+  background-image: repeating-linear-gradient(0deg, transparent 0 31px, #51716b38 31px 32px),
+    repeating-linear-gradient(90deg, transparent 0 31px, #51716b38 31px 32px);
+}
+.operations__room {
+  padding: 14px;
+  min-width: 0;
+  border: 1px solid #68817b;
+  border-top: 5px solid #7faf9d;
+  background: var(--ops-surface);
+  box-shadow: 3px 4px #081517;
+}
+.operations__machine-room { border-top-color: var(--ops-brass); }
+.operations__room h3 { margin: 0; font-size: 1rem; }
+.operations__room p { margin: 12px 0 0; color: var(--ops-muted); }
+.operations .operations__room-list { margin: 12px 0 0; }
+.operations .operations__room-list:empty { display: none; }
+.operations .operations__occupant {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--ops-border);
+}
+.operations__occupant small { color: var(--ops-muted); text-transform: capitalize; }
+.operations__occupant-symbol, .operations__host-symbol {
+  width: 32px;
+  height: 32px;
+  position: relative;
+  display: block;
+  border: 1px solid var(--ops-border);
+  background: var(--ops-deep);
+  color: #91bcb0;
+}
+.operations__occupant-symbol::before, .operations__occupant-symbol::after, .operations__host-symbol::before {
+  position: absolute;
+  content: "";
+  background: currentColor;
+}
+.operations__occupant-symbol::before { width: 8px; height: 8px; top: 6px; left: 12px; border-radius: 2px; }
+.operations__occupant-symbol::after { width: 16px; height: 9px; bottom: 6px; left: 8px; border-radius: 3px 3px 0 0; }
+.operations__host-symbol::before { width: 16px; height: 12px; top: 7px; left: 7px; border-bottom: 4px solid #45605d; }
+.operations__occupant[data-state="running"] > span { color: var(--ops-brass); }
+.operations__occupant[data-state="offline"] > span,
+.operations__occupant[data-state="retired"] > span { color: var(--ops-muted); opacity: .58; }
+@media (prefers-reduced-motion: no-preference) {
+  .operations__occupant[data-state="running"] > span { animation: operations-host-indicator 2.2s ease-in-out infinite alternate; }
+  @keyframes operations-host-indicator { from { box-shadow: 0 0 0 0 #efbe7500; } to { box-shadow: 0 0 0 3px #efbe7538; } }
+}
