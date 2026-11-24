@@ -45,6 +45,7 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
         {pendingApprovals > 0 && <button type="button" onClick={openApprovals}>{pendingApprovals} pending approvals</button>}
         {paused && <button type="button" onClick={() => navigate("Settings")}>Dispatch paused</button>}
         <StudioClock />
+        <Link className="operations__account" to="/dashboard" aria-label="Return to studio">Studio</Link>
         <Link className="operations__account" to="/profile">Account</Link>
       </div>
     </header>

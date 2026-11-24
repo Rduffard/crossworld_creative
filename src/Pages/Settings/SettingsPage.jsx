@@ -117,7 +117,7 @@ function SettingsPage() {
         : "Unable to load settings";
 
   return (
-    <main className="settings-page">
+    <div className="settings-page">
       <div className="settings-page__inner">
         <header className="settings-hero">
           <div>
@@ -228,7 +228,7 @@ function SettingsPage() {
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }
 

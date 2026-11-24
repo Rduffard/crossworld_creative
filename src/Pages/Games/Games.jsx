@@ -1,59 +1,36 @@
-import DashboardCard from "../../components/DashboardCard/DashboardCard";
-import "./Games.css";
+﻿import { Link } from "react-router-dom";
+import { StudioHeading, StudioLink } from "../../studio/StudioPresentation";
+import tide from "../../studio/art/tide.svg";
 
-const games = [
-  {
-    id: "sanguine-archipelago",
-    title: "Sanguine Archipelago",
-    subtitle: "Live tabletop companion",
-    description:
-      "A narrative-rich world of fractured islands, conflict, mystery, and long-form creative development, now taking shape as a live companion app.",
-    pillText: "Live",
-    href: "https://archipelago.crossworldcreative.com",
-    external: true,
-    ctaText: "Open Archipelago ->",
-  },
-  {
-    id: "taxi-cop",
-    title: "Taxi Cop",
-    subtitle: "Action noir concept",
-    description:
-      "A gritty sci-fi action concept blending absurdity, violence, and worldbuilding into a strange future ride.",
-    pillText: "Concept",
-    to: "/games/taxi-cop",
-    ctaText: "Explore Game ->",
-  },
-];
-
-function Games() {
+export function TaxiCopGame() {
   return (
-    <main className="games-page">
-      <section className="games-hero">
-        <h1 className="games-title">Games</h1>
-        <p className="games-intro">
-          Game worlds, interactive ideas, and future playable projects will be
-          showcased here.
-        </p>
-      </section>
-
-      <section className="games-grid">
-        {games.map((item) => (
-          <DashboardCard
-            key={item.id}
-            title={item.title}
-            subtitle={item.subtitle}
-            description={item.description}
-            to={item.to}
-            href={item.href}
-            external={item.external}
-            pillText={item.pillText}
-            ctaText={item.ctaText}
-            variant="games"
-          />
-        ))}
-      </section>
-    </main>
+    <article className="studio-page studio-games studio-detail">
+      <Link className="studio-back" to="/dashboard/games">← Games</Link>
+      <StudioHeading title="Taxi Cop" label="Action noir / Game concept" intro="A sci-fi action concept that brings noir, absurdity, and a strange future ride together." />
+      <StudioLink to="/dashboard/literature/taxi-cop">Explore the novel</StudioLink>
+    </article>
   );
 }
 
-export default Games;
+export default function Games() {
+  return (
+    <div className="studio-page studio-games">
+      <StudioHeading title="Games" label="Crossworld Creative / Interactive worlds" intro="Explore an island world or follow a game concept back to the writing desk." />
+      <section className="game-stage" aria-labelledby="game-archipelago">
+        <img src={tide} width="900" height="460" alt="" />
+        <div>
+          <p className="studio-kicker">Available / Tabletop companion</p>
+          <h2 id="game-archipelago">Sanguine<br />Archipelago</h2>
+          <StudioLink href="https://archipelago.crossworldcreative.com">Open Archipelago</StudioLink>
+          <StudioLink to="/dashboard/projects/archipelago">Project details</StudioLink>
+        </div>
+      </section>
+      <section className="game-concept">
+        <p className="studio-kicker">Concept / Action noir</p>
+        <h2>Taxi Cop</h2>
+        <p>Science fiction, noir, and an unusual fare.</p>
+        <StudioLink to="taxi-cop">Explore the concept</StudioLink>
+      </section>
+    </div>
+  );
+}

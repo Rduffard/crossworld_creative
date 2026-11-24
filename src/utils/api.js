@@ -16,7 +16,7 @@ function getToken() {
 
 async function request(
   path,
-  { method = "GET", body, auth = false, headers: extraHeaders } = {},
+  { method = "GET", body, auth = false, headers: extraHeaders, signal, cache } = {},
 ) {
   const headers = {
     ...(extraHeaders || {}),
@@ -34,6 +34,8 @@ async function request(
   const res = await fetch(`${API_BASE}${path}`, {
     method,
     headers,
+    signal,
+    cache,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 

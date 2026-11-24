@@ -1,0 +1,70 @@
+﻿.studio-shell .community-hero-bar {
+  min-height: clamp(24rem, 38vw, 35rem);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: end;
+  gap: 1rem;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: clamp(1.2rem, 4vw, 4rem);
+  border: 0;
+  border-radius: 0;
+  background: #241e30;
+  box-shadow: none;
+  clip-path: var(--studio-cut);
+}
+.studio-shell .community-hero-bar::before {
+  z-index: -1;
+  background: linear-gradient(15deg, #171520 14%, #171520db 39%, #17152000 80%), linear-gradient(90deg, #171520b3 0 30%, #17152062 65%, #17152024);
+}
+.studio-shell .community-hero-bar__art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: -2;
+}
+.studio-shell .community-hero-bar__title {
+  color: var(--studio-paper);
+  font: 900 clamp(2.4rem, 7vw, 7rem)/.97 var(--studio-display);
+  letter-spacing: -.067em;
+}
+.studio-shell .community-hero-bar__copy p,
+.studio-shell .community-hero-bar .community-stat-pill span { color: var(--studio-subtle); }
+.studio-shell .community-hero-bar .community-eyebrow,
+.studio-shell .community-hero-bar .community-stat-pill strong { color: var(--studio-gold); }
+.studio-shell .community-hero-bar__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1.3rem;
+  justify-content: flex-start;
+}
+.studio-shell .community-hero-bar .community-stat-pill {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.studio-shell .community-hero-bar__actions { justify-content: flex-start; flex-wrap: wrap; }
+.studio-shell .community-hero-bar .community-button {
+  border-radius: 0;
+  min-height: 44px;
+}
+.studio-shell .community-hero-bar .community-button--primary { background: #f8c797; color: #21171d; }
+.studio-shell .community-hero-bar .community-button--secondary, .studio-shell .community-hero-bar .community-button--ghost {
+  background: #251d2d; color: #fff3dc; border-color: #a47d74;
+}
+.studio-shell .community-home .community-card {
+  border-radius: 0;
+  border-width: 1px 0 0;
+  box-shadow: none;
+  background: var(--color-surface);
+}
+.studio-shell .community-home .community-card::before { display: none; }
+.studio-shell .community-space-page > main { margin: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .studio-shell .community-page { transition: none; transform: none; opacity: 1; }
+}

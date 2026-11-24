@@ -12,19 +12,19 @@ function QuickActionsCard({ isAuthenticated, joinSpaceHref, newThreadHref, onCre
       </div>
 
       <div className="community-action-grid">
-        <button
+        {isAuthenticated ? <button
           className="community-action-button community-action-button--primary"
           onClick={onCreateSpace}
           type="button"
         >
           <strong>Create a Space</strong>
-          <span>{isAuthenticated ? "Launch a new space for your team, story, or experiment." : "Sign in to open a new space."}</span>
-        </button>
+          <span>Launch a new space for your team, story, or experiment.</span>
+        </button> : <Link className="community-action-button" to="/">Sign in to create a space</Link>}
 
-        <Link className="community-action-button" to={newThreadHref}>
+        {isAuthenticated && newThreadHref && <Link className="community-action-button" to={newThreadHref}>
           <strong>Start Thread</strong>
           <span>Open a new discussion in a space that is already active.</span>
-        </Link>
+        </Link>}
 
         <Link className="community-action-button" to={joinSpaceHref}>
           <strong>Browse Spaces</strong>
@@ -32,7 +32,7 @@ function QuickActionsCard({ isAuthenticated, joinSpaceHref, newThreadHref, onCre
         </Link>
 
         <Link className="community-action-button" to="/dashboard/projects">
-          <strong>Open Dashboard</strong>
+          <strong>Browse Projects</strong>
           <span>Jump back into the wider Crossworld workspace when you need context.</span>
         </Link>
       </div>

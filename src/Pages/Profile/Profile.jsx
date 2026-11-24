@@ -1,13 +1,15 @@
-function Profile() {
+﻿import { Link } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
+import { getUserDisplayName } from "../../utils/userDisplay";
+import { StudioHeading, StudioLink } from "../../studio/StudioPresentation";
+
+export default function Profile() {
+  const { user } = useAuth();
   return (
-    <main>
-      <h1>Profile</h1>
-      <p>
-        This is where your account details, avatar, and personal info will live.
-        Later you can add things like bio, links, and preferences.
-      </p>
-    </main>
+    <article className="studio-page studio-detail">
+      <Link className="studio-back" to="/dashboard">← Studio</Link>
+      <StudioHeading label="Account" title="Profile" intro={getUserDisplayName(user)} />
+      <StudioLink to="/settings">Manage account settings</StudioLink>
+    </article>
   );
 }
-
-export default Profile;

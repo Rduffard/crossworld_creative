@@ -1,3 +1,4 @@
+import gathering from "../../../studio/art/gathering.svg";
 import { Link } from "react-router-dom";
 
 function CommunityHeroBar({
@@ -10,28 +11,25 @@ function CommunityHeroBar({
 }) {
   return (
     <section className="community-hero-bar community-panel">
+      <img className="community-hero-bar__art" src={gathering} width="800" height="410" alt="" />
       <div className="community-hero-bar__copy">
         <span className="community-eyebrow">{contextLabel || "Across the Crossworld network"}</span>
         <div>
           <h1 className="community-hero-bar__title">Community</h1>
           <p className="community-hero-bar__subtitle">
-            Community spaces across the Crossworld network.
+            Find a space, follow a conversation, or start one of your own.
           </p>
         </div>
       </div>
 
       <div className="community-hero-bar__stats" aria-label="Community stats">
         <div className="community-stat-pill">
-          <span>Active Spaces</span>
+          <span>Spaces</span>
           <strong>{stats.totalSpaces}</strong>
         </div>
         <div className="community-stat-pill">
           <span>Recent Threads</span>
-          <strong>{stats.threadsToday}</strong>
-        </div>
-        <div className="community-stat-pill">
-          <span>Members Online</span>
-          <strong>{stats.membersOnline}</strong>
+          <strong>{stats.recentThreads}</strong>
         </div>
         <div className="community-stat-pill">
           <span>Joined Spaces</span>
@@ -40,19 +38,19 @@ function CommunityHeroBar({
       </div>
 
       <div className="community-hero-bar__actions">
-        <button
+        {isAuthenticated ? <button
           className="community-button community-button--primary"
           onClick={onCreateSpace}
           type="button"
         >
-          {isAuthenticated ? "+ Create Space" : "Sign In To Create"}
-        </button>
-        <Link className="community-button community-button--secondary" to={newThreadHref}>
+          + Create Space
+        </button> : <Link className="community-button community-button--primary" to="/">Sign in</Link>}
+        {isAuthenticated && newThreadHref && <Link className="community-button community-button--secondary" to={newThreadHref}>
           + New Thread
-        </Link>
-        <Link className="community-button community-button--ghost" to={exploreHref}>
+        </Link>}
+        <a className="community-button community-button--ghost" href={exploreHref}>
           Explore Spaces
-        </Link>
+        </a>
       </div>
     </section>
   );

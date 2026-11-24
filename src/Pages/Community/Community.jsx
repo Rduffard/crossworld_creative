@@ -43,7 +43,6 @@ function Community() {
   });
   const [communityState, setCommunityState] = useState({
     spaces: [],
-    onlineCount: 18,
     recentActivity: [],
     recentThreads: [],
     threadCounts: {},
@@ -163,15 +162,9 @@ function Community() {
   );
 
   const stats = useMemo(() => {
-    const activeThreshold = Date.now() - 1000 * 60 * 60 * 24 * 7;
-    const activeSpaceCount = communityState.spaces.filter(
-      (space) => getTimestamp(space.lastActiveAt || space.updatedAt) >= activeThreshold,
-    ).length;
-
     return {
-      totalSpaces: activeSpaceCount || communityState.spaces.length,
-      threadsToday: communityState.recentThreads.length,
-      membersOnline: communityState.onlineCount,
+      totalSpaces: communityState.spaces.length,
+      recentThreads: communityState.recentThreads.length,
       joinedSpaces: memberships.length,
     };
   }, [communityState, memberships.length]);
@@ -247,16 +240,16 @@ function Community() {
   if (!loaded) return null;
 
   return (
-    <main className={`community-page ${isVisible ? "community-page--visible" : ""}`}>
+    <div className={`community-page ${isVisible ? "community-page--visible" : ""}`}>
       <div className="community-home">
         <CommunityHeroBar
-          exploreHref="/dashboard/community#community-active-spaces"
+          exploreHref="#community-active-spaces"
           contextLabel={
             communityContext.scope === "network" ? "Across the Crossworld network" : "App community"
           }
           isAuthenticated={isAuthenticated}
           newThreadHref={
-            primaryThreadSpace ? `/dashboard/community/spaces/${primaryThreadSpace.slug}` : "/dashboard/community"
+            primaryThreadSpace ? `/dashboard/community/spaces/${primaryThreadSpace.slug}` : null
           }
           onCreateSpace={handleCreateSpaceClick}
           stats={stats}
@@ -284,7 +277,7 @@ function Community() {
                   : "/dashboard/community#community-active-spaces"
               }
               newThreadHref={
-                primaryThreadSpace ? `/dashboard/community/spaces/${primaryThreadSpace.slug}` : "/dashboard/community"
+                primaryThreadSpace ? `/dashboard/community/spaces/${primaryThreadSpace.slug}` : null
               }
               onCreateSpace={handleCreateSpaceClick}
             />
@@ -305,7 +298,7 @@ function Community() {
         onClose={() => setIsCreateOpen(false)}
         onSubmit={handleCreateSpace}
       />
-    </main>
+    </div>
   );
 }
 

@@ -1,89 +1,119 @@
-import DashboardCard from "../../components/DashboardCard/DashboardCard";
-import "./Projects.css";
+﻿import { Link, useParams } from "react-router-dom";
+import { StudioHeading, StudioLink } from "../../studio/StudioPresentation";
+import tide from "../../studio/art/tide.svg";
 
 const projects = [
   {
     id: "archipelago",
-    title: "Archipelago",
-    subtitle: "Tabletop companion for Sanguine Archipelago",
-    description:
-      "A DnD Beyond style companion app for character sheets, campaigns, and future live tabletop tools built around your original world.",
-    pillText: "New",
-    tags: ["React", "Express", "MongoDB", "Auth", "TTRPG"],
+    title: "Sanguine Archipelago",
+    label: "Nautical fantasy / Live companion",
+    intro: "A tabletop companion for an original world of fractured islands.",
+    detail: "Create character sheets and organize campaigns in the Archipelago companion. The tabletop tools are built around the setting’s island world.",
+    tech: "React, Express, MongoDB",
     href: "https://archipelago.crossworldcreative.com",
-    external: true,
-    ctaText: "Open Archipelago ->",
-    featured: true,
+    action: "Open Archipelago",
+    art: tide,
+  },
+  {
+    id: "loom",
+    title: "Loom",
+    label: "Virtual tabletop / In development",
+    intro: "A virtual tabletop project for shared roleplaying sessions.",
+    detail: "Loom explores how a digital tabletop can support players and game masters around the same virtual table. A public build is unavailable.",
+    symbol: "loom",
   },
   {
     id: "squash",
     title: "Squash",
-    subtitle: "QA + bug tracking platform (in progress)",
-    description:
-      "A bug tracking + QA management platform inspired by Jira, built to be clean, fast, and portfolio-ready.",
-    pillText: "Live",
-    tags: ["React", "Express", "MongoDB", "Auth", "Storage"],
+    label: "Software / Live",
+    intro: "A standalone QA and bug-tracking platform.",
+    detail: "Squash gives project teams a dedicated place to track defects and organize quality assurance work.",
+    tech: "React, Express, MongoDB",
     href: "https://squash.crossworldcreative.com",
-    external: true,
-    ctaText: "Open Squash ->",
-    featured: false,
+    action: "Open Squash",
+    symbol: "squash",
   },
   {
     id: "wtwr",
     title: "WTWR",
-    subtitle: "Weather-based outfit picker",
-    description:
-      "React app that suggests clothing items based on weather conditions with a connected backend.",
-    pillText: "Demo",
-    tags: ["React", "API", "Routing"],
+    label: "Software / Demo",
+    intro: "A weather-based outfit picker with a connected backend.",
+    detail: "The React application uses weather conditions to suggest clothing from the wardrobe.",
+    tech: "React, Express, weather API",
     href: "https://wtwr.crossworldcreative.com",
-    external: true,
-    ctaText: "View Project ->",
+    action: "View demo",
+    symbol: "wtwr",
   },
   {
     id: "crossworld",
     title: "Crossworld Creative",
-    subtitle: "Portfolio + creative hub",
-    description:
-      "Your main landing site for projects, music, games, and writing, built as a hub for everything Crossworld.",
-    pillText: "Live",
-    tags: ["React", "Branding", "UI/UX"],
-    href: "https://crossworldcreative.com",
-    external: true,
-    ctaText: "View Project ->",
+    label: "Website / Live",
+    intro: "The studio’s home for games, software, music, and writing.",
+    detail: "The React frontend brings public showcases, cross-app community spaces, and account settings into one site.",
+    tech: "React, React Router, Vite",
+    symbol: "crossworld",
   },
 ];
 
-function Projects() {
-  return (
-    <main className="projects">
-      <header className="projects__header">
-        <h1 className="projects__title">Projects</h1>
-        <p className="projects__subtitle">
-          Showcase your development work, school assignments, experiments, and
-          personal creations here.
-        </p>
-      </header>
-
-      <section className="projects__grid">
-        {projects.map((project) => (
-          <DashboardCard
-            key={project.id}
-            title={project.title}
-            subtitle={project.subtitle}
-            description={project.description}
-            href={project.href}
-            external={project.external}
-            pillText={project.pillText}
-            ctaText={project.ctaText}
-            tags={project.tags}
-            featured={project.featured}
-            variant="projects"
-          />
-        ))}
-      </section>
-    </main>
+function ProjectArt({ project }) {
+  return project.art ? (
+    <img className="project-art" src={project.art} width="900" height="460" alt="" />
+  ) : (
+    <div className="project-art" data-symbol={project.symbol} aria-hidden="true"><span /></div>
   );
 }
 
-export default Projects;
+export function ProjectDetail() {
+  const { projectId } = useParams();
+  const project = projects.find(({ id }) => id === projectId);
+  return (
+    <article className="studio-page studio-project-detail">
+      <Link className="studio-back" to="/dashboard/projects">← All projects</Link>
+      {project ? (
+        <>
+          <StudioHeading title={project.title} label={project.label} intro={project.intro} />
+          <ProjectArt project={project} />
+          <div className="studio-project-detail__body">
+            <h2>About the project</h2>
+            <p>{project.detail}</p>
+            {project.tech && <p><strong>Built with</strong> {project.tech}</p>}
+            {project.href && <StudioLink href={project.href}>{project.action}</StudioLink>}
+            {project.id === "crossworld" && <StudioLink to="/dashboard">Explore the studio</StudioLink>}
+          </div>
+        </>
+      ) : <h1>Project unavailable</h1>}
+    </article>
+  );
+}
+
+export default function Projects() {
+  const [featured, ...rest] = projects;
+  return (
+    <div className="studio-page studio-projects">
+      <StudioHeading title="Projects" label="Crossworld Creative / Portfolio" intro="Original worlds, tools for the people who build them, and experiments across the studio." />
+      <section className="project-feature" aria-label="Featured project">
+        <ProjectArt project={featured} />
+        <div>
+          <p className="studio-kicker">{featured.label}</p>
+          <h2>{featured.title}</h2>
+          <p>{featured.intro}</p>
+          <StudioLink to="/dashboard/projects/archipelago">Project details</StudioLink>
+          <StudioLink href={featured.href}>{featured.action}</StudioLink>
+        </div>
+      </section>
+      <ul className="project-ledger">
+        {rest.map((project) => (
+          <li key={project.id}>
+            <ProjectArt project={project} />
+            <div>
+              <p className="studio-kicker">{project.label}</p>
+              <h2><Link to={project.id}>{project.title}</Link></h2>
+              <p>{project.intro}</p>
+            </div>
+            <StudioLink to={project.id}>Project details<span className="studio-sr"> for {project.title}</span></StudioLink>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

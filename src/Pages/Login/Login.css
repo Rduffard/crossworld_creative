@@ -509,3 +509,42 @@
     overflow: visible;
   }
 }
+
+@media (max-width: 980px) {
+  .login__page--shell {
+    height: auto;
+    overflow: visible;
+  }
+
+  .login__page--shell .login__landing {
+    position: absolute;
+    inset: 28px;
+    pointer-events: none;
+  }
+
+  .login__page--shell .login__shell {
+    height: auto;
+    min-height: var(--login-shell-height);
+    align-content: start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login__page .login__landing,
+  .login__page .login__shell {
+    transition: none;
+  }
+
+  .login__page .login__center,
+  .login__page .login__right,
+  .login__page .login__left-stack,
+  .login__page .login__logo {
+    transition: none;
+  }
+
+  .login__page .login__tagline {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}

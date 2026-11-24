@@ -77,7 +77,7 @@ function CommunitySpace() {
   }, [state]);
 
   return (
-    <main className="community-page community-space-page community-page--visible">
+    <div className="community-page community-space-page community-page--visible">
       <nav className="community-space-breadcrumbs">
         <Link to="/dashboard/community">Community</Link>
         <span>/</span>
@@ -206,7 +206,7 @@ function CommunitySpace() {
           </aside>
         </section>
       ) : null}
-    </main>
+    </div>
   );
 }
 

@@ -39,6 +39,11 @@ function Login() {
     if (phase !== "landing") return;
 
     setAuthError("");
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setPhase("open");
+      setShellActive(true);
+      return;
+    }
     setPhase("opening");
     setShellActive(false);
     requestAnimationFrame(() => setShellActive(true));
@@ -49,13 +54,17 @@ function Login() {
 
     setAuthError("");
     setPendingRoute(null);
-    setPhase("closing");
+    setPhase(window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "landing" : "closing");
     setShellActive(false);
     setAuthMode("login");
     setSwapDir("back");
   }, [phase]);
 
   function beginExitTo(route) {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      navigate(route, { replace: true });
+      return;
+    }
     setAuthError("");
     setPendingRoute(route);
     setPhase("closing");
@@ -88,7 +97,8 @@ function Login() {
 
     try {
       await login({ email, password });
-      beginExitTo(location.state?.from?.pathname === "/operations" ? "/operations" : "/dashboard");
+      const from = location.state?.from;
+      beginExitTo(from?.pathname === "/operations" ? "/operations" + from.search + from.hash : "/dashboard");
     } catch (error) {
       setAuthError(error.message || "Invalid email or password.");
     }
@@ -113,23 +123,33 @@ function Login() {
     beginExitTo("/dashboard");
   }
 
+  const finishClosing = useCallback(() => {
+    if (pendingRoute) navigate(pendingRoute, { replace: true });
+    else setPhase("landing");
+  }, [navigate, pendingRoute]);
+
+  useEffect(() => {
+    if (phase !== "opening" && phase !== "closing") return;
+    // A transition can be cancelled when the browser changes visibility or layout.
+    const timer = window.setTimeout(() => {
+      if (phase === "opening") setPhase("open");
+      else finishClosing();
+    }, 400);
+    return () => window.clearTimeout(timer);
+  }, [phase, finishClosing]);
+
   const handleLandingTransitionEnd = (event) => {
-    if (event.propertyName !== "opacity") return;
+    if (event.target !== event.currentTarget || event.propertyName !== "opacity") return;
     if (phase !== "opening") return;
 
     setPhase("open");
   };
 
   const handleShellTransitionEnd = (event) => {
-    if (event.propertyName !== "opacity") return;
+    if (event.target !== event.currentTarget || event.propertyName !== "opacity") return;
     if (phase !== "closing") return;
 
-    if (pendingRoute) {
-      navigate(pendingRoute, { replace: true });
-      return;
-    }
-
-    setPhase("landing");
+    finishClosing();
   };
 
   const pageClass = useMemo(() => {

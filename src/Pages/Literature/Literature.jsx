@@ -1,56 +1,42 @@
-import DashboardCard from "../../components/DashboardCard/DashboardCard";
-import "./Literature.css";
+﻿import { Link, useParams } from "react-router-dom";
+import { StudioHeading, StudioLink } from "../../studio/StudioPresentation";
 
-const literatureWorks = [
-  {
-    id: "taxi-cop",
-    title: "Taxi Cop",
-    subtitle: "Novel",
-    description:
-      "A grimy sci-fi noir story of violence, grief, and multiversal desperation set in the city of Bastion.",
-    pillText: "In Progress",
-    to: "/literature/taxi-cop",
-    ctaText: "Read More →",
-  },
-  {
-    id: "persona-non-grata",
-    title: "Persona Non Grata",
-    subtitle: "Original work",
-    description:
-      "A developing written project exploring identity, conflict, and larger thematic storytelling.",
-    pillText: "Planned",
-    to: "/literature/persona-non-grata",
-    ctaText: "Read More →",
-  },
+const works = [
+  { id: "taxi-cop", title: "Taxi Cop", label: "Novel / In progress", intro: "A sci-fi noir story of grief and multiversal desperation set in the city of Bastion." },
+  { id: "persona-non-grata", title: "Persona Non Grata", label: "Fiction / Planned", intro: "An original writing project exploring identity and conflict." },
 ];
 
-function Literature() {
+export function LiteratureDetail() {
+  const { workId } = useParams();
+  const work = works.find(({ id }) => id === workId);
   return (
-    <main className="literature-page">
-      <section className="literature-hero">
-        <h1 className="literature-title">Literature</h1>
-        <p className="literature-intro">
-          Novels, stories, written worlds, and long-form narrative projects will
-          live here.
-        </p>
-      </section>
-
-      <section className="literature-grid">
-        {literatureWorks.map((item) => (
-          <DashboardCard
-            key={item.id}
-            title={item.title}
-            subtitle={item.subtitle}
-            description={item.description}
-            to={item.to}
-            pillText={item.pillText}
-            ctaText={item.ctaText}
-            variant="literature"
-          />
-        ))}
-      </section>
-    </main>
+    <article className="studio-page studio-literature studio-detail">
+      <Link className="studio-back" to="/dashboard/literature">← Literature</Link>
+      {work ? (
+        <>
+          <StudioHeading {...work} />
+          <p>Reading excerpts are unavailable.</p>
+          {work.id === "taxi-cop" && <StudioLink to="/dashboard/games/taxi-cop">Explore the game concept</StudioLink>}
+        </>
+      ) : <h1>Work unavailable</h1>}
+    </article>
   );
 }
 
-export default Literature;
+export default function Literature() {
+  return (
+    <div className="studio-page studio-literature">
+      <StudioHeading title="Literature" label="Crossworld Creative / Written worlds" intro="Novels and long-form fiction from the studio’s writing desk." />
+      <div className="literary-spread">
+        {works.map((work) => (
+          <article key={work.id}>
+            <p className="studio-kicker">{work.label}</p>
+            <h2>{work.title}</h2>
+            <p>{work.intro}</p>
+            <StudioLink to={work.id}>About {work.title}</StudioLink>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}

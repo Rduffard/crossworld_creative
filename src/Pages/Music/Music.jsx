@@ -1,70 +1,26 @@
-import DashboardCard from "../../components/DashboardCard/DashboardCard";
-import "./Music.css";
+﻿import { Link } from "react-router-dom";
+import { StudioHeading, StudioLink } from "../../studio/StudioPresentation";
 
-const musicProjects = [
-  {
-    id: "pale-shelter",
-    title: "Pale Shelter",
-    subtitle: "Band page",
-    description:
-      "A home for Pale Shelter releases, visuals, updates, and future music content.",
-    pillText: "Soon",
-    href: "https://paleshelter.crossworldcreative.com",
-    external: true,
-    ctaText: "Visit Band Page →",
-  },
-  {
-    id: "southern-implication",
-    title: "The Southern Implication",
-    subtitle: "Band page",
-    description:
-      "A dedicated space for the band’s music, identity, recordings, and future releases.",
-    pillText: "Soon",
-    href: "https://thesouthernimplication.crossworldcreative.com",
-    external: true,
-    ctaText: "Visit Band Page →",
-  },
-  {
-    id: "solo-projects",
-    title: "Solo Projects",
-    subtitle: "Crossworld Creative",
-    description:
-      "A place for solo work, experiments, recordings, and personal releases under Crossworld Creative.",
-    pillText: "Here",
-    to: "/music/solo-projects",
-    ctaText: "Explore Music →",
-  },
-];
-
-function Music() {
+export function SoloProjects() {
   return (
-    <main className="music-page">
-      <section className="music-hero">
-        <h1 className="music-title">Music</h1>
-        <p className="music-intro">
-          Bands, recordings, solo work, and future releases will live here as
-          the music side of Crossworld Creative grows.
-        </p>
-      </section>
-
-      <section className="music-grid">
-        {musicProjects.map((item) => (
-          <DashboardCard
-            key={item.id}
-            title={item.title}
-            subtitle={item.subtitle}
-            description={item.description}
-            to={item.to}
-            href={item.href}
-            external={item.external}
-            pillText={item.pillText}
-            ctaText={item.ctaText}
-            variant="music"
-          />
-        ))}
-      </section>
-    </main>
+    <article className="studio-page studio-music studio-detail">
+      <Link className="studio-back" to="/dashboard/music">← Music</Link>
+      <StudioHeading title="Solo projects" label="Crossworld Creative / Recordings" intro="Solo recordings and experiments. This collection has no published tracks yet." />
+    </article>
   );
 }
 
-export default Music;
+export default function Music() {
+  return (
+    <div className="studio-page studio-music">
+      <StudioHeading title="Music" label="Crossworld Creative / Listening room" intro="Find the bands and recordings that make up the studio’s music catalogue.">
+        <div className="studio-record" aria-hidden="true" />
+      </StudioHeading>
+      <ul className="music-tracklist">
+        <li><div><h2>Pale Shelter</h2><p>Band</p></div><StudioLink href="https://paleshelter.crossworldcreative.com">Visit Pale Shelter</StudioLink></li>
+        <li><div><h2>The Southern Implication</h2><p>Band</p></div><StudioLink href="https://thesouthernimplication.crossworldcreative.com">Visit The Southern Implication</StudioLink></li>
+        <li><div><h2>Solo projects</h2><p>Recordings and experiments</p></div><StudioLink to="solo-projects">Explore solo projects</StudioLink></li>
+      </ul>
+    </div>
+  );
+}

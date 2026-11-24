@@ -1,179 +1,81 @@
-import { useEffect, useRef, useState } from "react";
-import { NavLink } from "react-router-dom";
-import { useAuth } from "../../hooks/useAuth.js";
-import "./Navbar.css";
+﻿import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, useLocation } from "react-router-dom";
+import { useAuth } from "../../hooks/useAuth";
+import { useOperationsAccess } from "../../hooks/useOperationsAccess";
+import { getUserDisplayName } from "../../utils/userDisplay";
 
-function getAccountTriggerLabel(user) {
-  if (typeof user?.displayName === "string" && user.displayName.trim()) {
-    return user.displayName.trim();
-  }
-
-  if (typeof user?.name === "string" && user.name.trim()) {
-    return user.name.trim();
-  }
-
-  if (typeof user?.email === "string" && user.email.trim()) {
-    return user.email.trim();
-  }
-
-  return "Account";
-}
+const destinations = [
+  ["/dashboard", "Studio"],
+  ["/dashboard/projects", "Projects"],
+  ["/dashboard/games", "Games"],
+  ["/dashboard/music", "Music"],
+  ["/dashboard/literature", "Literature"],
+  ["/dashboard/community", "Community"],
+];
 
 function Navbar() {
-  const { user, logout } = useAuth();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef(null);
-  const displayName = getAccountTriggerLabel(user);
-
-  const linkClass = ({ isActive }) =>
-    `navbar__link ${isActive ? "navbar__link--active" : ""}`;
+  const { loaded, user, logout } = useAuth();
+  const operations = useOperationsAccess();
+  const { key } = useLocation();
+  const [openAt, setOpenAt] = useState(null);
+  const open = openAt === key;
+  const account = useRef(null);
+  const trigger = useRef(null);
 
   useEffect(() => {
-    if (!menuOpen) {
-      return undefined;
+    if (!open) return;
+    function dismiss(event) {
+      if (!account.current?.contains(event.target)) setOpenAt(null);
     }
-
-    const handlePointerDown = (event) => {
-      if (!menuRef.current?.contains(event.target)) {
-        setMenuOpen(false);
-      }
-    };
-
-    const handleEscape = (event) => {
-      if (event.key === "Escape") {
-        setMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleEscape);
-
+    function escape(event) {
+      if (event.key !== "Escape") return;
+      setOpenAt(null);
+      trigger.current?.focus();
+    }
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("keydown", escape);
     return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleEscape);
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("keydown", escape);
     };
-  }, [menuOpen]);
+  }, [open]);
 
   return (
-    <header className="navbar">
-      <div className="navbar__inner">
-        <div className="navbar__left">
-          <NavLink
-            to="/dashboard"
-            className="navbar__brand"
-            aria-label="Go to dashboard"
-          >
-            <img
-              className="navbar__brand-mark"
-              src="/logo.png"
-              alt="Crossworld logo"
-            />
-            <div className="navbar__brand-text">
-              <span className="navbar__brand-title">CROSSWORLD</span>
-              <span className="navbar__brand-subtitle">CREATIVE</span>
-            </div>
-          </NavLink>
-
-          <nav className="navbar__nav" aria-label="Primary">
-            <NavLink to="/dashboard" end className={linkClass}>
-              Dashboard
+    <header className="studio-nav">
+      <div className="studio-nav__inner">
+        <Link className="studio-brand" to="/dashboard" aria-label="Crossworld Creative studio">
+          <img src="/logo.png" width="38" height="38" alt="" />
+          <span>Crossworld <b>Creative</b></span>
+        </Link>
+        <nav className="studio-nav__links" aria-label="Primary">
+          {destinations.map(([to, label], index) => (
+            <NavLink key={to} to={to} end={index === 0}>{label}</NavLink>
+          ))}
+        </nav>
+        <div className="studio-nav__utilities">
+          {operations && (
+            <NavLink className="studio-hq" to="/operations?workspace=headquarters">
+              <span className="studio-hq__mark" aria-hidden="true" /> Operations
             </NavLink>
-            <NavLink to="/dashboard/projects" className={linkClass}>
-              Projects
-            </NavLink>
-            <NavLink to="/dashboard/music" className={linkClass}>
-              Music
-            </NavLink>
-            <NavLink to="/dashboard/games" className={linkClass}>
-              Games
-            </NavLink>
-            <NavLink to="/dashboard/literature" className={linkClass}>
-              Literature
-            </NavLink>
-            <NavLink to="/dashboard/community" className={linkClass}>
-              Community
-            </NavLink>
-          </nav>
-        </div>
-
-        <div className="navbar__right">
-          {user && (
-            <div className="navbar__account" ref={menuRef}>
-              <button
-                type="button"
-                className={`navbar__trigger ${menuOpen ? "navbar__trigger--open" : ""}`}
-                onClick={() => setMenuOpen((open) => !open)}
-                aria-expanded={menuOpen}
-                aria-haspopup="menu"
-                aria-controls="navbar-account-menu"
-              >
-                <span className="navbar__trigger-label">{displayName}</span>
-                <span className="navbar__trigger-caret" aria-hidden="true">
-                  v
-                </span>
+          )}
+          {loaded && (user ? (
+            <div className="studio-account" ref={account} onBlur={event => {
+              if (!event.currentTarget.contains(event.relatedTarget)) setOpenAt(null);
+            }}>
+              <button ref={trigger} type="button" aria-expanded={open} aria-controls={open ? "studio-account-menu" : undefined}
+                onClick={() => setOpenAt(open ? null : key)}>
+                <span className="studio-account__name">{getUserDisplayName(user)}</span>
+                <span className="studio-account__label">Account</span><span aria-hidden="true">▾</span>
               </button>
-
-              {menuOpen && (
-                <div
-                  id="navbar-account-menu"
-                  className="navbar__menu"
-                  role="menu"
-                  aria-label="Account menu"
-                >
-                  <NavLink
-                    to="/settings"
-                    className="navbar__menu-item"
-                    role="menuitem"
-                    onClick={() => setMenuOpen(false)}
-                  >
-                    <span>Settings</span>
-                    <span className="navbar__menu-copy">
-                      Tweak the shared layer
-                    </span>
-                  </NavLink>
-
-                  <button
-                    type="button"
-                    className="navbar__menu-item navbar__menu-item--disabled"
-                    role="menuitem"
-                    disabled
-                  >
-                    <span>Theme</span>
-                    <span className="navbar__menu-copy">
-                      Quick switch landing soon
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="navbar__menu-item navbar__menu-item--disabled"
-                    role="menuitem"
-                    disabled
-                  >
-                    <span>Profile</span>
-                    <span className="navbar__menu-copy">
-                      Public identity lives here later
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    className="navbar__menu-item navbar__menu-item--danger"
-                    role="menuitem"
-                    onClick={() => {
-                      setMenuOpen(false);
-                      logout();
-                    }}
-                  >
-                    <span>Log out</span>
-                    <span className="navbar__menu-copy">
-                      Leave Crossworld for now
-                    </span>
-                  </button>
+              {open && (
+                <div id="studio-account-menu" className="studio-account__menu">
+                  <Link to="/profile" onClick={() => setOpenAt(null)}>Profile</Link>
+                  <Link to="/settings" onClick={() => setOpenAt(null)}>Settings</Link>
+                  <button type="button" onClick={() => { setOpenAt(null); logout(); }}>Log out</button>
                 </div>
               )}
             </div>
-          )}
+          ) : <Link className="studio-signin" to="/">Sign in</Link>)}
         </div>
       </div>
     </header>
