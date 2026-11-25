@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useRef, useState } from "react";
 import CrewPortrait from "./CrewPortrait";
 import { employeeActivity, roleLabel } from "./crewActivity";
 
@@ -7,6 +7,11 @@ export default function OrganizationChart({ departments, employees, observedRuns
   const [departmentId, setDepartmentId] = useState("");
   const [focus, setFocus] = useState(null);
   const [zoom, setZoom] = useState(100);
+  const [collapsed, setCollapsed] = useState(() => new Set());
+  const viewport = useRef(null);
+  const chart = useRef(null);
+  const pan = useRef(null);
+  const departmentNames = new Map(departments.map(department => [department._id, department.name]));
   const byId = new Map(employees.map(employee => [employee._id, employee]));
   const reports = new Map();
   const unattached = [];
@@ -37,27 +42,48 @@ export default function OrganizationChart({ departments, employees, observedRuns
   const showBranch = employee => !departmentId || visible.has(employee._id);
 
   function person(employee) {
-    const state = employeeActivity(employee, observedRuns, projectAssignments).state;
-    return <button className="operations__org-person" type="button" aria-pressed={selection === employee._id}
+    const { state, runs } = employeeActivity(employee, observedRuns, projectAssignments);
+    const assignment = runs.find(run => run.status === "running") || runs[0];
+    return <button className="operations__org-person" type="button" aria-pressed={selection === employee._id} data-state={state}
       onClick={() => select(employee._id)}>
       <CrewPortrait employee={employee} state={state} />
-      <span><strong>{employee.name}</strong><small>{roleLabel(employee.role)} · {state}</small></span>
+      <span><strong>{employee.name}</strong><small>{roleLabel(employee.role)} · {state}</small>
+        {departmentNames.has(employee.departmentId) && <small>{departmentNames.get(employee.departmentId)}</small>}
+        {assignment?.title && <small className="operations__org-assignment" title={assignment.title}>{assignment.title}</small>}</span>
     </button>;
   }
 
   function branch(employee) {
     const children = (reports.get(employee._id) || []).filter(showBranch);
+    const expanded = !collapsed.has(employee._id);
+    const branchId = "reports-" + employee._id;
     return <li key={employee._id}>{person(employee)}
-      {children.length > 0 && <details open>
-        <summary>{children.length} direct {children.length === 1 ? "report" : "reports"}</summary>
-        <ul>{children.map(branch)}</ul>
-      </details>}
+      {children.length > 0 && <>
+        <button type="button" className="operations__org-expand" aria-expanded={expanded} aria-controls={branchId}
+          aria-label={(expanded ? "Collapse " : "Expand ") + employee.name + "'s direct reports"}
+          onClick={() => setCollapsed(previous => {
+            const next = new Set(previous);
+            if (next.has(employee._id)) next.delete(employee._id);
+            else next.add(employee._id);
+            return next;
+          })}>{expanded ? "−" : "+"} {children.length}</button>
+        <ul id={branchId} hidden={!expanded}>{expanded && children.map(branch)}</ul>
+      </>}
     </li>;
   }
 
   const term = query.trim().toLocaleLowerCase();
   const matches = employees.filter(employee => inDepartment(employee)
     && [employee.name, roleLabel(employee.role)].some(value => value?.toLocaleLowerCase().includes(term)));
+  function fit() {
+    const width = chart.current.offsetWidth;
+    const height = chart.current.offsetHeight;
+    setZoom(Math.max(28, Math.min(100, Math.floor(100 * Math.min(
+      viewport.current.clientWidth / width, viewport.current.clientHeight / height,
+    )))));
+    viewport.current.scrollTo(0, 0);
+  }
+
   return <>
     <label>Find an employee <input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
     <div className="operations__modes">
@@ -75,17 +101,31 @@ export default function OrganizationChart({ departments, employees, observedRuns
         <option value="">All departments</option>
         {departments.map(department => <option value={department._id} key={department._id}>{department.name}</option>)}
       </select></label>
-      <label>Chart scale <select value={zoom} onChange={event => setZoom(Number(event.target.value))}>
-        <option value={100}>100%</option><option value={125}>125%</option><option value={150}>150%</option>
-      </select></label>
+      <button type="button" onClick={fit}>Fit chart</button>
+      <label>Zoom <input type="range" min="28" max="150" value={zoom}
+        onChange={event => setZoom(Number(event.target.value))} /></label>
+      <output>{zoom}%</output>
     </div>
-    <div className="operations__org-viewport" role="region" aria-label="Scrollable reporting chart" tabIndex={0}>
-      <div className="operations__org-chart" style={{ minWidth: zoom + "%", fontSize: zoom + "%" }}>
+    <div ref={viewport} className="operations__org-viewport" role="region" aria-label="Scrollable reporting chart" tabIndex={0}
+      onPointerDown={event => {
+        if (event.button !== 0 || event.pointerType !== "mouse" || event.target.closest("button")) return;
+        const current = event.currentTarget;
+        pan.current = { x: event.clientX, y: event.clientY, left: current.scrollLeft, top: current.scrollTop };
+        current.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={event => {
+        if (pan.current) event.currentTarget.scrollTo(
+          pan.current.left + pan.current.x - event.clientX,
+          pan.current.top + pan.current.y - event.clientY,
+        );
+      }}
+      onLostPointerCapture={() => { pan.current = null; }}>
+      <div ref={chart} className="operations__org-chart" style={{ zoom: zoom + "%" }}>
         {term ? <>
           <p>{matches.length} matching employees</p>
           <ul>{matches.map(employee => <li key={employee._id}>{person(employee)}</li>)}</ul>
         </> : focus && byId.has(focus) ? <ul>{branch(byId.get(focus))}</ul> : <>
-          <h3>Owner</h3>
+          <h3 className="operations__org-owner">Owner</h3>
           <ul>{(reports.get(null) || []).filter(showBranch).map(branch)}</ul>
           {departmentId && visible.size === 0 && <p>No employees in this department.</p>}
           {unattached.some(inDepartment) && <><h3>Reporting relationship unavailable</h3>

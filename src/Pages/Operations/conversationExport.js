@@ -19,7 +19,7 @@ export async function readTurn(api, id, includeActivity = false) {
     messages: agentMessages(events),
     attachments: [...(first.mediaInputs || []), ...(first.mediaOutputs || [])].map(({ name, mime }) => ({ name, mime })),
     ...(first.delegatedBy ? { delegatedFrom: first.delegatedBy.sourceTurnId, objectiveId: first.objectiveId } : {}),
-    ...(includeActivity ? { activity: events.filter(event => ["activity", "execution"].includes(event.view)) } : {}),
+    ...(includeActivity ? { error: first.error, activity: events.filter(event => ["activity", "execution"].includes(event.view)) } : {}),
   };
 }
 

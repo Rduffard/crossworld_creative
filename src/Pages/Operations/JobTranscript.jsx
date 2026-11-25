@@ -5,6 +5,7 @@ import { conversationPage, readTurn, readConversation, conversationMarkdown, red
 import { MediaPreview } from "./MediaAttachments";
 import { profileNames, workspaceNames } from "./workspaces";
 import { activityEntries, agentMessages } from "./executionEvents";
+import ExecutionStream from "./ExecutionStream";
 
 function AgentUpdates({ messages, actor, copy }) {
   return messages.map((event, index) => <article className="operations__message operations__message--update" key={index}>
@@ -16,47 +17,6 @@ function AgentUpdates({ messages, actor, copy }) {
     <div className="operations__response"><Markdown skipHtml remarkPlugins={[remarkGfm]} disallowedElements={["img"]}>{event.text}</Markdown></div>
     <button type="button" onClick={() => copy(event.text)}>Copy message</button>
   </article>);
-}
-
-function SessionTurns({ api, sessionId, jobId, selectJob }) {
-  const [turns, setTurns] = useState([]);
-  const [loaded, setLoaded] = useState(false);
-  const [atEnd, setAtEnd] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState("");
-
-  async function loadMore() {
-    if (busy || atEnd) return;
-    const query = new URLSearchParams({ session: sessionId, compact: "true" });
-    if (turns.length) query.set("before", turns.at(-1)._id);
-    setBusy(true);
-    setFailure("");
-    try {
-      const rows = await api(`/jobs?${query}`);
-      setTurns((previous) => [...previous, ...rows]);
-      setLoaded(true);
-      setAtEnd(rows.length < 50);
-    } catch (error) {
-      setFailure(error.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return <details className="operations__thread-turns" onToggle={(event) => {
-    if (event.currentTarget.open && !loaded) loadMore();
-  }}>
-    <summary>Conversation turns</summary>
-    {failure && <p role="alert">{failure}</p>}
-    {loaded && turns.length === 0 && <p>No turns were found.</p>}
-    <ul>{turns.map((turn) => <li key={turn._id}>
-      <button type="button" aria-current={jobId === turn._id ? "true" : undefined} onClick={() => selectJob(turn._id)}>
-        {turn.prompt || "Turn"} · {turn.status}
-        {turn.createdAt && <small><time dateTime={turn.createdAt}>{new Date(turn.createdAt).toLocaleString()}</time></small>}
-      </button>
-    </li>)}</ul>
-    {!atEnd && <button type="button" disabled={busy} onClick={loadMore}>{busy ? "Loading turns…" : loaded ? "Load earlier turns" : "Load turns"}</button>}
-  </details>;
 }
 
 function PreviousConversation({ api, sessionId, jobId, copy }) {
@@ -119,9 +79,6 @@ export default function JobTranscript({ api, job, host, copy, jobId, mode, selec
   const answer = useMemo(() => job.events.filter((event) => event.view === "response").map((event) => event.text).join(""), [job.events]);
   const [exportProgress, setExportProgress] = useState(null);
   const [exportFailure, setExportFailure] = useState("");
-  const [visibleCount, setVisibleCount] = useState(80);
-  const [filter, setFilter] = useState("");
-  const [category, setCategory] = useState("");
   const [prompt, setPrompt] = useState(null);
   const [loadingPrompt, setLoadingPrompt] = useState(true);
   const [promptAttempt, retryPrompt] = useState(0);
@@ -131,10 +88,6 @@ export default function JobTranscript({ api, job, host, copy, jobId, mode, selec
   const [showLatest, setShowLatest] = useState(false);
   const entries = useMemo(() => activityEntries(job.events), [job.events]);
   const messages = useMemo(() => agentMessages(job.events), [job.events]);
-  const categories = [...new Set(entries.map(entry => entry.category))].sort();
-  const term = filter.trim().toLowerCase();
-  const matching = entries.filter(entry => (!category || entry.category === category) &&
-    (!term || `${entry.label}\n${entry.text}`.toLowerCase().includes(term)));
   const workerRole = job.assignedRole || job.workerRole;
   const actor = job.conversationActor?.name || job.assigneeName || job.studioActor?.name || (job.studioTools ? "First Mate" :
     workerRole && workerRole !== "direct" ? workerRole.replaceAll("-", " ") : "Codex");
@@ -291,7 +244,7 @@ export default function JobTranscript({ api, job, host, copy, jobId, mode, selec
       {proposal}
       {showLatest && <button type="button" className="operations__latest" onClick={goToLatest}>Back to latest</button>}
     </section>
-    <section className="operations__pane" aria-label="Execution" tabIndex={0}>
+    <section className="operations__pane operations__execution-pane" aria-label="Execution" tabIndex={0}>
       <h3>Execution</h3>
       <details>
         <summary>Execution summary</summary>
@@ -299,22 +252,11 @@ export default function JobTranscript({ api, job, host, copy, jobId, mode, selec
           <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
       </details>
       {children}
-      {job.sessionId && <SessionTurns api={api} key={job.sessionId} sessionId={job.sessionId} jobId={jobId} selectJob={selectJob} />}
-      {entries[0] && <p>{actor} {"\u00b7"} {entries[0].label}{entries[0].at && <>{" \u00b7 "}<time dateTime={entries[0].at}>{new Date(entries[0].at).toLocaleTimeString()}</time></>}</p>}
-      <button type="button" disabled={exportProgress !== null || !entries.length} onClick={copyActivity}>Copy execution activity</button>
+      <button type="button" disabled={exportProgress !== null || !entries.length} onClick={copyActivity}>Copy selected turn activity</button>
       {mode === "Execution" && exportFailure && <p role="alert">{exportFailure}</p>}
-      <label>Search execution output<input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} /></label>
-      <label>Event category<select value={category} onChange={event => setCategory(event.target.value)}>
-        <option value="">All categories</option>
-        {categories.map(value => <option key={value}>{value}</option>)}
-      </select></label>
-      {matching.length === 0 && <p>{term || category ? "No matching execution events." : "No execution events yet."}</p>}
-      {matching.length > visibleCount && <button type="button" onClick={() => setVisibleCount((count) => count + 80)}>Show earlier events</button>}
-      {matching.slice(0, visibleCount).map((event) => <details key={event.index}>
-        <summary>{event.label}{event.at && <time dateTime={event.at}>{new Date(event.at).toLocaleTimeString()}</time>}</summary>
-        <button type="button" onClick={() => copy(event.text)}>Copy entry</button>
-        <pre>{event.text}</pre>
-      </details>)}
+      {mode !== "Conversation" && <ExecutionStream api={api} sessionId={job.sessionId} copy={copy} selectJob={selectJob}
+        current={{ id: jobId, actor, status: job.status, activity: job.events, createdAt: job.createdAt,
+          finishedAt: job.finishedAt, answer, error: job.error, prompt: prompt ?? promptPreview }} />}
     </section>
   </div>;
 }
