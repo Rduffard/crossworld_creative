@@ -483,6 +483,7 @@ export default function Operations() {
     dateGroups.get(group).push([id, turns]);
   }
   const awaitingApproval = selectedJob?.status === "running" && approval?.state === "pending";
+  const permissionUnavailable = selectedJob?.events?.findLast(event => event.label === "Permission request unavailable");
   const canAct = !busy && !relayError && !!selectedHost?.online;
   const governance = snapshot?.approvals;
   const workerEnabled = governance?.workerEnabled !== false;
@@ -564,7 +565,8 @@ export default function Operations() {
       const request = {
         prompt, model: "gpt-6.2-sol", effort: parent?.effort || selectedEffort, queue,
         profile: parent ? parent.profile || "read-only" : selectedProfile,
-        workspace: parent?.workspace || recipient?.workspace || startingWorkspace, hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
+        workspace: ordinaryConversation && !outputMedia ? undefined : parent?.workspace || recipient?.workspace || startingWorkspace,
+        hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
         ...(mediaAttachments.length ? { attachmentIds: mediaAttachments.map((item) => item._id) } : {}),
         ...(recipientId ? { recipientId } : {}),
         ...(!parent && assignment ? { objectiveId: assignment.id, employeeId } : {}),
@@ -694,23 +696,13 @@ export default function Operations() {
         {host?.efforts?.map((entry) => <option key={entry}>{entry}</option>)}
       </select></label>
     </div>
-    {ordinaryConversation && !recipientId && !["development", "workshop"].includes(selectedProfile) && <details>
-      <summary>Starting folder</summary>
-      <label>Starting workspace <select value={workspace} onChange={event => {
-        setOutputScope(null);
-        setWorkspace(event.target.value);
-        setProfileChoice({ context: JSON.stringify([event.target.value, assignment?.id, recipientId, scheduling]), value: profile });
-      }}>
-        {Object.entries(workspaceNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select></label>
-    </details>}
     {canReturnMedia && <label className="operations__check">
       <input type="checkbox" checked={outputMedia} onChange={(event) => setOutputScope(event.target.checked ? outputScopeKey : null)} />
       Allow this turn to return new images or videos
     </label>}
     {selectedProfile === "full-access" && <p className="operations__access-warning">
       <strong>Full Access.</strong> Commands run with the Windows account’s access to files, applications, and the network.
-      Codex approval prompts are disabled. Workspace selection sets the starting folder.
+      Codex approval prompts are disabled.
     </p>}
     </details>}
     {!jobId && <p role="status" className={profile === "full-access" ? "operations__access-warning" : undefined}>
@@ -1105,6 +1097,11 @@ export default function Operations() {
                 })}>{selectedJob.status === "scheduled" ? "Cancel schedule" :
                   selectedJob.status === "waiting" ? "Cancel follow-up" : "Cancel current task"}</button>}
               {awaitingApproval && <button type="button" onClick={() => changeMode("Execution")}>Review approval</button>}
+              {permissionUnavailable && <div role="status">
+                <p>{permissionUnavailable.text}</p>
+                <p>Review any partial work, then explicitly select an eligible profile in a new conversation before sending the remaining work.</p>
+                <button type="button" onClick={() => messageEmployee(null)}>Open a new conversation</button>
+              </div>}
               <details className="operations__conversation-actions">
                 <summary>Actions</summary>
                 <div>
@@ -1183,11 +1180,11 @@ export default function Operations() {
                 <dt>Affected paths</dt><dd><pre>{approval.paths || "Codex did not provide paths."}</pre></dd>
                 <dt>Reason</dt><dd>{approval.reason || "Codex did not provide a reason."}</dd>
               </dl>
-              {awaitingApproval && !approval.canApprove && <p>This request exceeds the selected permission profile.</p>}
-              {awaitingApproval && ["approve", "deny"].map((choice) => <button key={choice} type="button"
-                disabled={!canAct || selectedJob.decision?.id === approval.id || (choice === "approve" && !approval.canApprove)}
+              {awaitingApproval && !approval.canApprove && <p>This profile cannot grant the request. Dismiss it and review any partial work before retrying in a new conversation with an eligible profile.</p>}
+              {awaitingApproval && (approval.canApprove ? ["approve", "deny"] : ["deny"]).map((choice) => <button key={choice} type="button"
+                disabled={!canAct || selectedJob.decision?.id === approval.id}
                 onClick={() => action(() => post(`/jobs/${jobId}/approval`, { id: approval.id, choice }))}>
-                {choice === "approve" ? "Approve for this turn" : "Deny"}
+                {choice === "approve" ? "Approve for this turn" : approval.canApprove ? "Deny" : "Dismiss request"}
               </button>)}
             </section>}
             </JobTranscript>

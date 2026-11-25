@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import MaintenanceControls from "./MaintenanceControls";
+import RemoteLifecycle from "./RemoteLifecycle";
 import "./finance.css";
 
 const gib = (value) => (value / 1024 ** 3).toLocaleString(undefined, { maximumFractionDigits: 1 });
@@ -51,6 +52,7 @@ export default function Infrastructure({ request }) {
         }}>Refresh status</button>
       </div>
       <MaintenanceControls request={request} />
+      <RemoteLifecycle request={request} />
       {continuation !== null && <section className="operations__panel" aria-label="Parent continuation">
         <h3>Automatic parent continuation</h3>
         <p role="status">{continuation ? "Enabled for future continuations." : "Paused. Assignment outcomes remain recorded."}</p>
@@ -61,7 +63,6 @@ export default function Infrastructure({ request }) {
       {!snapshot && !error && <p role="status">Checking relay status…</p>}
       {snapshot && <>
         <small>Checked {new Date(snapshot.observedAt).toLocaleTimeString()} · Cloud VM telemetry unavailable</small>
-        <p>Remote relay restart and update are unavailable. Supervisor activation and device readiness require verification on the Windows host.</p>
         {!snapshot.devices.length && <p>No home relays are registered.</p>}
         <ul className="operations-finance__entries">
           {snapshot.devices.map(device => <li key={device._id}>
