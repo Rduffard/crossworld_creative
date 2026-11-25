@@ -21,7 +21,7 @@ export default function Missions({ api, hosts, openJob }) {
   const [profile, setProfile] = useState("read-only");
   const [custom, setCustom] = useState(null);
   const [refresh, setRefresh] = useState(0);
-  const host = hosts.find(device => device._id === hostId) || hosts.find(device => device.online);
+  const host = hosts.find(device => device._id === hostId) || hosts.find(device => device.online && !device.missionOnly);
   const steps = missionPlan(template, reviewer, profile);
   const active = items.find(item => item.status === "active") || items.find(item => ["paused", "expired", "blocked"].includes(item.status));
   const summary = active && (active.reason || active.dispatchHold || titleFor(active, active.next) || active.status);
@@ -66,14 +66,19 @@ export default function Missions({ api, hosts, openJob }) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
     mutate(async () => {
+      const plan = custom === null ? steps : JSON.parse(custom);
+      const executionPlan = Array.isArray(plan) ? { steps: plan } : {
+        steps: plan?.steps, authorization: plan?.authorization,
+      };
       const body = {
         title: data.get("title"), hostId: host._id, workspace: "development",
         effort: data.get("effort"), endsAt: new Date(end).toISOString(),
-        steps: custom === null ? steps : JSON.parse(custom), paused: data.has("paused"),
+        ...executionPlan, paused: data.has("paused"),
       };
       const signature = JSON.stringify(body);
       if (submission.current?.signature !== signature) submission.current = { signature, id: crypto.randomUUID() };
-      await api("/missions", { method: "POST", body: { ...body, id: submission.current.id } });
+      await api(Array.isArray(plan) ? "/missions" : "/missions/capability-plans",
+        { method: "POST", body: { ...body, id: submission.current.id } });
       submission.current = null;
       setCreating(false);
     });
@@ -126,8 +131,14 @@ export default function Missions({ api, hosts, openJob }) {
           }}>Terminate mission</button>}
         </div>
         <details><summary>Plan and execution history</summary>
+          {item.authorization && <ul aria-label="Authorized execution routes">
+            {item.authorization.routes.map(route => <li key={route.profile}>
+              {route.profile} · {route.capabilities.join(", ")}
+            </li>)}
+          </ul>}
           <ol>{item.steps.map(step => <li key={step.key}>
             <strong>{step.title}</strong> · {item.results[step.key]?.result || (item.current?.step === step.key ? "selected" : "pending")}
+            {step.requires?.length > 0 && <span> · {step.profile} · {step.requires.join(", ")}</span>}
             {item.results[step.key]?.jobId && <button type="button" onClick={() => inspect(item.results[step.key].jobId)}>Inspect</button>}
           </li>)}</ol>
         </details>
@@ -142,7 +153,9 @@ export default function Missions({ api, hosts, openJob }) {
             defaultValue={template === "foundry" ? "Operation FOUNDRY" : "FOUNDRY continuation acceptance"} required maxLength={120} /></label>
           <label>Relay<select value={host?._id || ""} onChange={event => setHostId(event.target.value)} required>
             <option value="">Select relay</option>
-            {hosts.map(device => <option key={device._id} value={device._id}>{device.label}</option>)}
+            {hosts.map(device => <option key={device._id} value={device._id}>
+              {device.label}{device.missionOnly ? " · capability-authorized missions only" : ""}
+            </option>)}
           </select></label>
           <label>Reasoning effort<select name="effort" defaultValue="low" required>
             {host?.efforts?.map(effort => <option key={effort}>{effort}</option>)}
@@ -162,6 +175,7 @@ export default function Missions({ api, hosts, openJob }) {
           <label>Authorize dispatch until<input type="datetime-local" required value={end} onChange={event => setEnd(event.target.value)} /></label>
           <label><span><input type="checkbox" name="paused" /> Register paused</span></label>
           <details><summary>Review or edit the authorized plan</summary>
+            <p>To authorize capability routes, provide an object with an authorization and steps. Each step lists the capabilities it requires.</p>
             <label>Plan JSON<textarea rows={12} value={custom ?? JSON.stringify(steps, null, 2)}
               onChange={event => setCustom(event.target.value)} /></label>
           </details>

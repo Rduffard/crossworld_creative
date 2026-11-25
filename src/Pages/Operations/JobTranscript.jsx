@@ -59,11 +59,23 @@ export default function JobTranscript({ api, job, host, copy, jobId, mode, selec
     (!term || `${entry.label}\n${entry.text}`.toLowerCase().includes(term)));
   const actor = turnActor(job);
   const confirmedModel = entries.find(entry => entry.label === "Confirmed model" && entry.view === "execution")?.text;
+  const permissions = job.permissionDiagnostics;
   const executionSummary = [
     ["Execution", jobId], ["Session", job.sessionId], ["Employee", actor], ["Status", job.status], ["Host", host?.label || "Unknown"],
     ["Requested model", job.model || "Unknown"], ["Confirmed model", confirmedModel || "Unknown"],
     ["Requested reasoning", job.effort || "Unknown"], ["Confirmed reasoning", "Unknown"],
     ["Permission profile", profileNames[job.profile || "read-only"]],
+    ...(permissions ? [
+      ["Effective profile", profileNames[permissions.effectiveProfile]],
+      ["Mission", permissions.missionId],
+      ["Authorized capabilities", permissions.authorizedCapabilities.join(", ")],
+      ["Required capabilities", permissions.requiredCapabilities.join(", ")],
+      ["Verified capabilities", permissions.verifiedCapabilities.join(", ")],
+      ["Execution environment", permissions.environment + " · " + permissions.sandbox],
+      ["Scope fingerprint", permissions.scope],
+      ["Runtime fingerprint", permissions.runtime],
+      ["Preflight observed", new Date(permissions.observedAt).toLocaleString()],
+    ] : []),
     ["Started", job.startedAt ? new Date(job.startedAt).toLocaleString() : "Not recorded"],
     ["Objective", job.objectiveId], ["Previous turn", job.parentId], ["Delegated by", job.delegatedBy?.sourceTurnId],
     ["Delegated review", job.delegatedReview?._id],

@@ -454,7 +454,7 @@ export default function Operations() {
     return () => { active = false; clearTimeout(timer); };
   }, [jobId, accessDenied, refreshVersion, page]);
 
-  const executionHosts = snapshot?.hosts.filter(entry => !entry.revokedAt && !entry.isolatedReviewSnapshot) || [];
+  const executionHosts = snapshot?.hosts.filter(entry => !entry.revokedAt && !entry.isolatedReviewSnapshot && !entry.missionOnly) || [];
   const host = executionHosts.find(entry => entry._id === hostId) ||
     executionHosts.find(entry => entry.online) || executionHosts[0];
   const loadingEffort = !jobId && !effort && studioEffort === null;
@@ -853,13 +853,15 @@ export default function Operations() {
             <p>Register your Windows PC, then open <strong>Start Crossworld Operations.cmd</strong> on that PC.</p>
             <form onSubmit={(event) => {
               event.preventDefault();
+              const missionOnly = new FormData(event.currentTarget).has("missionOnly");
               action(async () => {
-                const result = await post("/hosts", { label: deviceName });
+                const result = await post(missionOnly ? "/hosts/mission-pilot" : "/hosts", { label: deviceName, missionOnly });
                 setCredential(result.token);
                 setDeviceName("");
               });
             }}>
               <label>Device name<input required maxLength={80} value={deviceName} onChange={(event) => setDeviceName(event.target.value)} /></label>
+              <label><input type="checkbox" name="missionOnly" /> Capability-authorized missions only</label>
               <button disabled={busy}>Register device</button>
             </form>
             {credential && <div>
@@ -1086,7 +1088,7 @@ export default function Operations() {
       </dialog>}
       {page === "Command Center" && <>
       <div className="operations__commandbar">
-        <Missions api={api} hosts={executionHosts} openJob={openJob} />
+        <Missions api={api} hosts={snapshot.hosts.filter(entry => !entry.revokedAt && !entry.isolatedReviewSnapshot)} openJob={openJob} />
         <button className="operations__history-button" type="button" onClick={() => {
           historyDrawer.current?.showModal();
           setHistoryOpen(true);
