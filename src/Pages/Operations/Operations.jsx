@@ -461,9 +461,12 @@ export default function Operations() {
     [workspace, ...(!scheduling ? ["scoped"] : []), "full-access"];
   const selectedProfile = !recipientId && selectableEditing.includes(profile) && host?.profiles?.includes(profile)
     ? profile : "read-only";
+  const assignmentScopes = assignment && selectedProfile === "scoped" ? host?.assignmentScopes || [] : [];
+  const assignmentScope = assignmentScopes.find(entry => entry.revision === assignmentScopeRevision);
   const startingWorkspace = ordinaryConversation && ["development", "workshop"].includes(selectedProfile) ? selectedProfile : workspace;
-  const canReturnMedia = !jobId && host?.mediaOutput && startingWorkspace === "workshop" && selectedProfile === "workshop";
-  const outputScopeKey = JSON.stringify([host?._id, assignment?.id, employeeId, params.toString()]);
+  const canReturnMedia = !jobId && host?.mediaOutput && startingWorkspace === "workshop" &&
+    (selectedProfile === "workshop" || !!assignmentScope);
+  const outputScopeKey = JSON.stringify([host?._id, assignment?.id, employeeId, assignmentScope?.revision, params.toString()]);
   const outputMedia = canReturnMedia && outputScope === outputScopeKey;
   const approval = selectedJob?.approval;
   const activeHistory = snapshot?.historyKey === historyKey ? snapshot.jobs : [];
@@ -503,8 +506,6 @@ export default function Operations() {
   const validScheduleDeadline = !snapshot?.dispatch?.dispatchDeadlines || !dispatchDeadline || !!repeatDays ||
     (!!scheduleDeadline && +scheduleDeadline > +scheduleDate);
   const workerOptions = assignees.filter((employee) => employee.workspace === workspace);
-  const assignmentScopes = assignment && selectedProfile === "scoped" ? host?.assignmentScopes || [] : [];
-  const assignmentScope = assignmentScopes.find(entry => entry.revision === assignmentScopeRevision);
   const validAssignment = !assignment || (workerOptions.some((employee) => employee._id === employeeId) &&
     (!includeProjectReferences || host?.media) && (!assignmentScopes.length || !!assignmentScope));
   const validRepeat = repeatDays === 0 || (snapshot?.recurrence && Number.isInteger(repeatCount) && repeatCount >= 2 && repeatCount <= 12);
@@ -717,7 +718,7 @@ export default function Operations() {
     </div>
     {canReturnMedia && <label className="operations__check">
       <input type="checkbox" checked={outputMedia} onChange={(event) => setOutputScope(event.target.checked ? outputScopeKey : null)} />
-      Allow this turn to return new images or videos
+      Allow this turn to publish new deliverables
     </label>}
     {selectedProfile === "full-access" && <p className="operations__access-warning">
       <strong>Full Access.</strong> Commands run with the Windows account’s access to files, applications, and the network.

@@ -25,7 +25,11 @@ function PolicyForm({ policy, employees, departments, save, pending }) {
     const values = Object.fromEntries(["model", "effort", "profile"].flatMap(key =>
       fields[key]?.trim() ? [[key, fields[key].trim()]] : []));
     if (global) {
-      save({ ...policy, defaults: values, maxExecutions: Number(fields.maxExecutions), authority, bounds: {
+      save({ ...policy, defaults: values, maxExecutions: Number(fields.maxExecutions), authority,
+        ...(policy.scopedAdmission ? { resourceLimits: {
+          maxCpuPercent: Number(fields.maxCpuPercent),
+          minAvailableRamMiB: Number(fields.minAvailableRamMiB),
+        } } : {}), bounds: {
         models: parseList(fields.models), efforts: parseList(fields.efforts), profiles: parseList(fields.profiles),
       } });
       return;
@@ -67,7 +71,16 @@ function PolicyForm({ policy, employees, departments, save, pending }) {
         {Object.entries(profileNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select></label>
       {global && <>
-        <label>Desired maximum executions <input name="maxExecutions" type="number" min={1} required defaultValue={policy.maxExecutions} /></label>
+        <label>{policy.scopedAdmission ? "Maximum scoped executions per host" : "Desired maximum executions"}
+          <input name="maxExecutions" type="number" min={1} required defaultValue={policy.maxExecutions} />
+        </label>
+        {policy.scopedAdmission && <>
+          <label>Maximum CPU use (%, 0 disables)<input name="maxCpuPercent" type="number" min={0} max={100} step={1}
+            required defaultValue={policy.resourceLimits?.maxCpuPercent ?? 0} /></label>
+          <label>Minimum available RAM (MiB, 0 disables)<input name="minAvailableRamMiB" type="number" min={0} max={1048576} step={1}
+            required defaultValue={policy.resourceLimits?.minAvailableRamMiB ?? 0} /></label>
+          <p>Limits apply to new scoped assignments on compatible hosts. Running turns continue if capacity or resources fall.</p>
+        </>}
         <label>First Mate authority <select value={authority} onChange={event => setAuthority(event.target.value)}>
           {Object.entries(authorityNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select></label>
@@ -110,7 +123,8 @@ export default function WorkforcePolicy({ api, employees, departments }) {
   }
 
   return <section aria-label="Execution policy">
-    <p>Saved policy · Runtime enforcement pending. Existing relay capacity and current per-turn controls apply.</p>
+    <p>{policy?.scopedAdmission ? "Scoped admission enforces capacity and resource limits. Employee defaults are advisory."
+      : "Saved policy · Runtime enforcement pending. Existing relay capacity and current per-turn controls apply."}</p>
     <p>Preview order starts with global defaults, then applies department and employee overrides. Planned execution enforcement applies explicit assignment settings last.</p>
     {error && <p role="alert">{error}</p>}
     {saved && <p role="status">Configuration saved.</p>}
