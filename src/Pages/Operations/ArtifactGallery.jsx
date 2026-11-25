@@ -52,7 +52,7 @@ function ArtifactInspector({ api, id, close }) {
         <p>{item.mime || "Type unavailable"} · {Number.isSafeInteger(item.size) ? item.size.toLocaleString() + " bytes" : "Size unavailable"}</p>
         <p>Recorded <time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleString()}</time></p>
         {item.jobId && <a href={"/operations?workspace=command&job=" + encodeURIComponent(item.jobId)}>Open source execution</a>}
-        {item.state === "ready" ? <MediaPreview key={id} id={id} name={item.name} inspect />
+        {item.state === "ready" ? <MediaPreview key={id} id={id} name={item.name} mime={item.mime} inspect />
           : <p>This upload has not finished.</p>}
         {item.review ? <>
           <h3>Candidate review</h3>

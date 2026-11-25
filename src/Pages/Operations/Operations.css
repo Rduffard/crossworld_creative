@@ -494,10 +494,16 @@
   .operations--shell[data-keyboard="true"] .operations__transcript > .operations__modes { display: none; }
   .operations--shell[data-keyboard="true"] #operations-composer { max-height: 78%; }
 }
+.operations__mobile-nav .operations__compact-approvals { display: none; }
+.operations__blueprints fieldset { min-inline-size: 0; }
+.operations__blueprints select, .operations__blueprints textarea { display: block; max-inline-size: 100%; }
+
 @media (max-width: 420px) {
   .operations__topbar { min-height: 44px; padding-inline: 8px; }
   .operations__topbar-tools { font-size: .75rem; gap: 7px; }
   .operations__topbar-tools button { display: none; }
+  .operations__mobile-nav { flex-wrap: wrap; }
+  .operations__mobile-nav .operations__compact-approvals { display: inline-block; }
   .operations__wordmark { font-size: .8rem; white-space: nowrap; }
   .operations__desktop-label { display: none; }
   .operations__commandbar, .operations__transcript > header { padding: 4px 8px; }

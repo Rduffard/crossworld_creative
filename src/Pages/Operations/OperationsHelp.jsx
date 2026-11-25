@@ -1,14 +1,14 @@
 const guides = [
   ["Workspaces", "On a phone or tablet, open Workspaces to see the full grouped navigation. Select a destination to focus its content."],
   ["Headquarters", "Review live hosts, pending approvals, recent outcomes, and work awaiting attention. Open the linked source to see its current details."],
-  ["Command Center", "Choose New conversation and write a message. Open Execution settings for host, workspace, reasoning effort, and permissions. Use Ctrl or Command + Enter to submit."],
-  ["Command Center", "In a new conversation, ask Barnaby what needs attention or request an objective for the exact name of an active project. Review the structured proposal and its criteria before creating the objective."],
-  ["Command Center", "Select a conversation in History to see its messages. Load older messages as needed. Search by name or content, or select Archived sessions. Open Actions on a conversation to rename or archive it. Use Execution for newest-first activity, earlier turns, and pending approvals. Copy the complete conversation or download an export from the transcript."],
-  ["Command Center", "On an updated relay, start a new conversation with Barnaby and ask him to delegate a read-only Operations interface review to Iona Keel. Open the linked assignment to see its queue state and transcript. Ask Barnaby for the outcome once the review finishes."],
+  ["Command Center", "Choose New conversation and write a message. Open Execution settings for host, workspace, reasoning effort, and permissions. Use Ctrl or Command + Enter to submit.", "Start a conversation"],
+  ["Command Center", "In a new conversation, ask Barnaby what needs attention or request an objective for the exact name of an active project. Review the structured proposal and its criteria before creating the objective.", "Propose an objective"],
+  ["Command Center", "Select a conversation in History to see its messages. Load older messages as needed. Search by name or content, or select Archived sessions. Open Actions on a conversation to rename or archive it. Use Execution for newest-first activity, earlier turns, and pending approvals. Copy the complete conversation or download an export from the transcript.", "Find a past turn"],
+  ["Command Center", "Ask Barnaby to delegate a read-only Operations interface review to Iona Keel. Open the linked assignment to see its queue state, transcript and parent continuation. A completed parent turn can resume automatically when the review has an outcome.", "Request an interface review"],
   ["Schedules", "Open Schedule a new session from a new conversation. Select a local start time and, if needed, a fixed daily or weekly interval. Return to Schedules to check upcoming work or stop a series."],
   ["Workforce", "Open a worker profile to inspect recorded responsibilities or assignments. Select Message employee for a read-only conversation when a compatible relay is online. Assign production work from an objective."],
   ["Office", "Select a worker to inspect their profile and a host to follow its current execution. Worker and host status come from recorded activity."],
-  ["Workflow", "Expand a handoff to see delegated assignments and review dependencies. Open the employee, objective, execution or final report from the workflow."],
+  ["Workflow", "Expand a handoff to see delegated assignments and review dependencies. Open Blueprints to define read-only steps, assign employees, set dependencies, and run a saved revision. Review gated candidates in Approvals."],
   ["Projects", "Create or open a project to record its workspace and repository context. Open its objectives to see the work needed for delivery."],
   ["Objectives", "Record an outcome and measurable criteria, then assign the work from the objective. Queue independent QA against a completed turn and use the evidence to decide whether to accept each criterion."],
   ["Reports", "Open View Final Report from a completed assignment or search by title or employee. Copy the summary or full report, or download Markdown, text, or JSON."],
@@ -33,8 +33,8 @@ export default function OperationsHelp({ navigate }) {
       <h2>Recover a conversation</h2>
       <p>Reopen the turn from History after a refresh or disconnection. Draft text is saved in this browser by conversation. The relay and its registered Windows host manage execution independently of your browser.</p>
     </section>
-    {guides.map(([name, text]) => <section key={text} className="operations__panel">
-      <h2>{name}</h2>
+    {guides.map(([name, text, title]) => <section key={title || name} className="operations__panel">
+      <h2>{title || name}</h2>
       <p>{text}</p>
       <button type="button" onClick={() => navigate(name === "Workspaces" ? "Command Center" : name)}>Open {name === "Workspaces" ? "Command Center" : name}</button>
     </section>)}

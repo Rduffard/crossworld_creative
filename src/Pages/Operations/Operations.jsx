@@ -16,6 +16,7 @@ const Engineering = lazy(() => import("./Engineering"));
 const Finance = lazy(() => import("./Finance"));
 const Headquarters = lazy(() => import("./Headquarters"));
 const Infrastructure = lazy(() => import("./Infrastructure"));
+const ExecutionApprovals = lazy(() => import("./ExecutionApprovals"));
 const JobTranscript = lazy(() => import("./JobTranscript"));
 const Knowledge = lazy(() => import("./Knowledge"));
 const Objectives = lazy(() => import("./Objectives"));
@@ -27,6 +28,7 @@ const ReferenceLibrary = lazy(() => import("./ReferenceLibrary"));
 const VirtualOffice = lazy(() => import("./VirtualOffice"));
 const ArtifactGallery = lazy(() => import("./ArtifactGallery"));
 const Quality = lazy(() => import("./Quality"));
+const Communications = lazy(() => import("./Communications"));
 const Reports = lazy(() => import("./Reports"));
 const Workflow = lazy(() => import("./Workflow"));
 const Workforce = lazy(() => import("./Workforce"));
@@ -44,7 +46,8 @@ const directPermissionKey = "cw_operations_direct_development_permission";
 
 function loadDirectPermission() {
   try {
-    return window.localStorage.getItem(directPermissionKey) === "full-access" ? "full-access" : "read-only";
+    const profile = window.localStorage.getItem(directPermissionKey);
+    return ["scoped", "full-access"].includes(profile) ? profile : "read-only";
   } catch {
     return "read-only";
   }
@@ -120,6 +123,9 @@ export default function Operations() {
   const [profileChoice, setProfileChoice] = useState(null);
   const [directPermission, setDirectPermission] = useState(loadDirectPermission);
   const [permissionError, setPermissionError] = useState("");
+  const [ownerPreferences, setOwnerPreferences] = useState(null);
+  const [preferencesVersion, setPreferencesVersion] = useState(0);
+  const [preferencePending, setPreferencePending] = useState(false);
   const [policyRole, setPolicyRole] = useState("direct");
   const [job, setJob] = useState(null);
   const [showApprovalInbox, setShowApprovalInbox] = useState(false);
@@ -345,7 +351,7 @@ export default function Operations() {
       try {
         const command = page === "Command Center";
         const schedules = page === "Schedules";
-        const sharedApprovals = command || page === "Headquarters" || page === "Settings";
+        const sharedApprovals = command || page === "Headquarters" || page === "Settings" || page === "Approvals";
         const [hosts, jobs, approvals, schedule, dispatch, recurrence] = await Promise.all([
           api("/hosts"), command ? api(`/jobs?${historyKey}`) : null, sharedApprovals ? api("/approvals").catch((failure) => {
             if (failure.status === 404) return null;
@@ -416,8 +422,9 @@ export default function Operations() {
     return () => { active = false; clearTimeout(timer); };
   }, [jobId, accessDenied, refreshVersion, page]);
 
-  const host = snapshot?.hosts.find((entry) => entry._id === hostId && !entry.revokedAt) ||
-    snapshot?.hosts.find((entry) => entry.online) || snapshot?.hosts.find((entry) => !entry.revokedAt);
+  const executionHosts = snapshot?.hosts.filter(entry => !entry.revokedAt && !entry.isolatedReviewSnapshot) || [];
+  const host = executionHosts.find(entry => entry._id === hostId) ||
+    executionHosts.find(entry => entry.online) || executionHosts[0];
   const selectedEffort = host?.efforts?.includes(effort) ? effort : "";
   const selectedJob = job?._id === jobId ? job : null;
   const hostOnline = !relayError && host?.online;
@@ -426,13 +433,32 @@ export default function Operations() {
   const mediaKey = draftKey === null || !mediaHostId ? null : JSON.stringify([draftKey, mediaHostId]);
   const mediaAttachments = mediaDrafts[mediaKey] || [];
   const mediaUploading = mediaKey !== null && uploadingDraft === mediaKey;
-  const directDevelopment = !jobId && !recipientId && !assignment && !scheduling && workspace === "development";
+  const canReadPreferences = !!snapshot && !accessDenied;
+  useEffect(() => {
+    if (!canReadPreferences) return;
+    let active = true;
+    api("/owner-preferences").then(value => {
+      if (active) setOwnerPreferences(value);
+    }).catch(failure => {
+      if (!active) return;
+      if (failure.status === 404) setOwnerPreferences(false);
+      else setPermissionError("Account execution preferences are unavailable.");
+    });
+    return () => { active = false; };
+  }, [canReadPreferences, preferencesVersion]);
+  const ordinaryConversation = !jobId && !assignment && !scheduling;
   const permissionContext = JSON.stringify([workspace, assignment?.id, recipientId, scheduling]);
+  const savedDirectProfile = ownerPreferences === false ? directPermission
+    : ownerPreferences?.directDevelopmentProfile || "read-only";
   const profile = profileChoice?.context === permissionContext ? profileChoice.value
-    : directDevelopment ? directPermission : "read-only";
-  const selectedProfile = !recipientId && (profile === workspace || profile === "full-access") && host?.profiles?.includes(profile)
+    : ordinaryConversation && !recipientId && (workspace === "development" || savedDirectProfile === "scoped")
+      ? savedDirectProfile : "read-only";
+  const selectableEditing = ordinaryConversation ? ["development", "workshop", "scoped", "full-access"] :
+    [workspace, ...(!scheduling ? ["scoped"] : []), "full-access"];
+  const selectedProfile = !recipientId && selectableEditing.includes(profile) && host?.profiles?.includes(profile)
     ? profile : "read-only";
-  const canReturnMedia = !jobId && host?.mediaOutput && workspace === "workshop" && selectedProfile === "workshop";
+  const startingWorkspace = ordinaryConversation && ["development", "workshop"].includes(selectedProfile) ? selectedProfile : workspace;
+  const canReturnMedia = !jobId && host?.mediaOutput && startingWorkspace === "workshop" && selectedProfile === "workshop";
   const outputScopeKey = JSON.stringify([host?._id, assignment?.id, employeeId, params.toString()]);
   const outputMedia = canReturnMedia && outputScope === outputScopeKey;
   const approval = selectedJob?.approval;
@@ -502,6 +528,27 @@ export default function Operations() {
     setAttachment({});
   }
 
+  async function savePermission(value) {
+    setPermissionError("");
+    try {
+      if (ownerPreferences === false) {
+        window.localStorage.setItem(directPermissionKey, value);
+        setDirectPermission(value);
+      } else if (ownerPreferences) {
+        setPreferencePending(true);
+        setOwnerPreferences(await api("/owner-preferences", { method: "PATCH", body: {
+          revision: ownerPreferences?.revision, directDevelopmentProfile: value,
+        } }));
+      }
+      setProfileChoice(null);
+    } catch (failure) {
+      setPermissionError(failure.message || "Could not save the permission preference.");
+      if (failure.status === 409) setPreferencesVersion(version => version + 1);
+    } finally {
+      setPreferencePending(false);
+    }
+  }
+
   async function action(callback) {
     setBusy(true);
     setError("");
@@ -512,12 +559,12 @@ export default function Operations() {
   function submit(parent, queue = false, scheduledAt) {
     if ((scheduledAt !== undefined && !scheduling) || editingLocked || mediaUploading || !validPrompt || (parent && assignment) || (!parent && !validAssignment) ||
         (scheduledAt !== undefined && (!validRepeat || mediaAttachments.length)) || prompt.length > (parent ? continuationLimit : startLimit) ||
-        (!parent && !recipientId && profile === "full-access" && selectedProfile !== profile)) return;
+        (!parent && !recipientId && profile !== selectedProfile)) return;
     return action(async () => {
       const request = {
         prompt, model: "gpt-6.2-sol", effort: parent?.effort || selectedEffort, queue,
         profile: parent ? parent.profile || "read-only" : selectedProfile,
-        workspace: parent?.workspace || recipient?.workspace || workspace, hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
+        workspace: parent?.workspace || recipient?.workspace || startingWorkspace, hostId: parent?.hostId || host?._id, parentId: parent?._id, scheduledAt,
         ...(mediaAttachments.length ? { attachmentIds: mediaAttachments.map((item) => item._id) } : {}),
         ...(recipientId ? { recipientId } : {}),
         ...(!parent && assignment ? { objectiveId: assignment.id, employeeId } : {}),
@@ -576,11 +623,11 @@ export default function Operations() {
   const commonDisabled = !workerEnabled || editingLocked || mediaUploading || !validPrompt || !!relayError;
   const canStart = !commonDisabled && hostOnline && selectedEffort && validAssignment && prompt.length <= startLimit &&
     (recipientId ? recipient && host?.employeeConversations && host.profiles?.includes("read-only") :
-      profile !== "full-access" || selectedProfile === profile);
-  const canContinue = !commonDisabled && canAct && selectedJob?.codexThreadId &&
+      selectedProfile === profile);
+  const canContinue = !selectedJob?.blueprintTyped && !commonDisabled && canAct && selectedJob?.codexThreadId &&
     !running.includes(selectedJob.status) && prompt.length <= continuationLimit;
-  const canQueue = !commonDisabled && ["queued", "running"].includes(selectedJob?.status) && prompt.length <= continuationLimit;
-  const canSteer = !editingLocked && canAct && selectedJob?.activeTurn && selectedJob.status === "running" &&
+  const canQueue = !selectedJob?.blueprintTyped && !commonDisabled && ["queued", "running"].includes(selectedJob?.status) && prompt.length <= continuationLimit;
+  const canSteer = !selectedJob?.blueprintTyped && !editingLocked && canAct && selectedJob?.activeTurn && selectedJob.status === "running" &&
     !["pending", "sending"].includes(selectedJob.instruction?.state) && !mediaUploading && !mediaAttachments.length &&
     validPrompt && prompt.length <= continuationLimit;
   const send = !jobId ? { label: assignment ? "Start assignment" : recipient ? "Message " + recipient.name : "Send message", enabled: canStart, run: () => submit(null) }
@@ -626,19 +673,19 @@ export default function Operations() {
     <div className="operations__selectors">
       <label>Host<select value={host?._id || ""} onChange={(event) => { setOutputScope(null); setHostId(event.target.value); }}>
         <option value="" disabled>Select host</option>
-        {snapshot.hosts.filter((entry) => !entry.revokedAt).map((entry) => <option key={entry._id} value={entry._id}>{entry.label}</option>)}
+        {executionHosts.map((entry) => <option key={entry._id} value={entry._id}>{entry.label}</option>)}
       </select></label>
-      {!recipientId && <><label>Workspace<select value={workspace} onChange={(event) => { setOutputScope(null); setWorkspace(event.target.value); }}>
+      {!recipientId && <>{!ordinaryConversation && <label>Starting workspace<select value={workspace} onChange={(event) => { setOutputScope(null); setWorkspace(event.target.value); }}>
         {Object.entries(workspaceNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
-      </select></label>
-      <label>Permissions<select value={profile === "full-access" ? profile : selectedProfile} onChange={(event) => {
+      </select></label>}
+      <label>Permissions<select value={profile} onChange={(event) => {
         setOutputScope(null);
         setProfileChoice({ context: permissionContext, value: event.target.value });
       }}>
         <option value="read-only">{profileNames["read-only"]}</option>
-        {host?.profiles?.includes(workspace) && <option value={workspace}>{profileNames[workspace]}</option>}
-        {host?.profiles?.includes("full-access") && <option value="full-access">Full Access</option>}
-        {profile === "full-access" && selectedProfile !== profile && <option value="full-access" disabled>Full Access unavailable</option>}
+        {selectableEditing.filter(value => host?.profiles?.includes(value)).map(value =>
+          <option value={value} key={value}>{profileNames[value]}</option>)}
+        {profile !== "read-only" && selectedProfile !== profile && <option value={profile} disabled>{profileNames[profile]} unavailable</option>}
       </select></label>
       </>}
       <label>Model<select defaultValue="gpt-6.2-sol"><option value="gpt-6.2-sol">GPT-6.2 Sol</option></select></label>
@@ -647,6 +694,16 @@ export default function Operations() {
         {host?.efforts?.map((entry) => <option key={entry}>{entry}</option>)}
       </select></label>
     </div>
+    {ordinaryConversation && !recipientId && !["development", "workshop"].includes(selectedProfile) && <details>
+      <summary>Starting folder</summary>
+      <label>Starting workspace <select value={workspace} onChange={event => {
+        setOutputScope(null);
+        setWorkspace(event.target.value);
+        setProfileChoice({ context: JSON.stringify([event.target.value, assignment?.id, recipientId, scheduling]), value: profile });
+      }}>
+        {Object.entries(workspaceNames).map(([key, label]) => <option key={key} value={key}>{label}</option>)}
+      </select></label>
+    </details>}
     {canReturnMedia && <label className="operations__check">
       <input type="checkbox" checked={outputMedia} onChange={(event) => setOutputScope(event.target.checked ? outputScopeKey : null)} />
       Allow this turn to return new images or videos
@@ -658,8 +715,8 @@ export default function Operations() {
     </details>}
     {!jobId && <p role="status" className={profile === "full-access" ? "operations__access-warning" : undefined}>
       <strong>Effective permissions</strong>{" "}
-      {profile === "full-access" && selectedProfile !== profile
-        ? "Full Access unavailable on the selected host. Select an available profile."
+      {profile !== "read-only" && selectedProfile !== profile
+        ? "The selected relay has not verified this profile."
         : profileNames[selectedProfile]}
     </p>}
     <div className="operations__editor">
@@ -802,14 +859,14 @@ export default function Operations() {
   return <OperationsShell page={page} navigate={setPage} keyboardOpen={keyboardOpen} paused={snapshot.dispatch?.paused} health={{
     online: !!hostOnline,
     label: relayError ? "API unavailable" : hostOnline ? "Relay online" : "Relay offline",
-  }} occupancy={occupancy} pendingApprovals={pendingApprovalCount} openApprovals={() => setShowApprovalInbox(true)}
+  }} occupancy={occupancy} pendingApprovals={pendingApprovalCount} openApprovals={() => setPage("Approvals")}
     subscription={<SubscriptionLink observation={snapshot.hosts.find(entry => entry.online && entry.usage)?.usage ||
     snapshot.hosts.find(entry => !entry.revokedAt && entry.usage)?.usage} />}>
       <Suspense fallback={<p role="status">Loading workspace…</p>}>
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
         openOffice={() => setPage("Office")} openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
-        openGovernance={() => setShowApprovalInbox(true)} openJob={openJob} />}
+        openGovernance={() => setPage("Approvals")} openJob={openJob} />}
       {page === "Workflow" && <Workflow key={linkedRecord?.id || "studio"} api={api} scope={linkedRecord?.group} recordId={linkedRecord?.id}
         openRecord={openSource} openJob={openJob} />}
       {page === "Projects" && <Projects api={api} openRecord={openSource} openJob={openJob} initialId={linkedRecord?.group === "project" ? linkedRecord.id : null}
@@ -832,6 +889,7 @@ export default function Operations() {
         setParams(next);
       }} />}
       {page === "Quality" && <Quality />}
+      {page === "Communications" && <Communications api={api} />}
       {page === "Activity" && <Activity api={api} openSource={openSource} />}
       {page === "Knowledge" && <Knowledge key={linkedRecord?.id ?? "library"} api={api} initialId={linkedRecord?.id} />}
       {page === "Art Department" && <ArtDepartment api={api} openSource={openSource} />}
@@ -889,20 +947,13 @@ export default function Operations() {
       </>}
       {page === "Settings" && <section className="operations__panel">
         <h2>Relay and execution</h2>
-        <label>Default permissions for direct development on this browser
-          <select value={directPermission} onChange={event => {
-            const value = event.target.value;
-            try {
-              window.localStorage.setItem(directPermissionKey, value);
-              setDirectPermission(value);
-              setProfileChoice(null);
-              setPermissionError("");
-            } catch {
-              setPermissionError("This browser could not save the permission preference.");
-            }
-          }}>
+        <label>{ownerPreferences === false ? "Default permissions for direct development on this browser"
+          : "Account default permissions for direct development"}
+          <select value={savedDirectProfile} disabled={ownerPreferences === null || preferencePending}
+            onChange={event => savePermission(event.target.value)}>
             <option value="read-only">Read-only inspection</option>
             <option value="full-access">Full Access</option>
+            <option value="scoped">Scoped editing across drives</option>
           </select>
         </label>
         {permissionError && <p role="alert">{permissionError}</p>}
@@ -912,21 +963,53 @@ export default function Operations() {
           setRefreshVersion((value) => value + 1);
         })}>{snapshot.dispatch.paused ? "Resume future dispatch" : "Pause future dispatch"}</button></p>}
         <p>Pausing holds new and scheduled work. Claimed jobs can finish.</p>
-        {governance && <button type="button" onClick={() => setShowApprovalInbox(true)}>Operation policies and approvals</button>}
+        {governance && <button type="button" onClick={() => setShowApprovalInbox(true)}>Operation policies</button>}
         {error && <p role="alert">{error}</p>}
         {notice && <p role="status">{notice}</p>}
         {devices}
         <OrganizationSetup api={api} />
-        <Infrastructure request={api} />
+      </section>}
+      {page === "Infrastructure" && <Infrastructure request={api} />}
+      {page === "Approvals" && <section className="operations__panel operations__approval-inbox" aria-label="Approvals">
+        <h2>Approvals</h2>
+        <ExecutionApprovals api={api} openJob={(id) => openJob(id, "Execution")} />
+        <h3>Brokered operations</h3>
+        {governance ? <>
+        {governance.requests.length === 0 && <p>No operation requests.</p>}
+        {governance.requests.map((request) => <details key={request._id} open={request.state === "pending" || undefined}>
+          <summary>{request.intent.tool || request.intent.operation} · {request.intent.repository || request.intent.workspace} · {request.state}</summary>
+          <dl>
+            <dt>Worker and session</dt><dd>{request.worker.label} · {request.sessionId}</dd>
+            {request.intent.operation === "mcpTool" ? <>
+              <dt>Workspace and role</dt><dd>{workspaceNames[request.intent.workspace]} · {request.intent.role}</dd>
+              <dt>Tool arguments</dt><dd><pre>{JSON.stringify(request.intent.arguments, null, 2)}</pre></dd>
+            </> : <>
+            <dt>Branch and target</dt><dd>{request.intent.branch} {request.intent.target && `· ${request.intent.target}`}</dd>
+            <dt>Reviewed commits</dt><dd><code>{request.intent.headSha}</code>{request.intent.baseSha && <> · <code>{request.intent.baseSha}</code></>}</dd>
+            <dt>Submitted changes</dt><dd><pre>{request.intent.changes}</pre></dd>
+            {request.intent.diff && <><dt>Submitted diff</dt><dd><pre>{request.intent.diff}</pre></dd></>}
+            <dt>Submitted test results</dt><dd><pre>{request.intent.tests}</pre></dd>
+            </>}
+            <dt>Consequences</dt><dd>{request.consequences}</dd>
+            <dt>Expires</dt><dd>{new Date(request.expiresAt).toLocaleString()}</dd>
+          </dl>
+          {request.state === "pending" && ["approve", "deny"].map((choice) => <button key={choice} type="button"
+            disabled={busy || (choice === "approve" && !(request.intent.operation === "mcpTool" ? governance.toolsEnabled : governance.githubEnabled))} onClick={() => action(() =>
+              post(`/jobs/${request.jobId}/approval`, { id: request._id, choice, fingerprint: request.fingerprint }))}>
+            {choice === "approve" ? "Approve once" : "Deny"}
+          </button>)}
+        </details>)}
+        </> : <p>Operation requests are unavailable.</p>}
+        {error && <p role="alert">{error}</p>}
       </section>}
       {page === "Help" && <OperationsHelp navigate={setPage} />}
       </Suspense>
       {showApprovalInbox && <dialog className="operations__dialog" aria-labelledby="operations-approval-title"
         ref={(node) => { if (node && !node.open) node.showModal(); }}
         onClose={() => setShowApprovalInbox(false)}>
-        <form method="dialog"><button>Close approvals</button></form>
+        <form method="dialog"><button>Close policies</button></form>
       {governance && <section className="operations__approval-inbox">
-        <h2 id="operations-approval-title">Operation approvals and policy</h2>
+        <h2 id="operations-approval-title">Operation policies</h2>
         {!governance.githubEnabled && <p>Use an editing session for instructed Git operations. Review any command approval in that session.</p>}
         {!governance.toolsEnabled && <p>Editing sessions can use installed app commands and the worker’s selected MCP inspection tools.</p>}
         <details>
@@ -964,30 +1047,6 @@ export default function Operations() {
             </label>;
           }))}
         </details>
-        {governance.requests.length === 0 && <p>No operation requests.</p>}
-        {governance.requests.map((request) => <details key={request._id} open={request.state === "pending" || undefined}>
-          <summary>{request.intent.tool || request.intent.operation} · {request.intent.repository || request.intent.workspace} · {request.state}</summary>
-          <dl>
-            <dt>Worker and session</dt><dd>{request.worker.label} · {request.sessionId}</dd>
-            {request.intent.operation === "mcpTool" ? <>
-              <dt>Workspace and role</dt><dd>{workspaceNames[request.intent.workspace]} · {request.intent.role}</dd>
-              <dt>Tool arguments</dt><dd><pre>{JSON.stringify(request.intent.arguments, null, 2)}</pre></dd>
-            </> : <>
-            <dt>Branch and target</dt><dd>{request.intent.branch} {request.intent.target && `· ${request.intent.target}`}</dd>
-            <dt>Reviewed commits</dt><dd><code>{request.intent.headSha}</code>{request.intent.baseSha && <> · <code>{request.intent.baseSha}</code></>}</dd>
-            <dt>Submitted changes</dt><dd><pre>{request.intent.changes}</pre></dd>
-            {request.intent.diff && <><dt>Submitted diff</dt><dd><pre>{request.intent.diff}</pre></dd></>}
-            <dt>Submitted test results</dt><dd><pre>{request.intent.tests}</pre></dd>
-            </>}
-            <dt>Consequences</dt><dd>{request.consequences}</dd>
-            <dt>Expires</dt><dd>{new Date(request.expiresAt).toLocaleString()}</dd>
-          </dl>
-          {request.state === "pending" && ["approve", "deny"].map((choice) => <button key={choice} type="button"
-            disabled={busy || (choice === "approve" && !(request.intent.operation === "mcpTool" ? governance.toolsEnabled : governance.githubEnabled))} onClick={() => action(() =>
-              post(`/jobs/${request.jobId}/approval`, { id: request._id, choice, fingerprint: request.fingerprint }))}>
-            {choice === "approve" ? "Approve once" : "Deny"}
-          </button>)}
-        </details>)}
       </section>}
         {error && <p role="alert">{error}</p>}
       </dialog>}
@@ -1000,7 +1059,7 @@ export default function Operations() {
         <button type="button" aria-label="New conversation" onClick={() => { setAssignment(null); selectJob(null); }}>
           New<span className="operations__desktop-label"> conversation</span>
         </button>
-        {governance && <button type="button" onClick={() => setShowApprovalInbox(true)}>
+        {governance && <button type="button" onClick={() => setPage("Approvals")}>
           Approvals{pendingApprovalCount > 0 && ` (${pendingApprovalCount})`}
         </button>}
       </div>

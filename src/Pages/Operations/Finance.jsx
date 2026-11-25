@@ -25,6 +25,7 @@ export default function Finance({ request, view, onView, hosts }) {
   const [submission, setSubmission] = useState(null);
   const [editing, setEditing] = useState(null);
   const [formOpen, setFormOpen] = useState(false);
+  const [trendsOpen, setTrendsOpen] = useState(false);
   const mutation = useRef(false);
   const description = useRef(null);
 
@@ -159,6 +160,10 @@ export default function Finance({ request, view, onView, hosts }) {
           <dl className="operations__execution-summary">{Object.entries(breakdown).map(([name, amount]) =>
             <div key={name}><dt>{name}</dt><dd>{money(amount, currency)}</dd></div>)}</dl>
         </details>)}
+        <details open={trendsOpen} onToggle={event => setTrendsOpen(event.currentTarget.open)}>
+          <summary>Six-month expense trend</summary>
+          {trendsOpen && <ExpenseTrend key={`${month}/${refresh}`} request={request} month={month} />}
+        </details>
         {!!report.projectBudgets?.length && <details>
           <summary>Project budgets ({report.projectBudgets.length})</summary>
           <ul className="operations-finance__entries">
@@ -193,6 +198,34 @@ export default function Finance({ request, view, onView, hosts }) {
       </>}
     </section>
   );
+}
+
+function ExpenseTrend({ request, month }) {
+  const [months, setMonths] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let current = true;
+    request(`/finance/trends?month=${encodeURIComponent(month)}`).then(result => {
+      if (current) setMonths(result.months);
+    }).catch(failure => { if (current) setError(failure.message); });
+    return () => { current = false; };
+  }, [request, month]);
+
+  if (error) return <p role="alert">{error}</p>;
+  if (!months) return <p role="status">Loading expense trend…</p>;
+  const currencies = [...new Set(months.flatMap(item => Object.keys(item.expenses)))].sort();
+  if (!currencies.length) return <p>No expenses recorded in this period.</p>;
+
+  return <div className="operations-finance__history" role="region" aria-label="Monthly expenses by currency" tabIndex={0}>
+    <table>
+      <thead><tr><th scope="col">Month</th>{currencies.map(currency => <th key={currency} scope="col">{currency}</th>)}</tr></thead>
+      <tbody>{months.map(({ month, expenses }) => <tr key={month}>
+        <th scope="row"><time dateTime={month}>{month}</time>{month === dateToday().slice(0, 7) && <small>Month to date</small>}</th>
+        {currencies.map(currency => <td key={currency}>{money(expenses[currency], currency)}</td>)}
+      </tr>)}</tbody>
+    </table>
+  </div>;
 }
 
 function ExpenseEntries({ entries, projects, actions }) {

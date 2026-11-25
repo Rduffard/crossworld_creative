@@ -54,6 +54,8 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
     </nav>
     <div className="operations__mobile-nav">
       <span>{page}{paused && <small>Dispatch paused</small>}</span>
+      {page !== "Approvals" && <button type="button" className="operations__compact-approvals"
+        onClick={openApprovals}>{pendingApprovals > 0 ? pendingApprovals + " pending approvals" : "Approvals"}</button>}
       <button type="button" aria-haspopup="dialog" onClick={() => workspaces.current?.showModal()}>Workspaces</button>
     </div>
     <dialog ref={workspaces} className="operations__dialog operations__workspace-menu" aria-labelledby="operations-workspace-menu-title">

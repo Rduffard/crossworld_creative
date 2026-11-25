@@ -57,6 +57,43 @@ function EmployeeForm({ employee, departments, identityEnabled, save, pending })
   </form>;
 }
 
+function ReportingForm({ employee, employees, pending, save }) {
+  const current = employee.supervisorId || "";
+  const byId = new Map(employees.map(entry => [entry._id, entry]));
+  const valid = employees.filter(entry => {
+    if (["first-mate", "air"].includes(employee.role)) return false;
+    const visited = new Set([employee._id]);
+    for (let id = entry._id; id; id = byId.get(id).supervisorId) {
+      const supervisor = byId.get(id);
+      if (!supervisor || supervisor.status === "retired" || visited.has(id)) return false;
+      visited.add(id);
+    }
+    return true;
+  });
+  const name = id => byId.get(id)?.name || (id ? "Former employee" : "Owner");
+  return <details>
+    <summary>Reporting relationship</summary>
+    <form onSubmit={event => {
+      event.preventDefault();
+      const next = new FormData(event.currentTarget).get("supervisor");
+      if (next === current || !window.confirm("Change who supervises " + employee.name + "?")) return;
+      save("/employees/" + employee._id + "/supervisor", { supervisorId: next || null, revision: employee.revision }, "PATCH");
+    }}>
+      <label>Reports to <select name="supervisor" defaultValue={current}>
+        <option value="">Owner</option>
+        {current && !valid.some(entry => entry._id === current) && <option value={current}>{name(current)}</option>}
+        {valid.map(entry => <option key={entry._id} value={entry._id}>{entry.name}</option>)}
+      </select></label>
+      <button type="submit" disabled={pending}>Change supervisor</button>
+    </form>
+    {employee.reportingChanges?.length > 0 && <ul className="operations__feed">
+      {[...employee.reportingChanges].reverse().map((entry, index) => <li key={entry.at + "/" + index}>
+        <span>{name(entry.from)} to {name(entry.to)}</span><small>{new Date(entry.at).toLocaleString()}</small>
+      </li>)}
+    </ul>}
+  </details>;
+}
+
 export default function Workforce({ api, openJob, openRecord, openWorkflow, messageEmployee, initialId }) {
   const [directory, setDirectory] = useState(null);
   const [editor, setEditor] = useState(null);
@@ -135,8 +172,17 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
         </li>)}</ul>
       </details>}
       {employee?.status === "available" && <button type="button" onClick={() => messageEmployee(employee)}>Message employee</button>}
-      {(employee || selection === "employee") && <EmployeeForm key={employee ? employee._id + "/" + employee.revision : "new"}
-        employee={employee} departments={departments} identityEnabled={directory.capabilities?.employeeIdentity === true} save={save} pending={pending} />}
+      {employee && <p>{employee.responsibilities}</p>}
+      {selection === "employee" && <EmployeeForm key="new" departments={departments}
+        identityEnabled={directory.capabilities?.employeeIdentity === true} save={save} pending={pending} />}
+      {employee && <details key={employee._id}>
+        <summary>Edit employee profile and reporting</summary>
+        <EmployeeForm key={employee.revision} employee={employee} departments={departments}
+          identityEnabled={directory.capabilities?.employeeIdentity === true} save={save} pending={pending} />
+        {directory.capabilities?.reportingChanges === true && employee.status !== "retired" &&
+          !["first-mate", "air"].includes(employee.role) && <ReportingForm key={"reporting-" + employee.revision}
+            employee={employee} employees={employees} pending={pending} save={save} />}
+      </details>}
       {employee && <section>
         <button type="button" onClick={() => openWorkflow(employee._id)}>View employee workflow</button>
         {projects.length > 0 && <>

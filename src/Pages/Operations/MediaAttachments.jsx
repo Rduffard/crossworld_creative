@@ -191,7 +191,7 @@ export function MediaComposer({ hostId, api, attachments, onChange, onBusy, disa
   </div>;
 }
 
-export function MediaPreview({ id, name, inspect = false }) {
+export function MediaPreview({ id, name, mime, inspect = false }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -209,8 +209,9 @@ export function MediaPreview({ id, name, inspect = false }) {
       const response = await requestPrivateMedia(`/${id}/content`, { signal: controller.signal });
       const data = await response.blob();
       controller.signal.throwIfAborted();
-      if (!formats.includes(data.type)) throw new Error("This file cannot be previewed.");
-      setPreview({ url: URL.createObjectURL(data), image: data.type.startsWith("image/") });
+      const model = data.type === "model/gltf-binary";
+      if (!model && !formats.includes(data.type)) throw new Error("This file cannot be previewed.");
+      setPreview({ url: URL.createObjectURL(data), image: data.type.startsWith("image/"), model });
     } catch (failure) {
       if (!controller.signal.aborted) setError(failure.message);
     } finally { request.current = null; setLoading(false); }
@@ -218,15 +219,17 @@ export function MediaPreview({ id, name, inspect = false }) {
 
   return <figure className="operations-media__preview">
     {preview?.image && <img src={preview.url} alt={name || "Uploaded attachment"} />}
-    {preview && !preview.image && <video controls playsInline src={preview.url} aria-label={name || "Uploaded video"} />}
+    {preview && !preview.image && !preview.model && <video controls playsInline src={preview.url} aria-label={name || "Uploaded video"} />}
     <figcaption>
-      {!preview && !loading && <button type="button" onClick={open}>{name ? `Preview ${name}` : "Preview attached image"}</button>}
+      {!preview && !loading && <button type="button" onClick={open}>
+        {mime === "model/gltf-binary" ? "Prepare GLB download" : name ? `Preview ${name}` : "Preview attached image"}
+      </button>}
       {loading && <button type="button" onClick={() => request.current?.abort()}>Cancel preview loading</button>}
       {preview && <>
         {name && <span>{name}</span>}
-        {inspect && <a href={preview.url} target="_blank" rel="noopener noreferrer">Open original</a>}
-        {inspect && <a href={preview.url} download={name || "artifact"}>Download</a>}
-        <button type="button" onClick={() => setPreview(null)}>Close preview</button>
+        {inspect && !preview.model && <a href={preview.url} target="_blank" rel="noopener noreferrer">Open original</a>}
+        {(inspect || preview.model) && <a href={preview.url} download={name || "artifact"}>Download</a>}
+        <button type="button" onClick={() => setPreview(null)}>{preview.model ? "Clear download" : "Close preview"}</button>
       </>}
       {error && <p role="alert">{error}</p>}
     </figcaption>

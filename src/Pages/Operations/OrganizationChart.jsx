@@ -4,6 +4,7 @@ import { employeeActivity, roleLabel } from "./crewActivity";
 
 export default function OrganizationChart({ departments, employees, observedRuns, projectAssignments, selection, select }) {
   const [query, setQuery] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [focus, setFocus] = useState(null);
   const [zoom, setZoom] = useState(100);
   const byId = new Map(employees.map(employee => [employee._id, employee]));
@@ -24,6 +25,16 @@ export default function OrganizationChart({ departments, employees, observedRuns
     if (!reports.has(supervisor)) reports.set(supervisor, []);
     reports.get(supervisor).push(employee);
   }
+  const inDepartment = employee => !departmentId || employee.departmentId === departmentId;
+  const visible = new Set();
+  if (departmentId) {
+    for (const employee of employees.filter(inDepartment)) {
+      for (let entry = employee; entry && !visible.has(entry._id); entry = byId.get(entry.supervisorId)) {
+        visible.add(entry._id);
+      }
+    }
+  }
+  const showBranch = employee => !departmentId || visible.has(employee._id);
 
   function person(employee) {
     const state = employeeActivity(employee, observedRuns, projectAssignments).state;
@@ -35,7 +46,7 @@ export default function OrganizationChart({ departments, employees, observedRuns
   }
 
   function branch(employee) {
-    const children = reports.get(employee._id) || [];
+    const children = (reports.get(employee._id) || []).filter(showBranch);
     return <li key={employee._id}>{person(employee)}
       {children.length > 0 && <details open>
         <summary>{children.length} direct {children.length === 1 ? "report" : "reports"}</summary>
@@ -45,12 +56,25 @@ export default function OrganizationChart({ departments, employees, observedRuns
   }
 
   const term = query.trim().toLocaleLowerCase();
-  const matches = employees.filter(employee => [employee.name, roleLabel(employee.role)].some(value => value?.toLocaleLowerCase().includes(term)));
+  const matches = employees.filter(employee => inDepartment(employee)
+    && [employee.name, roleLabel(employee.role)].some(value => value?.toLocaleLowerCase().includes(term)));
   return <>
     <label>Find an employee <input type="search" value={query} onChange={event => setQuery(event.target.value)} /></label>
     <div className="operations__modes">
-      <button type="button" disabled={!byId.has(selection)} onClick={() => { setFocus(selection); setQuery(""); }}>Focus selected</button>
-      <button type="button" disabled={!focus} onClick={() => setFocus(null)}>Whole organization</button>
+      <button type="button" disabled={!byId.has(selection) || !showBranch(byId.get(selection))}
+        onClick={() => { setFocus(selection); setQuery(""); }}>Focus selected</button>
+      <button type="button" disabled={!focus && !departmentId} onClick={() => {
+        setFocus(null);
+        setDepartmentId("");
+        setQuery("");
+      }}>Whole organization</button>
+      <label>Department <select aria-label="Filter by department" value={departmentId} onChange={event => {
+        setDepartmentId(event.target.value);
+        setFocus(null);
+      }}>
+        <option value="">All departments</option>
+        {departments.map(department => <option value={department._id} key={department._id}>{department.name}</option>)}
+      </select></label>
       <label>Chart scale <select value={zoom} onChange={event => setZoom(Number(event.target.value))}>
         <option value={100}>100%</option><option value={125}>125%</option><option value={150}>150%</option>
       </select></label>
@@ -62,9 +86,10 @@ export default function OrganizationChart({ departments, employees, observedRuns
           <ul>{matches.map(employee => <li key={employee._id}>{person(employee)}</li>)}</ul>
         </> : focus && byId.has(focus) ? <ul>{branch(byId.get(focus))}</ul> : <>
           <h3>Owner</h3>
-          <ul>{(reports.get(null) || []).map(branch)}</ul>
-          {!!unattached.length && <><h3>Reporting relationship unavailable</h3>
-            <ul>{unattached.map(employee => <li key={employee._id}>{person(employee)}</li>)}</ul></>}
+          <ul>{(reports.get(null) || []).filter(showBranch).map(branch)}</ul>
+          {departmentId && visible.size === 0 && <p>No employees in this department.</p>}
+          {unattached.some(inDepartment) && <><h3>Reporting relationship unavailable</h3>
+            <ul>{unattached.filter(inDepartment).map(employee => <li key={employee._id}>{person(employee)}</li>)}</ul></>}
         </>}
       </div>
     </div>

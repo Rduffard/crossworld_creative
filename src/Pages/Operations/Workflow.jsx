@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import Blueprints from "./Blueprints";
 
 const scopes = { "workflow-job": "jobId", "workflow-project": "projectId", "workflow-objective": "objectiveId", "workflow-employee": "employeeId" };
 const active = ["queued", "waiting", "running", "cancelling"];
@@ -19,12 +20,16 @@ function WorkflowRun({ node, childrenByParent, openRecord, openJob, observedAt, 
         {Number.isFinite(duration) && " · " + Math.floor(duration / 60) + "m " + duration % 60 + "s"}
       </p>}
       {node.error && <p>{node.error}</p>}
+      {node.resumeDisposition === "parent-unavailable" && <p>Automatic continuation requires a completed parent turn.</p>}
+      {node.resumeDisposition === "session-changed" && <p>The parent session changed before continuation.</p>}
       <div className="operations__modes">
         <button type="button" onClick={() => openJob(node._id, "Conversation")}>Open execution</button>
         {node.employeeId && <button type="button" onClick={() => openRecord("employee", node.employeeId)}>Employee</button>}
         {node.employee?.supervisorId && <button type="button" onClick={() => openRecord("employee", node.employee.supervisorId)}>Supervisor</button>}
         {node.objectiveId && <button type="button" onClick={() => openRecord("objective", node.objectiveId)}>Objective</button>}
         {node.hasReport && <button type="button" onClick={() => openRecord("report", node._id)}>Final report</button>}
+        {node.resumeDisposition && !["parent-unavailable", "session-changed"].includes(node.resumeDisposition) &&
+          <button type="button" onClick={() => openJob(node.resumeDisposition, "Conversation")}>Open parent continuation</button>}
       </div>
       {related.length > 0 && <ul className="operations__workflow-chain">{related.map(child => <WorkflowRun key={child._id} node={child}
         observedAt={observedAt} ancestry={[...ancestry, node._id]} childrenByParent={childrenByParent} openRecord={openRecord} openJob={openJob} />)}</ul>}
@@ -70,6 +75,7 @@ export default function Workflow({ api, scope, recordId, openRecord, openJob }) 
     }
   }
   return <section className="operations__panel">
+    {!recordId && <Blueprints api={api} openJob={openJob} />}
     {problem && <p role="alert">{problem}</p>}
     {data.limited && <p>Showing the latest 40 assignments and their linked runs.</p>}
     {data.nodes.length === 0 && <p>No assignments match this view.</p>}
