@@ -22,7 +22,8 @@ export function conversationTimeline(turns) {
     add(-1, "owner", { at: turn.createdAt, text: turn.prompt, media: turn.mediaInputs });
     const steering = new Map();
     for (const instruction of turn.steeringHistory || []) {
-      const offset = Math.min(instruction.eventOffset, turn.events.length);
+      const offset = instruction.eventOffset;
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset > turn.events.length) continue;
       if (!steering.has(offset)) steering.set(offset, []);
       steering.get(offset).push(instruction);
     }
@@ -41,9 +42,11 @@ export function conversationTimeline(turns) {
       add(index, type, { ...event, text });
     });
     addSteering(turn.events.length);
-    if (turn.mediaOutputs?.length) add(turn.events.length, "artifacts", { media: turn.mediaOutputs, at: turn.finishedAt });
-    if (terminal.has(turn.status) && !(turn.error && items.some(item => item.type === "notice" && item.text === turn.error))) {
-      add(turn.events.length + 1, "notice", { label: "Execution " + turn.status, text: turn.error, at: turn.finishedAt });
+    if (turn.events.length >= (turn.eventCount ?? turn.events.length)) {
+      if (turn.mediaOutputs?.length) add(turn.events.length, "artifacts", { media: turn.mediaOutputs, at: turn.finishedAt });
+      if (terminal.has(turn.status) && !(turn.error && items.some(item => item.type === "notice" && item.text === turn.error))) {
+        add(turn.events.length + 1, "notice", { label: "Execution " + turn.status, text: turn.error, at: turn.finishedAt });
+      }
     }
     return items;
   }).sort((a, b) => a.chronology - b.chronology || a.turnIndex - b.turnIndex || a.offset - b.offset);
