@@ -66,6 +66,7 @@ export default function JobTranscript({ api, job, host, copy, jobId, mode, selec
     ["Requested reasoning", job.effort || "Unknown"], ["Confirmed reasoning", "Unknown"],
     ["Permission profile", profileNames[job.profile || "read-only"]],
     ...(permissions ? [
+      ["Requested profile", profileNames[permissions.requestedProfile]],
       ["Effective profile", profileNames[permissions.effectiveProfile]],
       ["Mission", permissions.missionId],
       ["Authorized capabilities", permissions.authorizedCapabilities.join(", ")],

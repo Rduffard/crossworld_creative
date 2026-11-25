@@ -68,10 +68,10 @@ export default function Missions({ api, hosts, openJob }) {
     mutate(async () => {
       const plan = custom === null ? steps : JSON.parse(custom);
       const executionPlan = Array.isArray(plan) ? { steps: plan } : {
-        steps: plan?.steps, authorization: plan?.authorization,
+        steps: plan?.steps, authorization: plan?.authorization, sourceConversationId: plan?.sourceConversationId,
       };
       const body = {
-        title: data.get("title"), hostId: host._id, workspace: "development",
+        title: data.get("title"), hostId: host._id, workspace: plan?.workspace ?? "development",
         effort: data.get("effort"), endsAt: new Date(end).toISOString(),
         ...executionPlan, paused: data.has("paused"),
       };
@@ -131,6 +131,9 @@ export default function Missions({ api, hosts, openJob }) {
           }}>Terminate mission</button>}
         </div>
         <details><summary>Plan and execution history</summary>
+          {item.sourceConversationId && <button type="button" onClick={() => inspect(item.sourceConversationId)}>
+            Inspect source conversation
+          </button>}
           {item.authorization && <ul aria-label="Authorized execution routes">
             {item.authorization.routes.map(route => <li key={route.profile}>
               {route.profile} · {route.capabilities.join(", ")}
@@ -138,8 +141,11 @@ export default function Missions({ api, hosts, openJob }) {
           </ul>}
           <ol>{item.steps.map(step => <li key={step.key}>
             <strong>{step.title}</strong> · {item.results[step.key]?.result || (item.current?.step === step.key ? "selected" : "pending")}
-            {step.requires?.length > 0 && <span> · {step.profile} · {step.requires.join(", ")}</span>}
+            {step.requires?.length > 0 && <span> · {step.profile} ({step.allowProfileFallback ? "fallback allowed" : "required"}) · {step.requires.join(", ")}</span>}
             {item.results[step.key]?.jobId && <button type="button" onClick={() => inspect(item.results[step.key].jobId)}>Inspect</button>}
+            {item.results[step.key]?.previousJobId && <button type="button" onClick={() => inspect(item.results[step.key].previousJobId)}>
+              Inspect previous attempt
+            </button>}
           </li>)}</ol>
         </details>
       </section>)}
@@ -175,12 +181,14 @@ export default function Missions({ api, hosts, openJob }) {
           <label>Authorize dispatch until<input type="datetime-local" required value={end} onChange={event => setEnd(event.target.value)} /></label>
           <label><span><input type="checkbox" name="paused" /> Register paused</span></label>
           <details><summary>Review or edit the authorized plan</summary>
-            <p>To authorize capability routes, provide an object with an authorization and steps. Each step lists the capabilities it requires.</p>
+            <p>Provide an object with <code>steps</code> and either <code>authorization</code> or a First Mate <code>sourceConversationId</code> on this relay. Each step lists the capabilities it requires.</p>
+            <p>Set <code>allowProfileFallback</code> on a step to let the relay select another verified route within the mission’s authorization. Leave it unset to require the listed profile.</p>
+            <p>Use <code>assignee</code> for a production employee or <code>reviewer</code> for an independent reviewer.</p>
             <label>Plan JSON<textarea rows={12} value={custom ?? JSON.stringify(steps, null, 2)}
               onChange={event => setCustom(event.target.value)} /></label>
           </details>
           <p>Pause and expiry prevent new dispatch. An execution already admitted can finish. Approval gates apply to their own steps.</p>
-          <button disabled={busy || !host || !reviewer}>Register mission</button>
+          <button disabled={busy || !host || (custom === null && !reviewer)}>Register mission</button>
         </form>}
     </dialog>
   </>;
