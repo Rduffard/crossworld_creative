@@ -857,6 +857,27 @@
   .operations .operations__projects, .operations__project-lanes { grid-template-columns: minmax(0, 1fr); }
 }
 .operations .operations__subscription-link[data-low="true"] { color: #f4b061; font-weight: 700; }
+.operations__mobile-account { display: none; }
 @media (max-width: 560px) {
   .operations__topbar-tools .operations__subscription-link { white-space: normal; }
+  .operations__topbar-tools .operations__dock-trigger { display: inline-block; min-height: 44px; }
+  .operations__topbar-tools .operations__account,
+  .operations__topbar-tools .operations__studio-clock { display: none; }
+  .operations__topbar-tools { justify-content: flex-end; flex-wrap: wrap; gap: 4px 8px; min-width: 0; }
+  .operations__mobile-account { display: flex; gap: 16px; padding-top: 12px; }
 }
+
+.operations__execution-dock { width: min(32rem, calc(100vw - 1rem)); box-sizing: border-box; }
+.operations__dock-observation { color: var(--ops-muted); font-size: .85rem; }
+.operations__dock-list { list-style: none; padding: 0; margin: 0; }
+.operations__dock-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border-block-start: 1px solid var(--ops-border);
+  padding-block: 12px;
+  overflow-wrap: anywhere;
+}
+.operations__dock-list li > div { display: grid; gap: 4px; }
+.operations__dock-list small { color: var(--ops-muted); }

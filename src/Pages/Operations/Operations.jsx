@@ -852,6 +852,7 @@ export default function Operations() {
     online: !!hostOnline,
     label: relayError ? "API unavailable" : hostOnline ? "Relay online" : "Relay offline",
   }} occupancy={occupancy} pendingApprovals={pendingApprovalCount} openApprovals={() => setPage("Approvals")}
+    request={api} openExecution={(id) => openJob(id, "Execution")}
     subscription={<SubscriptionLink observation={snapshot.hosts.find(entry => entry.online && entry.usage)?.usage ||
     snapshot.hosts.find(entry => !entry.revokedAt && entry.usage)?.usage} />}>
       <Suspense fallback={<p role="status">Loading workspace…</p>}>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { groups } from "./workspaces";
+import ExecutionDock from "./ExecutionDock";
 
 function StudioClock() {
   const [now, setNow] = useState(() => new Date());
@@ -22,9 +23,11 @@ function WorkspaceLinks({ page, navigate }) {
 }
 
 export default function OperationsShell({ page, navigate, health, paused, keyboardOpen, subscription, occupancy,
-  pendingApprovals, openApprovals, children }) {
+  pendingApprovals, openApprovals, request, openExecution, children }) {
   const workspaces = useRef(null);
+  const executions = useRef(null);
   const workspace = useRef(null);
+  const [dockOpen, setDockOpen] = useState(false);
 
   function navigateMobile(name) {
     workspaces.current?.close();
@@ -42,6 +45,10 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
           {occupancy.active} active · {occupancy.open} open
         </span>}
         <span className="operations__health" data-online={health.online} role="status">{health.label}</span>
+        <button type="button" className="operations__dock-trigger" aria-haspopup="dialog" onClick={() => {
+          executions.current?.showModal();
+          setDockOpen(true);
+        }}>Executions</button>
         {pendingApprovals > 0 && <button type="button" onClick={openApprovals}>{pendingApprovals} pending approvals</button>}
         {paused && <button type="button" onClick={() => navigate("Settings")}>Dispatch paused</button>}
         <StudioClock />
@@ -64,6 +71,22 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
         <form method="dialog"><button>Close</button></form>
       </div>
       <nav aria-label="Available workspaces"><WorkspaceLinks page={page} navigate={navigateMobile} /></nav>
+      <div className="operations__mobile-account">
+        <Link className="operations__account" to="/dashboard" aria-label="Return to studio">Studio</Link>
+        <Link className="operations__account" to="/profile">Account</Link>
+      </div>
+    </dialog>
+    <dialog ref={executions} className="operations__dialog operations__execution-dock" onClose={() => setDockOpen(false)}
+      aria-labelledby="operations-execution-dock-title">
+      <div className="operations__briefing-title">
+        <h2 id="operations-execution-dock-title">Relay executions</h2>
+        <form method="dialog"><button>Close</button></form>
+      </div>
+      {dockOpen && <ExecutionDock request={request} inspect={(id) => {
+        executions.current?.close();
+        openExecution(id);
+        requestAnimationFrame(() => workspace.current?.focus());
+      }} />}
     </dialog>
     <div ref={workspace} id="operations-workspace" className="operations__workspace" tabIndex={-1}>
       {page !== "Command Center" && page !== "Headquarters" && <h1>{page}</h1>}
