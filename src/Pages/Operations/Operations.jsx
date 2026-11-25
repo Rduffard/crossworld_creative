@@ -148,6 +148,8 @@ export default function Operations() {
     return "Conversation";
   });
   const [scheduledTime, setScheduledTime] = useState("");
+  const [dispatchDeadline, setDispatchDeadline] = useState("");
+  const [scheduledFirstMate, setScheduledFirstMate] = useState(false);
   const [repeatDays, setRepeatDays] = useState(0);
   const [repeatCount, setRepeatCount] = useState(3);
   const [rescheduleTime, setRescheduleTime] = useState("");
@@ -496,6 +498,9 @@ export default function Operations() {
     : !prompt.isWellFormed() ? "The prompt contains invalid Unicode." : "";
   const editingLocked = busy || importing;
   const scheduleDate = localScheduleTime(scheduledTime);
+  const scheduleDeadline = !repeatDays && snapshot?.dispatch?.dispatchDeadlines ? localScheduleTime(dispatchDeadline) : null;
+  const validScheduleDeadline = !snapshot?.dispatch?.dispatchDeadlines || !dispatchDeadline || !!repeatDays ||
+    (!!scheduleDeadline && +scheduleDeadline > +scheduleDate);
   const workerOptions = assignees.filter((employee) => employee.workspace === workspace);
   const validAssignment = !assignment || (workerOptions.some((employee) => employee._id === employeeId) &&
     (!includeProjectReferences || host?.media));
@@ -560,7 +565,7 @@ export default function Operations() {
 
   function submit(parent, queue = false, scheduledAt) {
     if ((scheduledAt !== undefined && !scheduling) || editingLocked || mediaUploading || !validPrompt || (parent && assignment) || (!parent && !validAssignment) ||
-        (scheduledAt !== undefined && (!validRepeat || mediaAttachments.length)) || prompt.length > (parent ? continuationLimit : startLimit) ||
+        (scheduledAt !== undefined && (!validRepeat || !validScheduleDeadline || mediaAttachments.length)) || prompt.length > (parent ? continuationLimit : startLimit) ||
         (!parent && !recipientId && profile !== selectedProfile)) return;
     return action(async () => {
       const request = {
@@ -574,6 +579,8 @@ export default function Operations() {
         ...(!parent && assignment && includeProjectReferences ? { includeProjectReferences: true } : {}),
         ...(!parent && scheduledAt === undefined && canReturnMedia && outputMedia ? { outputMedia: true } : {}),
         ...(scheduledAt === undefined && !recipientId && !assignment && (!parent || parent.studioTools === true) ? { studioTools: true } : {}),
+        ...(scheduledAt !== undefined && scheduleDeadline ? { dispatchBefore: +scheduleDeadline,
+          ...(scheduledFirstMate && selectedProfile === "read-only" ? { studioTools: true } : {}) } : {}),
         ...(scheduledAt !== undefined && snapshot.recurrence && repeatDays ? { repeat: { days: repeatDays, count: repeatCount } } : {}),
       };
       const signature = JSON.stringify(request);
@@ -769,10 +776,20 @@ export default function Operations() {
       </>}
       {schedulePreview && <p>Dispatch time <strong>{schedulePreview}</strong></p>}
       {scheduledTime && !scheduleDate && <p role="alert">Choose a valid time in your current time zone.</p>}
-      <p>Overdue sessions wait for the selected host to reconnect and become available.</p>
+      {!repeatDays && snapshot.dispatch?.dispatchDeadlines && <>
+        <label>Dispatch deadline (optional, local time)<input type="datetime-local" value={dispatchDeadline}
+          onChange={event => setDispatchDeadline(event.target.value)} /></label>
+        {!validScheduleDeadline && <p role="alert">Choose a deadline after the scheduled time.</p>}
+        {scheduleDeadline && selectedProfile === "read-only" && <label className="operations__check">
+          <input type="checkbox" checked={scheduledFirstMate} onChange={event => setScheduledFirstMate(event.target.checked)} />
+          Run with First Mate tools
+        </label>}
+      </>}
+      <p>{scheduleDeadline ? "Skip this session if the host cannot start it before the deadline."
+        : "Overdue sessions wait for the selected host to reconnect and become available."}</p>
       {mediaAttachments.length > 0 && <p>Remove images before scheduling. Send them in a conversation or queued follow-up.</p>}
       <button type="button" disabled={!workerEnabled || editingLocked || mediaUploading || !!mediaAttachments.length || !!relayError || !host || !selectedEffort ||
-        !validPrompt || prompt.length > startLimit || !scheduleDate || !validRepeat || (profile === "full-access" && selectedProfile !== profile)}
+        !validPrompt || prompt.length > startLimit || !scheduleDate || !validRepeat || !validScheduleDeadline || (profile === "full-access" && selectedProfile !== profile)}
         onClick={() => submit(null, false, +scheduleDate)}>{repeatDays > 0 ? "Schedule series" : "Schedule session"}</button>
     </details>}
     </div>
@@ -905,6 +922,7 @@ export default function Operations() {
           {snapshot.schedule.map((entry) => <li key={entry._id}>
             <div><strong>{workspaceNames[entry.workspace] || entry.workspace}</strong>
               <small><time dateTime={entry.scheduledAt}>{new Date(entry.scheduledAt).toLocaleString()}</time></small>
+              {entry.dispatchBefore && <small>Deadline <time dateTime={entry.dispatchBefore}>{new Date(entry.dispatchBefore).toLocaleString()}</time></small>}
             </div>
             <button type="button" onClick={() => openJob(entry._id, "Conversation")}>Open session</button>
           </li>)}
