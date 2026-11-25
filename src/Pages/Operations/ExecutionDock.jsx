@@ -7,6 +7,13 @@ function executionState(host, run) {
   return run.status === "cancelling" ? "Cancelling" : "Running";
 }
 
+function elapsed(startedAt, observedAt) {
+  const seconds = Math.floor((Date.parse(observedAt) - Date.parse(startedAt)) / 1000);
+  if (!Number.isFinite(seconds) || seconds < 0) return "";
+  if (seconds < 60) return seconds + "s elapsed";
+  return Math.floor(seconds / 60) + "m elapsed";
+}
+
 export default function ExecutionDock({ request, inspect }) {
   const [snapshot, setSnapshot] = useState(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -58,7 +65,7 @@ export default function ExecutionDock({ request, inspect }) {
         <div>
           <strong>{run.title || run.workspace || "Execution"}</strong>
           <small>{[run.employee, host.label, run.slot].filter(Boolean).join(" · ")}</small>
-          <span>{executionState(host, run)}</span>
+          <span>{[executionState(host, run), elapsed(run.startedAt, snapshot.observedAt)].filter(Boolean).join(" · ")}</span>
         </div>
         <button type="button" onClick={() => inspect(run._id)}
           aria-label={`Inspect execution ${run.title || run.workspace || run._id}${run.employee ? ` for ${run.employee}` : ""}`}>

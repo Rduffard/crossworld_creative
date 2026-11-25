@@ -47,10 +47,8 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
           {occupancy.active} active · {occupancy.open} open
         </span>}
         <span className="operations__health" data-online={health.online} role="status">{health.label}</span>
-        <button type="button" className="operations__dock-trigger" aria-haspopup="dialog" onClick={() => {
-          executions.current?.showModal();
-          setDockOpen(true);
-        }}>Executions</button>
+        <button type="button" className="operations__dock-trigger" aria-haspopup="dialog"
+          popoverTarget="operations-execution-monitor">Executions</button>
         {pendingApprovals > 0 && <button type="button" onClick={openApprovals}>{pendingApprovals} pending approvals</button>}
         {paused && <button type="button" onClick={() => navigate("Settings")}>Dispatch paused</button>}
         <StudioClock />
@@ -85,18 +83,20 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
         <Link className="operations__account" to="/profile">Account</Link>
       </div>
     </dialog>
-    <dialog ref={executions} className="operations__dialog operations__execution-dock" onClose={() => setDockOpen(false)}
+    <section ref={executions} id="operations-execution-monitor" role="dialog" popover="auto"
+      className="operations__dialog operations__execution-dock operations__execution-dock--popover"
+      onToggle={event => setDockOpen(event.nativeEvent.newState === "open")}
       aria-labelledby="operations-execution-dock-title">
       <div className="operations__briefing-title">
         <h2 id="operations-execution-dock-title">Relay executions</h2>
-        <form method="dialog"><button>Close</button></form>
+        <button type="button" popoverTarget="operations-execution-monitor" popoverTargetAction="hide">Close</button>
       </div>
       {dockOpen && <ExecutionDock request={request} inspect={(id) => {
-        executions.current?.close();
+        executions.current?.hidePopover();
         openExecution(id);
         requestAnimationFrame(() => workspace.current?.focus());
       }} />}
-    </dialog>
+    </section>
     <div ref={workspace} id="operations-workspace" className="operations__workspace" tabIndex={-1}>
       {page !== "Command Center" && page !== "Headquarters" && <h1>{page}</h1>}
       {children}

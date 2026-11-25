@@ -9,6 +9,7 @@ import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
 } from "./promptEditor";
 import "./Operations.css";
+import "./Conversation.css";
 
 const Activity = lazy(() => import("./Activity"));
 const ArtDepartment = lazy(() => import("./ArtDepartment"));
@@ -83,7 +84,7 @@ function ExecutionElapsed({ startedAt, finishedAt, active }) {
   </small>;
 }
 const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
-const modes = ["Split", "Conversation", "Execution"];
+const modes = ["Conversation", "Execution"];
 const jobIdPattern = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
 const sourcePages = {
   "workflow-job": "Workflow", "workflow-project": "Workflow", "workflow-objective": "Workflow", "workflow-employee": "Workflow",
@@ -239,6 +240,21 @@ export default function Operations() {
   function openJob(id, view) {
     selectJob(id);
     changeMode(view);
+  }
+
+  async function openConversation(turn) {
+    if (!turn.sessionId) return openJob(turn._id, "Conversation");
+    const from = window.location.href;
+    let target = turn._id;
+    try {
+      const query = new URLSearchParams({ session: turn.sessionId, compact: "true" });
+      const history = await api("/jobs?" + query);
+      const current = history.find(entry => entry.status === "running") || history[0];
+      if (current?._id) target = current._id;
+    } catch { /* The selected turn is still available when the history refresh fails. */ }
+    if (window.location.href !== from) return;
+    if (target === jobId && page === "Command Center") changeMode("Conversation");
+    else openJob(target, "Conversation");
   }
 
   function openSource(group, id) {
@@ -678,6 +694,37 @@ export default function Operations() {
       {!host?.media && <p>Choose a host with media enabled to include project images.</p>}
       <p>The worker receives the task prompt with the objective criteria and saved project and employee instructions.</p>
     </section>}
+    <div className="operations__editor">
+      <div className="operations__composer-heading">
+        <label htmlFor="operations-prompt">Message</label>
+        <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
+          onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>
+      </div>
+      <textarea id="operations-prompt" required readOnly={editingLocked || draftKey === null} rows={expanded ? 12 : 2}
+        value={prompt} spellCheck={false} autoCapitalize="off"
+        placeholder={canSteer ? "Steer this execution or queue a follow-up" : jobId ? "Write a follow-up" : "Message the studio"}
+        aria-invalid={!!promptError} aria-describedby="operations-prompt-count"
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            if (!scheduling && send.enabled) send.run();
+          }
+        }}
+        onChange={(event) => updatePrompt(event.target.value)} />
+      <div className="operations__editor-tools">
+        <span id="operations-prompt-count">{prompt ? `${prompt.length.toLocaleString()} characters · ${draft.error ? "Draft unsaved" : "Draft saved"}` : "Ctrl / ⌘ + Enter to send"}</span>
+      </div>
+      {validPrompt && prompt.length > (jobId ? continuationLimit : startLimit) && <p role="alert">
+        This relay accepts up to {(jobId ? continuationLimit : startLimit).toLocaleString()} characters per message.
+      </p>}
+      {promptError && <p role="alert">{promptError}</p>}
+      {!recipientId && (selectedJob?.profile || selectedProfile) === "read-only" &&
+        /^(?:please\s+)?(?:implement|fix|refactor|deploy|modify|edit)\b/i.test(prompt.trimStart()) &&
+        <p role="status">Read Only is selected. File changes and deployment require a separately authorized execution with the appropriate permissions.</p>}
+      {attachment.error && <p role="alert">{attachment.error}</p>}
+      {attachment.message && <p role="status">{attachment.message}</p>}
+      {draft.error && <p role="alert">{draft.error}</p>}
+    </div>
     {!jobId && !assignment && <label>Recipient
       <select value={recipientId} disabled={editingLocked} onChange={event => messageEmployee(recipients.find(employee => employee._id === event.target.value))}>
         <option value="">{recipients.find(employee => employee.role === "first-mate")?.name || "First Mate"}</option>
@@ -729,35 +776,6 @@ export default function Operations() {
         ? "The selected relay has not verified this profile."
         : profileNames[selectedProfile]}
     </p>}
-    <div className="operations__editor">
-      <label htmlFor="operations-prompt">Message</label>
-      <textarea id="operations-prompt" required readOnly={editingLocked || draftKey === null} rows={expanded ? 12 : 3}
-        value={prompt} spellCheck={false} autoCapitalize="off"
-        placeholder={jobId ? "Write a follow-up" : "What would you like the studio to do?"}
-        aria-invalid={!!promptError} aria-describedby="operations-prompt-count"
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) {
-            event.preventDefault();
-            if (!scheduling && send.enabled) send.run();
-          }
-        }}
-        onChange={(event) => updatePrompt(event.target.value)} />
-      <div className="operations__editor-tools">
-        <span id="operations-prompt-count">{prompt ? `${prompt.length.toLocaleString()} characters · ${draft.error ? "Draft unsaved" : "Draft saved"}` : "Ctrl / ⌘ + Enter to send"}</span>
-        <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
-          onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>
-      </div>
-      {validPrompt && prompt.length > (jobId ? continuationLimit : startLimit) && <p role="alert">
-        This relay accepts up to {(jobId ? continuationLimit : startLimit).toLocaleString()} characters per message.
-      </p>}
-      {promptError && <p role="alert">{promptError}</p>}
-      {!recipientId && (selectedJob?.profile || selectedProfile) === "read-only" &&
-        /^(?:please\s+)?(?:implement|fix|refactor|deploy|modify|edit)\b/i.test(prompt.trimStart()) &&
-        <p role="status">Read Only is selected. File changes and deployment require a separately authorized execution with the appropriate permissions.</p>}
-      {attachment.error && <p role="alert">{attachment.error}</p>}
-      {attachment.message && <p role="status">{attachment.message}</p>}
-      {draft.error && <p role="alert">{draft.error}</p>}
-    </div>
     <details className="operations__prompt-file">
       <summary>Attachments{mediaAttachments.length ? ` (${mediaAttachments.length})` : ""}</summary>
       {mediaKey && <MediaComposer key={mediaKey} hostId={mediaHostId} api={api} attachments={mediaAttachments} disabled={editingLocked}
@@ -794,6 +812,7 @@ export default function Operations() {
     </details>}
     </div>
     <div className="operations__prompt-actions">
+      {selectedJob?.profile === "full-access" && <small className="operations__composer-permission">Full Access follow-up</small>}
       {selectedJob?.status === "running" && <button type="button" disabled={!canSteer}
         onClick={steer}>Steer current task</button>}
       {scheduling ? <button type="button" onClick={() => selectJob(null)}>Return to conversation</button>
@@ -815,7 +834,7 @@ export default function Operations() {
             const active = turns.some(entry => entry._id === jobId) || selectedJob?.sessionId === id;
             const employee = latest.conversationActor?.name || latest.assigneeName || latest.studioActor?.name;
             return <li key={id}>
-              <button type="button" aria-pressed={active} onClick={() => selectJob(latest._id)}>
+              <button type="button" aria-pressed={active} onClick={() => openConversation(latest)}>
                 {label || "Conversation"}
                 <small>{employee ? employee + " \u00b7 " : ""}{latest.status}
                   {latest.createdAt && <>{" \u00b7 "}<time dateTime={latest.createdAt}>{new Date(latest.createdAt).toLocaleDateString()}</time></>}
@@ -1073,8 +1092,8 @@ export default function Operations() {
         <button type="button" aria-label="New conversation" onClick={() => { setAssignment(null); selectJob(null); }}>
           New<span className="operations__desktop-label"> conversation</span>
         </button>
-        {governance && <button type="button" onClick={() => setPage("Approvals")}>
-          Approvals{pendingApprovalCount > 0 && ` (${pendingApprovalCount})`}
+        {pendingApprovalCount > 0 && <button type="button" onClick={() => setPage("Approvals")}>
+          Approvals (${pendingApprovalCount})
         </button>}
       </div>
       <dialog ref={historyDrawer} className="operations__dialog operations__drawer" aria-labelledby="operations-history-title"
@@ -1118,7 +1137,13 @@ export default function Operations() {
                   }
                 })}>{selectedJob.status === "scheduled" ? "Cancel schedule" :
                   selectedJob.status === "waiting" ? "Cancel follow-up" : "Cancel current task"}</button>}
-              {awaitingApproval && <button type="button" onClick={() => changeMode("Execution")}>Review approval</button>}
+              <button type="button" className="operations__inspect-toggle"
+                onClick={() => {
+                  if (mode === "Execution") openConversation(selectedJob);
+                  else changeMode("Execution");
+                }}>
+                {mode === "Execution" ? "Conversation" : awaitingApproval ? "Review approval" : "Inspect"}
+              </button>
               {permissionUnavailable && <div role="status">
                 <p>{permissionUnavailable.text}</p>
                 <p>Review any partial work, then explicitly select an eligible profile in a new conversation before sending the remaining work.</p>
@@ -1147,6 +1172,14 @@ export default function Operations() {
                 </div>
               </details>
             </header>
+            <Suspense fallback={<p role="status">Loading transcript…</p>}>
+            <JobTranscript api={api} key={jobId} job={selectedJob} host={selectedHost} jobId={jobId} mode={mode} copy={copy} selectJob={selectJob}
+              promptPreview={sessions.get(selectedJob.sessionId)?.find((turn) => turn._id === jobId)?.prompt}
+              proposal={selectedJob.studioTools && <Suspense fallback={null}>
+                <ObjectiveProposal key={jobId} request={api} jobId={jobId} jobStatus={selectedJob.status}
+                  openObjective={(id) => openSource("objective", id)} />
+              </Suspense>}>
+            <details className="operations__execution-context"><summary>Related work and scheduling</summary>
             {selectedJob.status === "completed" && selectedJob.employeeId && selectedJob.objectiveId && !selectedJob.parentId &&
               <button type="button" onClick={() => openSource("report", selectedJob._id)}>View Final Report</button>}
             {selectedJob.delegatedReview && <p>
@@ -1182,18 +1215,7 @@ export default function Operations() {
               })}>Save time</button>
             </details>}
             {selectedJob.instruction && <p role="status">Steering · {selectedJob.instruction.state}</p>}
-            <div className="operations__modes" aria-label="Command Center layout">
-              {modes.map((entry) => <button className={entry === "Split" ? "operations__split" : undefined}
-                key={entry} type="button" aria-pressed={mode === entry}
-                onClick={() => changeMode(entry)}>{entry}</button>)}
-            </div>
-            <Suspense fallback={<p role="status">Loading transcript…</p>}>
-            <JobTranscript api={api} key={jobId} job={selectedJob} host={selectedHost} jobId={jobId} mode={mode} copy={copy} selectJob={selectJob}
-              promptPreview={sessions.get(selectedJob.sessionId)?.find((turn) => turn._id === jobId)?.prompt}
-              proposal={selectedJob.studioTools && <Suspense fallback={null}>
-                <ObjectiveProposal key={jobId} request={api} jobId={jobId} jobStatus={selectedJob.status}
-                  openObjective={(id) => openSource("objective", id)} />
-              </Suspense>}>
+            </details>
             {approval && <section aria-label="Approval request">
               <h3>Approval request · {approval.state}</h3>
               <dl>
@@ -1212,7 +1234,7 @@ export default function Operations() {
             </JobTranscript>
             </Suspense>
           </section>}
-          {composer}
+          {(!selectedJob || mode !== "Execution") && composer}
         </div>
       </div>
       </>}

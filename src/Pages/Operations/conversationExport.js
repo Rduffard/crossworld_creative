@@ -1,8 +1,8 @@
 import { agentMessages } from "./executionEvents.js";
 
-export async function readTurn(api, id, includeActivity = false) {
+export async function readExecutionTurn(api, id) {
   const endpoint = "/jobs/" + id;
-  const first = await api(endpoint);
+  const first = await api(endpoint + "?conversation=true");
   const eventCount = first.eventCount ?? first.events.length;
   const events = [...first.events];
   while (events.length < eventCount) {
@@ -10,6 +10,12 @@ export async function readTurn(api, id, includeActivity = false) {
     if (!page.events.length) throw new Error("A committed turn page could not be loaded.");
     events.push(...page.events.slice(0, eventCount - events.length));
   }
+  return { ...first, _id: id, events };
+}
+
+export async function readTurn(api, id, includeActivity = false) {
+  const first = await readExecutionTurn(api, id);
+  const { events } = first;
   return {
     id, createdAt: first.createdAt, finishedAt: first.finishedAt, status: first.status,
     actor: first.conversationActor?.name || first.assigneeName || first.reviewerName || first.studioActor?.name ||
