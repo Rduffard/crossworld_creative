@@ -140,6 +140,7 @@ export default function Operations() {
   const recipient = recipients.find(employee => employee._id === recipientId);
   const [assignees, setAssignees] = useState([]);
   const [employeeId, setEmployeeId] = useState("");
+  const [assignmentScopeRevision, setAssignmentScopeRevision] = useState("");
   const [mode, setMode] = useState(() => {
     try {
       const preference = window.localStorage.getItem("cw_operations_desk_view");
@@ -502,8 +503,10 @@ export default function Operations() {
   const validScheduleDeadline = !snapshot?.dispatch?.dispatchDeadlines || !dispatchDeadline || !!repeatDays ||
     (!!scheduleDeadline && +scheduleDeadline > +scheduleDate);
   const workerOptions = assignees.filter((employee) => employee.workspace === workspace);
+  const assignmentScopes = assignment && selectedProfile === "scoped" ? host?.assignmentScopes || [] : [];
+  const assignmentScope = assignmentScopes.find(entry => entry.revision === assignmentScopeRevision);
   const validAssignment = !assignment || (workerOptions.some((employee) => employee._id === employeeId) &&
-    (!includeProjectReferences || host?.media));
+    (!includeProjectReferences || host?.media) && (!assignmentScopes.length || !!assignmentScope));
   const validRepeat = repeatDays === 0 || (snapshot?.recurrence && Number.isInteger(repeatCount) && repeatCount >= 2 && repeatCount <= 12);
   const schedulePreview = scheduleDate?.toLocaleString(undefined, { dateStyle: "long", timeStyle: "long" });
   const rescheduleDate = localScheduleTime(rescheduleTime);
@@ -576,6 +579,7 @@ export default function Operations() {
         ...(mediaAttachments.length ? { attachmentIds: mediaAttachments.map((item) => item._id) } : {}),
         ...(recipientId ? { recipientId } : {}),
         ...(!parent && assignment ? { objectiveId: assignment.id, employeeId } : {}),
+        ...(!parent && assignmentScope ? { assignmentScopeId: assignmentScope.id, assignmentScopeRevision: assignmentScope.revision } : {}),
         ...(!parent && assignment && includeProjectReferences ? { includeProjectReferences: true } : {}),
         ...(!parent && scheduledAt === undefined && canReturnMedia && outputMedia ? { outputMedia: true } : {}),
         ...(scheduledAt === undefined && !recipientId && !assignment && (!parent || parent.studioTools === true) ? { studioTools: true } : {}),
@@ -634,9 +638,9 @@ export default function Operations() {
   const canStart = !commonDisabled && hostOnline && selectedEffort && validAssignment && prompt.length <= startLimit &&
     (recipientId ? recipient && host?.employeeConversations && host.profiles?.includes("read-only") :
       selectedProfile === profile);
-  const canContinue = !selectedJob?.blueprintTyped && !commonDisabled && canAct && selectedJob?.codexThreadId &&
+  const canContinue = !selectedJob?.blueprintTyped && !selectedJob?.assignmentScopeId && !commonDisabled && canAct && selectedJob?.codexThreadId &&
     !running.includes(selectedJob.status) && prompt.length <= continuationLimit;
-  const canQueue = !selectedJob?.blueprintTyped && !commonDisabled && ["queued", "running"].includes(selectedJob?.status) && prompt.length <= continuationLimit;
+  const canQueue = !selectedJob?.blueprintTyped && !selectedJob?.assignmentScopeId && !commonDisabled && ["queued", "running"].includes(selectedJob?.status) && prompt.length <= continuationLimit;
   const canSteer = !selectedJob?.blueprintTyped && !editingLocked && canAct && selectedJob?.activeTurn && selectedJob.status === "running" &&
     !["pending", "sending"].includes(selectedJob.instruction?.state) && !mediaUploading && !mediaAttachments.length &&
     validPrompt && prompt.length <= continuationLimit;
@@ -660,6 +664,13 @@ export default function Operations() {
         <option value="">{workerOptions.length ? "Select an employee" : "No available worker in this workspace"}</option>
         {workerOptions.map((employee) => <option key={employee._id} value={employee._id}>{employee.name}</option>)}
       </select></label>
+      {!!assignmentScopes.length && <label>Assignment write scope
+        <select value={assignmentScope?.revision || ""} onChange={event => setAssignmentScopeRevision(event.target.value)} required>
+          <option value="">Select verified roots</option>
+          {assignmentScopes.map(scope => <option key={scope.id} value={scope.revision}>{scope.id}</option>)}
+        </select>
+      </label>}
+      {assignmentScope && <ul aria-label="Writable assignment roots">{assignmentScope.roots.map(root => <li key={root}>{root}</li>)}</ul>}
       <label className="operations__check">
         <input type="checkbox" checked={includeProjectReferences}
           disabled={editingLocked || (!host?.media && !includeProjectReferences)}
