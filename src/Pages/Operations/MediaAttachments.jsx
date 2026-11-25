@@ -279,6 +279,8 @@ export function MediaLibrary({ api, openArtifact }) {
   const [type, setType] = useState("");
   const [project, setProject] = useState("");
   const [projects, setProjects] = useState([]);
+  const [view, setView] = useState("grid");
+  const [sort, setSort] = useState("newest");
   async function refresh(before) {
     try {
       const data = await mediaApi(api, before ? `?before=${encodeURIComponent(before)}` : "");
@@ -302,8 +304,10 @@ export function MediaLibrary({ api, openArtifact }) {
   const items = records?.items.filter((item) => item.state === "ready" &&
     item.name.toLowerCase().includes(filter.trim().toLowerCase()) &&
     (!type || item.mime?.startsWith(type)) && (!project || item.projectId === project));
+  if (sort === "name") items?.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  if (sort === "size") items?.sort((a, b) => (b.size || 0) - (a.size || 0));
   return <section className="operations-media">
-    <label>Storage device <select value={active?._id || ""} onChange={(event) => setHost(event.target.value)}>
+    <label>{gallery ? "Upload device" : "Storage device"} <select value={active?._id || ""} onChange={(event) => setHost(event.target.value)}>
       <option value="">Select device</option>
       {records?.hosts.map((item) => <option key={item._id} value={item._id}>{item.label || "Media device"} ({item.online ? "online" : "offline"})</option>)}
     </select></label>
@@ -327,9 +331,18 @@ export function MediaLibrary({ api, openArtifact }) {
         <option value="">All projects</option>
         {projects.map(entry => <option key={entry._id} value={entry._id}>{entry.name}</option>)}
       </select></label>}
+      <label>Sort loaded assets <select value={sort} onChange={event => setSort(event.target.value)}>
+        <option value="newest">Newest first</option><option value="name">Name A–Z</option>
+        <option value="size">Largest first</option>
+      </select></label>
+      <div className="operations-media__view" role="group" aria-label="Artifact view">
+        <button type="button" aria-pressed={view === "grid"} onClick={() => setView("grid")}>Grid</button>
+        <button type="button" aria-pressed={view === "list"} onClick={() => setView("list")}>List</button>
+      </div>
+      {!records && !error && <p role="status">Loading artifacts…</p>}
       {items?.length === 0 && <p>No matching assets in the loaded uploads.</p>}
     </>}
-    <div className={openArtifact ? "operations-media__gallery" : "operations-media__records"}>
+    <div className={gallery ? "operations-media__gallery" : "operations-media__records"} data-view={gallery ? view : undefined}>
     {items?.map((item) => <div className="operations-media__record" key={item._id}>
       {openArtifact ? <button type="button" onClick={() => openArtifact(item._id)}>{item.name}</button>
         : <MediaPreview id={item._id} name={item.name} />}

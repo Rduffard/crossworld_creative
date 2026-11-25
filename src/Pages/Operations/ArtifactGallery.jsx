@@ -80,10 +80,14 @@ function ArtifactInspector({ api, id, close }) {
 }
 
 export default function ArtifactGallery({ api, artifactId, openArtifact }) {
-  if (artifactId) return <ArtifactInspector key={artifactId} api={api} id={artifactId} close={() => openArtifact(null)} />;
-  return <section className="operations__panel" aria-label="Artifact library">
-    <h2>Review library</h2>
-    <p>Files are served through the private media relay. A preview may be unavailable while its device is offline.</p>
-    <MediaLibrary api={api} openArtifact={openArtifact} />
-  </section>;
+  return <>
+    <div hidden={!!artifactId}>
+      <section className="operations__panel" aria-label="Artifact library">
+        <h2>Review library</h2>
+        <p>Files are served through the private media relay. A preview may be unavailable while its device is offline.</p>
+        <MediaLibrary api={api} openArtifact={openArtifact} />
+      </section>
+    </div>
+    {artifactId && <ArtifactInspector key={artifactId} api={api} id={artifactId} close={() => openArtifact(null)} />}
+  </>;
 }
