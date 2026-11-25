@@ -154,6 +154,25 @@ export default function Missions({ api, hosts, openJob }) {
             {item.results[step.key]?.previousJobId && <button type="button" onClick={() => inspect(item.results[step.key].previousJobId)}>
               Inspect previous attempt
             </button>}
+            {item.recoveries?.filter(attempt => attempt.step === step.key).map(attempt => <p key={attempt.jobId}>
+              Owner resolution on <time dateTime={attempt.authorizedAt}>{new Date(attempt.authorizedAt).toLocaleString()}</time>
+              {" — "}{attempt.resolution}
+              {attempt.previous.jobId && <button type="button" onClick={() => inspect(attempt.previous.jobId)}>
+                Inspect blocked attempt
+              </button>}
+            </p>)}
+            {item.status === "blocked" && item.results[step.key]?.result === "blocked" && <form onSubmit={event => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              const renewal = data.get("renewal");
+              control(item, "recover", { step: step.key, resolution: data.get("resolution"),
+                ...(renewal ? { endsAt: new Date(renewal).toISOString() } : {}) });
+            }}>
+              <label>Owner resolution for {step.title}<textarea name="resolution" required maxLength={800} /></label>
+              <label>New window end (required after expiry)<input name="renewal" type="datetime-local"
+                required={+new Date(item.endsAt) <= Date.now()} /></label>
+              <button disabled={busy}>Resume blocked step</button>
+            </form>}
           </li>)}</ol>
         </details>
       </section>)}
