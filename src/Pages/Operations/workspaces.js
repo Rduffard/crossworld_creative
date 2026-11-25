@@ -1,7 +1,7 @@
 export const groups = [
-  ["Studio", [["headquarters", "Headquarters"], ["command", "Command Center"], ["office", "Office"], ["workflow", "Workflow"], ["workforce", "Workforce"], ["communications", "Communications"]]],
+  ["Studio", [["headquarters", "Headquarters"], ["command", "Command Center"], ["office", "Office"], ["blueprints", "Blueprints"], ["workforce", "Workforce"], ["communications", "Communications"]]],
   ["Production", [["projects", "Projects"], ["objectives", "Objectives"], ["reports", "Reports"], ["art", "Art Department"], ["artifacts", "Artifacts"], ["quality", "Quality"], ["references", "References"], ["knowledge", "Knowledge"]]],
-  ["Operations", [["approvals", "Approvals"], ["infrastructure", "Infrastructure"], ["schedules", "Schedules"], ["engineering", "Engineering"], ["finance", "Finance"], ["activity", "Activity"], ["settings", "Settings"], ["help", "Help"]]],
+  ["Operations", [["approvals", "Approvals"], ["infrastructure", "Infrastructure"], ["workflow", "Workflow"], ["schedules", "Schedules"], ["engineering", "Engineering"], ["finance", "Finance"], ["activity", "Activity"], ["settings", "Settings"], ["help", "Help"]]],
 ];
 
 export const workspaces = groups.flatMap(([, entries]) => entries);

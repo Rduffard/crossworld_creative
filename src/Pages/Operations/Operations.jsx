@@ -31,6 +31,7 @@ const Quality = lazy(() => import("./Quality"));
 const Communications = lazy(() => import("./Communications"));
 const Reports = lazy(() => import("./Reports"));
 const Workflow = lazy(() => import("./Workflow"));
+const Blueprints = lazy(() => import("./Blueprints"));
 const Workforce = lazy(() => import("./Workforce"));
 
 const api = (path, options) => requestJson(`/operations${path}`, { auth: true, ...options });
@@ -859,6 +860,7 @@ export default function Operations() {
         openOffice={() => setPage("Office")} openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
         openGovernance={() => setPage("Approvals")} openJob={openJob} />}
+      {page === "Blueprints" && <Blueprints api={api} openJob={openJob} standalone />}
       {page === "Workflow" && <Workflow key={linkedRecord?.id || "studio"} api={api} scope={linkedRecord?.group} recordId={linkedRecord?.id}
         openRecord={openSource} openJob={openJob} />}
       {page === "Projects" && <Projects api={api} openRecord={openSource} openJob={openJob} initialId={linkedRecord?.group === "project" ? linkedRecord.id : null}

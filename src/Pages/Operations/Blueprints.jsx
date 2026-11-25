@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
+import BlueprintCanvas from "./BlueprintCanvas";
 
 const stepTypes = { task: "Read-only task", review: "Independent review", correction: "Bounded correction", retest: "Independent retest" };
 const newStep = () => ({ id: crypto.randomUUID(), type: "task", name: "", employeeId: "", prompt: "", dependencies: [] });
 const newBlueprint = () => ({ _id: crypto.randomUUID(), name: "", revision: 0, steps: [newStep()] });
 
-export default function Blueprints({ api, openJob }) {
+export default function Blueprints({ api, openJob, standalone = false }) {
   const [data, setData] = useState(null);
   const [draft, setDraft] = useState(newBlueprint);
   const [dirty, setDirty] = useState(true);
@@ -14,6 +15,11 @@ export default function Blueprints({ api, openJob }) {
   const [refresh, setRefresh] = useState(0);
   const [run, setRun] = useState({ objectiveId: "", hostId: "", workspace: "development" });
   const [scopedCorrection, setScopedCorrection] = useState(false);
+  const [selection, setSelection] = useState(null);
+  const [palette, setPalette] = useState("");
+  const selected = draft.steps.find(step => step.id === selection) || draft.steps[0];
+  const latest = data?.runs.find(item => item.blueprintId === draft._id && item.revision === draft.revision);
+  const selectedRunStep = !dirty && latest?.steps.find(step => step.id === selected.id);
   const hasCorrection = draft.steps.some(step => step.type === "correction");
   const supportsScopedCorrection = data?.devices.find(item => item._id === run.hostId)?.profiles?.includes("scoped");
 
@@ -37,7 +43,7 @@ export default function Blueprints({ api, openJob }) {
   }, [api, refresh]);
 
   function change(value) {
-    setDraft({ ...draft, ...value });
+    setDraft(previous => ({ ...previous, ...value }));
     setDirty(true);
     setNotice("");
   }
@@ -46,8 +52,59 @@ export default function Blueprints({ api, openJob }) {
     change({ steps: draft.steps.map(step => step.id === id ? { ...step, ...fields } : step) });
   }
 
+  function openDraft(saved) {
+    setDraft(saved || newBlueprint());
+    setSelection(null);
+    setDirty(!saved);
+    setProblem("");
+    setNotice("");
+  }
+
+  function duplicate() {
+    const ids = new Map(draft.steps.map(step => [step.id, crypto.randomUUID()]));
+    openDraft({
+      ...draft, _id: crypto.randomUUID(), revision: 0, name: (draft.name.slice(0, 115) + " copy").trim(),
+      steps: draft.steps.map(step => ({ ...step, id: ids.get(step.id), dependencies: step.dependencies.map(id => ids.get(id)) })),
+      layout: Object.fromEntries(Object.entries(draft.layout || {}).map(([id, point]) => [ids.get(id), point])),
+    });
+    setDirty(true);
+  }
+
+  function connect(source, target) {
+    const byId = new Map(draft.steps.map(step => [step.id, step]));
+    const from = byId.get(source);
+    const to = byId.get(target);
+    if (!from || !to || to.dependencies.includes(source)) return false;
+    const ancestors = new Set(from.dependencies);
+    for (const id of ancestors) {
+      for (const dependency of byId.get(id)?.dependencies || []) ancestors.add(dependency);
+    }
+    if (source === target || ancestors.has(target)) {
+      setProblem("This connection would create a dependency cycle.");
+      return false;
+    }
+    const required = { review: "task", correction: "review", retest: "correction" }[to.type];
+    if (required && (from.type || "task") !== required) {
+      setProblem("Connect " + stepTypes[required].toLowerCase() + " to " + stepTypes[to.type].toLowerCase() + ".");
+      return false;
+    }
+    if (["correction", "retest"].includes(to.type) && to.dependencies.length) {
+      setProblem("Remove the current predecessor before connecting a different step.");
+      return false;
+    }
+    setProblem("");
+    updateStep(target, { dependencies: [...to.dependencies, source] });
+    return true;
+  }
+
   async function submit(event, start) {
     event.preventDefault();
+    const incomplete = !start && draft.steps.find(step => !step.name.trim() || !step.employeeId || !step.prompt.trim());
+    if (incomplete) {
+      setSelection(incomplete.id);
+      setProblem("Each step needs a name, an employee and instructions.");
+      return;
+    }
     setPending(true);
     setProblem("");
     setNotice("");
@@ -81,29 +138,50 @@ export default function Blueprints({ api, openJob }) {
     finally { setPending(false); }
   }
 
-  return <details className="operations__panel operations__blueprints">
-    <summary>Blueprints</summary>
+  const Wrapper = standalone ? "section" : "details";
+  return <Wrapper className="operations__panel operations__blueprints">
+    {!standalone && <summary>Blueprints</summary>}
     {problem && <p role="alert">{problem}</p>}
     {notice && <p role="status">{notice}</p>}
     {data && <>
-      <label htmlFor="operations-blueprint-current">Saved Blueprint</label>
-      <select id="operations-blueprint-current" value={data.blueprints.some(item => item._id === draft._id) ? draft._id : ""} disabled={pending}
-        onChange={event => {
-          const saved = data.blueprints.find(item => item._id === event.target.value);
-          setDraft(saved || newBlueprint());
-          setDirty(!saved);
-          setProblem("");
-          setNotice("");
-        }}>
-        <option value="">New Blueprint</option>
+      <div className="operations__blueprint-header">
+      <label>Saved Blueprint
+      <select value={data.blueprints.some(item => item._id === draft._id) ? draft._id : ""} disabled={pending}
+        onChange={event => openDraft(data.blueprints.find(item => item._id === event.target.value))}>
+        <option value="">Unsaved Blueprint</option>
         {data.blueprints.map(item => <option key={item._id} value={item._id}>{item.name}</option>)}
-      </select>
+      </select></label>
+      <button type="button" disabled={pending} onClick={() => openDraft()}>New Blueprint</button>
+      <button type="button" disabled={pending || !draft.name.trim()} onClick={duplicate}>Duplicate</button>
+      </div>
       <form onSubmit={event => submit(event, false)}>
         <fieldset disabled={pending}>
           <legend>Workflow definition</legend>
           <label>Name <input value={draft.name} maxLength={120} required onChange={event => change({ name: event.target.value })} /></label>
-          {draft.steps.map((step, index) => <fieldset key={step.id}>
-            <legend>{step.name || "Step " + (index + 1)}</legend>
+          <div className="operations__blueprint-editor">
+          <BlueprintCanvas key={draft._id} steps={draft.steps} types={stepTypes}
+            employees={new Map(data.employees.map(employee => [employee._id, employee.name]))}
+            states={new Map((dirty ? [] : latest?.steps || []).map(step => [step.id, step.status]))}
+            selected={selected.id} select={setSelection} connect={connect} positions={draft.layout || {}}
+            move={(id, position) => {
+              setDraft(previous => ({ ...previous, layout: { ...previous.layout, [id]: position } }));
+              setDirty(true);
+            }} />
+          <div className="operations__blueprint-inspector">
+          <label>Find step type <input type="search" value={palette} onChange={event => setPalette(event.target.value)} /></label>
+          <div className="operations__blueprint-palette" aria-label="Add to workflow">
+            {Object.entries(stepTypes).filter(([, label]) => label.toLowerCase().includes(palette.trim().toLowerCase()))
+              .map(([type, label]) => <button key={type} type="button" disabled={draft.steps.length >= 12} onClick={() => {
+                const step = { ...newStep(), type };
+                change({ steps: [...draft.steps, step] });
+                setSelection(step.id);
+              }}>+ {label}</button>)}
+          </div>
+          {[selected].map(step => <fieldset key={step.id}>
+            <legend>{step.name || "Step configuration"}</legend>
+            {selectedRunStep?.jobId && <button type="button" onClick={() => openJob(selectedRunStep.jobId, "Execution")}>
+              Inspect {selectedRunStep.status} execution
+            </button>}
             <label>Step name <input value={step.name} maxLength={120} required onChange={event => updateStep(step.id, { name: event.target.value })} /></label>
             <label htmlFor={"operations-blueprint-type-" + step.id}>Step type</label>
             <select id={"operations-blueprint-type-" + step.id} value={step.type || "task"}
@@ -125,18 +203,21 @@ export default function Blueprints({ api, openJob }) {
             {draft.steps.length > 1 && <fieldset>
               <legend>Run after</legend>
               {draft.steps.filter(item => item.id !== step.id).map((item, otherIndex) => <label key={item.id}>
-                <input type="checkbox" checked={step.dependencies.includes(item.id)} onChange={event => updateStep(step.id, {
-                  dependencies: event.target.checked ? [...step.dependencies, item.id] : step.dependencies.filter(id => id !== item.id),
-                })} /> {item.name || "Untitled step " + (otherIndex + 1)}
+                <input type="checkbox" checked={step.dependencies.includes(item.id)} onChange={event => {
+                  if (event.target.checked) connect(item.id, step.id);
+                  else updateStep(step.id, { dependencies: step.dependencies.filter(id => id !== item.id) });
+                }} /> {item.name || "Untitled step " + (otherIndex + 1)}
               </label>)}
             </fieldset>}
             <button type="button" disabled={draft.steps.length < 2} onClick={() => change({
+              layout: Object.fromEntries(Object.entries(draft.layout || {}).filter(([id]) => id !== step.id)),
               steps: draft.steps.filter(item => item.id !== step.id).map(item => ({
                 ...item, dependencies: item.dependencies.filter(id => id !== step.id),
               })),
             })}>Remove step</button>
           </fieldset>)}
-          <button type="button" disabled={draft.steps.length >= 12} onClick={() => change({ steps: [...draft.steps, newStep()] })}>Add step</button>
+          </div>
+          </div>
           <button type="submit">Save Blueprint</button>
         </fieldset>
       </form>
@@ -189,5 +270,5 @@ export default function Blueprints({ api, openJob }) {
       </section>}
     </>}
     {!data && !problem && <p role="status">Loading Blueprints…</p>}
-  </details>;
+  </Wrapper>;
 }
