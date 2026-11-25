@@ -153,7 +153,8 @@ export default function Operations() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [hostId, setHostId] = useState("");
   const [workspace, setWorkspace] = useState("development");
-  const [effort, setEffort] = useState("medium");
+  const [effort, setEffort] = useState("");
+  const [studioEffort, setStudioEffort] = useState(null);
   const session = job?._id === jobId ? job.sessionId : "";
   const draftKey = session || (jobId ? null : recipientId);
   const [storedDrafts, setDrafts] = useState({});
@@ -345,6 +346,19 @@ export default function Operations() {
   }, [assignment]);
 
   useEffect(() => {
+    if (page !== "Command Center" || jobId || accessDenied) return;
+    const controller = new AbortController();
+    api("/workforce/execution-policy", { signal: controller.signal, cache: "no-store" })
+      .then(policy => {
+        if (!controller.signal.aborted) setStudioEffort(policy?.defaults?.effort || "medium");
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setStudioEffort("medium");
+      });
+    return () => controller.abort();
+  }, [page, jobId, accessDenied]);
+
+  useEffect(() => {
     let active = true;
     let timer;
     async function refresh() {
@@ -425,7 +439,9 @@ export default function Operations() {
   const executionHosts = snapshot?.hosts.filter(entry => !entry.revokedAt && !entry.isolatedReviewSnapshot) || [];
   const host = executionHosts.find(entry => entry._id === hostId) ||
     executionHosts.find(entry => entry.online) || executionHosts[0];
-  const selectedEffort = host?.efforts?.includes(effort) ? effort : "";
+  const loadingEffort = !jobId && !effort && studioEffort === null;
+  const preferredEffort = effort || (host?.efforts?.includes(studioEffort) ? studioEffort : "medium");
+  const selectedEffort = !loadingEffort && host?.efforts?.includes(preferredEffort) ? preferredEffort : "";
   const selectedJob = job?._id === jobId ? job : null;
   const hostOnline = !relayError && host?.online;
   const selectedHost = snapshot?.hosts.find((entry) => entry._id === selectedJob?.hostId);
@@ -671,7 +687,7 @@ export default function Operations() {
     </label>}
     {recipientId && host && !host.employeeConversations && <p role="status">Choose a relay that supports employee conversations.</p>}
     {!jobId && <details className="operations__composer-options">
-    <summary>Execution settings <span>GPT-6.2 Sol / {selectedEffort || "Effort unavailable"}</span></summary>
+    <summary>Execution settings <span>GPT-6.2 Sol / {loadingEffort ? "Loading studio default…" : selectedEffort || "Effort unavailable"}</span></summary>
     <div className="operations__selectors">
       <label>Host<select value={host?._id || ""} onChange={(event) => { setOutputScope(null); setHostId(event.target.value); }}>
         <option value="" disabled>Select host</option>
@@ -692,7 +708,8 @@ export default function Operations() {
       </>}
       <label>Model<select defaultValue="gpt-6.2-sol"><option value="gpt-6.2-sol">GPT-6.2 Sol</option></select></label>
       <label>Reasoning effort<select value={selectedEffort} onChange={(event) => setEffort(event.target.value)}>
-        {!selectedEffort && <option value="" disabled>{host?.efforts?.length ? "Select a supported effort" : "Awaiting host"}</option>}
+        {!selectedEffort && <option value="" disabled>{loadingEffort ? "Loading studio default…" :
+          host?.efforts?.length ? "Select a supported effort" : "Awaiting host"}</option>}
         {host?.efforts?.map((entry) => <option key={entry}>{entry}</option>)}
       </select></label>
     </div>
