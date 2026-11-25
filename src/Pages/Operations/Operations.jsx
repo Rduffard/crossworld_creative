@@ -712,7 +712,7 @@ export default function Operations() {
         : profileNames[selectedProfile]}
     </p>}
     <div className="operations__editor">
-      <label className="operations__sr-only" htmlFor="operations-prompt">Message</label>
+      <label htmlFor="operations-prompt">Message</label>
       <textarea id="operations-prompt" required readOnly={editingLocked || draftKey === null} rows={expanded ? 12 : 3}
         value={prompt} spellCheck={false} autoCapitalize="off"
         placeholder={jobId ? "Write a follow-up" : "What would you like the studio to do?"}
@@ -883,7 +883,9 @@ export default function Operations() {
       {page === "Quality" && <Quality />}
       {page === "Communications" && <Communications api={api} />}
       {page === "Activity" && <Activity api={api} openSource={openSource} />}
-      {page === "Knowledge" && <Knowledge key={linkedRecord?.id ?? "library"} api={api} initialId={linkedRecord?.id} />}
+      {page === "Knowledge" && <Knowledge key={linkedRecord?.id ?? "library"} api={api}
+        initialId={linkedRecord?.id === "workshop-registry" ? null : linkedRecord?.id}
+        initialWorkshop={linkedRecord?.id === "workshop-registry"} openWorkshop={() => openSource("knowledge", "workshop-registry")} />}
       {page === "Art Department" && <ArtDepartment api={api} openSource={openSource} />}
       {page === "Finance" && <Finance request={api} view={financeView} onView={view => setPage("Finance", "finance", view)}
         hosts={snapshot.hosts.filter(entry => !entry.revokedAt)} />}

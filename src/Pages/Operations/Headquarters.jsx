@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SubscriptionLink } from "./subscriptionUsage";
 
 const time = (value) => value
@@ -18,6 +18,7 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
   const [attentionError, setAttentionError] = useState("");
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [readLocally, setReadLocally] = useState([]);
+  const attentionHeading = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -45,6 +46,9 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
   const read = new Set([...(data.attentionRead ?? []), ...readLocally]);
   const visibleIncidents = unreadOnly ? incidents.filter(entry => !read.has("incident:" + entry._id)) : incidents;
   const visibleApprovals = unreadOnly ? approvals.filter(entry => !read.has("approval:" + entry.approval.id)) : approvals;
+  const attentionCount = (pendingGovernance || 0) +
+    approvals.filter(entry => !read.has("approval:" + entry.approval.id)).length +
+    incidents.filter(entry => !read.has("incident:" + entry._id)).length;
   async function markRead(kind, id) {
     try {
       await api("/headquarters/attention", { method: "POST", body: { kind, id } });
@@ -76,9 +80,13 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
         <div className="operations__modes">
           <button type="button" onClick={openOffice}>Enter the office</button>
           <button type="button" onClick={openObjectives}>View objectives</button>
+          {attentionCount > 0 && <button type="button" className="operations__attention-action"
+            onClick={() => {
+              setUnreadOnly(true);
+              attentionHeading.current?.focus();
+            }}>Attention ({attentionCount})</button>}
         </div>
       </div>
-      <div className="operations__command-windows" aria-hidden="true"><i /><i /><i /></div>
     </section>
     <section className="operations__panel operations__briefing">
       <div className="operations__briefing-title">
@@ -114,7 +122,7 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
     </section>
     <section className="operations__panel operations__attention">
       <div className="operations__briefing-title">
-        <h2>Attention</h2>
+        <h2 ref={attentionHeading} tabIndex={-1}>Attention</h2>
         <label><input type="checkbox" checked={unreadOnly} onChange={event => setUnreadOnly(event.target.checked)} /> Unread only</label>
       </div>
       {attentionError && <p role="alert">{attentionError}</p>}

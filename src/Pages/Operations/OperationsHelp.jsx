@@ -36,7 +36,10 @@ export default function OperationsHelp({ navigate }) {
     {guides.map(([name, text, title]) => <section key={title || name} className="operations__panel">
       <h2>{title || name}</h2>
       <p>{text}</p>
-      <button type="button" onClick={() => navigate(name === "Workspaces" ? "Command Center" : name)}>Open {name === "Workspaces" ? "Command Center" : name}</button>
+      {name !== "Workspaces" && <button type="button" onClick={() => navigate(name)}>Open {name}</button>}
+      {name === "Knowledge" && <button type="button" onClick={() => navigate("Knowledge", "knowledge", "workshop-registry")}>
+        Open Workshop registry
+      </button>}
     </section>)}
   </div>;
 }

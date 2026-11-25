@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CrewPortrait from "./CrewPortrait";
 import { employeeActivity, roleLabel } from "./crewActivity";
 
@@ -8,6 +8,7 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
   const [roomId, setRoomId] = useState("owner");
   const [employeeId, setEmployeeId] = useState(null);
   const [zoom, setZoom] = useState(100);
+  const roomHeading = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -30,7 +31,7 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
 
   if (!snapshot) return <p role={error ? "alert" : "status"}>{error || "Loading office…"}</p>;
   const { departments, employees, observedRuns = [], projectAssignments = [] } = snapshot.directory;
-  const activity = (employee) => employeeActivity(employee, observedRuns, projectAssignments);
+  const activity = (employee) => employeeActivity(employee, observedRuns);
   const rooms = [
     { id: "owner", name: "Owner’s office", members: employees.filter(employee => !employee.departmentId) },
     ...departments.map(department => ({
@@ -42,6 +43,7 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
   const room = rooms.find(entry => entry.id === roomId) || rooms[0];
   const employee = room.members.find(entry => entry._id === employeeId);
   const supervisor = employees.find(entry => entry._id === employee?.supervisorId);
+  const hasMandate = employee && projectAssignments.some(entry => entry.employeeId === employee._id && entry.status === "assigned");
 
   return <section className="operations__office-map" aria-label="Living office">
     <div className="operations__briefing-title operations__office-toolbar">
@@ -49,19 +51,31 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
         <button type="button" onClick={openHeadquarters}>Headquarters</button>
         <button type="button" onClick={openWorkflow}>Live workflow</button>
       </div>
+      <label>Room <select value={room.id} aria-controls="operations-office-inspector"
+        onChange={event => { setRoomId(event.target.value); setEmployeeId(null); }}>
+        {rooms.map(entry => <option value={entry.id} key={entry.id}>{entry.name}</option>)}
+      </select></label>
       <label>Map scale <select value={zoom} onChange={event => setZoom(Number(event.target.value))}>
         <option value={100}>100%</option><option value={125}>125%</option><option value={150}>150%</option>
       </select></label>
     </div>
     {error && <p role="alert">Office updates unavailable. Showing the last successful refresh. {error}</p>}
+    <div className="operations__office-room-summary">
+      <span><strong>{room.name}</strong>{" · "}{room.hosts
+        ? room.hosts.filter(host => host.online).length + " online"
+        : room.members.length + (room.members.length === 1 ? " employee" : " employees")}</span>
+      <button type="button" onClick={() => roomHeading.current?.focus()}>Room details</button>
+    </div>
     <div className="operations__studio-layout">
       <div className="operations__studio-viewport" role="region" aria-label="Scrollable office floor plan" tabIndex={0}>
         <div className="operations__studio-plan" style={{ minWidth: zoom + "%", "--office-zoom": zoom / 100 }}>
           {rooms.map(entry => <button type="button" key={entry.id} className="operations__studio-room" data-room={entry.id === "owner" || entry.id === "hosts" ? entry.id : "department"}
-            aria-pressed={entry.id === room.id} onClick={() => { setRoomId(entry.id); setEmployeeId(null); }}>
+            aria-pressed={entry.id === room.id} aria-controls="operations-office-inspector"
+            onClick={() => { setRoomId(entry.id); setEmployeeId(null); }}>
             <span className="operations__studio-furniture" aria-hidden="true"><i /><i /><i /></span>
             <span className="operations__studio-room-label">
               <strong>{entry.name}</strong>
+              {entry.id === room.id && <small className="operations__room-selected" aria-hidden="true">Selected room</small>}
               <small>{entry.hosts ? entry.hosts.filter(host => host.online).length + " online" : entry.members.length + (entry.members.length === 1 ? " employee" : " employees")}</small>
             </span>
             <span className="operations__studio-crew" aria-hidden="true">
@@ -70,11 +84,8 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
           </button>)}
         </div>
       </div>
-      <section className="operations__panel operations__studio-inspector" aria-label="Office inspector">
-        <label>Room <select value={room.id} onChange={event => { setRoomId(event.target.value); setEmployeeId(null); }}>
-          {rooms.map(entry => <option value={entry.id} key={entry.id}>{entry.name}</option>)}
-        </select></label>
-        <h2>{room.name}</h2>
+      <section id="operations-office-inspector" className="operations__panel operations__studio-inspector" aria-label="Office inspector">
+        <h2 ref={roomHeading} tabIndex={-1}>{room.name}</h2>
         {room.department?.responsibilities && <p>{room.department.responsibilities}</p>}
         {room.hosts ? <>
           {!room.hosts.length && <p>No execution hosts reported.</p>}
@@ -88,13 +99,14 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
           <ul className="operations__crew-list">{room.members.map(member => <li key={member._id}>
             <button type="button" aria-pressed={member._id === employee?._id} onClick={() => setEmployeeId(member._id)}>
               <CrewPortrait employee={member} state={activity(member).state} />
-              <span><strong>{member.name}</strong><small>{roleLabel(member.role)} · {activity(member).state}</small></span>
+              <span><strong>{member.name}</strong><small>{roleLabel(member.role)} · {activity(member).label}</small></span>
             </button>
           </li>)}</ul>
         </>}
         {employee && <section className="operations__crew-inspector" aria-label={employee.name + " inspector"}>
           <h3>{employee.name}</h3>
-          <p>{roleLabel(employee.role)} · {activity(employee).state}</p>
+          <p>{roleLabel(employee.role)} · {activity(employee).label}</p>
+          {hasMandate && <p>Has an active project mandate.</p>}
           {supervisor && <p>Reports to {supervisor.name}</p>}
           <p>{employee.responsibilities}</p>
           {activity(employee).runs.map(run => <button key={run._id} type="button"

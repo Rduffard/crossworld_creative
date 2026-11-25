@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import WorkshopRegistry from "./WorkshopRegistry";
 
 const kinds = [
@@ -14,9 +14,15 @@ const fields = [
   ["limitations", "Limitations", 2000], ["license", "License", 300],
 ];
 
-export default function Knowledge({ api, initialId }) {
+export default function Knowledge({ api, initialId, initialWorkshop, openWorkshop }) {
   const [filter, setFilter] = useState("");
-  const [workshopOpen, setWorkshopOpen] = useState(false);
+  const [workshopOpen, setWorkshopOpen] = useState(initialWorkshop);
+  const workshopSummary = useRef(null);
+  useEffect(() => {
+    if (!initialWorkshop) return;
+    const frame = requestAnimationFrame(() => workshopSummary.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [initialWorkshop]);
   const [result, setResult] = useState(null);
   const [selection, setSelection] = useState(initialId || "");
   const [detail, setDetail] = useState(null);
@@ -109,6 +115,7 @@ export default function Knowledge({ api, initialId }) {
   <section className="operations__layout operations__knowledge" aria-label="Knowledge library">
     <section className="operations__panel">
       <h2>Knowledge library</h2>
+      {!initialWorkshop && <button type="button" onClick={openWorkshop}>Open Workshop registry</button>}
       <form onSubmit={search}>
         <label>Search <input name="q" type="search" maxLength={120} /></label>
         <label>Record type <select name="kind">
@@ -198,7 +205,7 @@ export default function Knowledge({ api, initialId }) {
     </section>
   </section>
   <details className="operations__panel operations__workshop-registry" open={workshopOpen} onToggle={(event) => setWorkshopOpen(event.currentTarget.open)}>
-    <summary>Workshop resource registry</summary>
+    <summary ref={workshopSummary}>Workshop resource registry</summary>
     {workshopOpen && <WorkshopRegistry api={api} />}
   </details>
   </>;

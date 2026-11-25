@@ -8,9 +8,17 @@ export function roleLabel(role) {
   return roles[role] || role;
 }
 
-export function employeeActivity(employee, runs, assignments) {
+const executionLabels = {
+  running: "Running", cancelling: "Cancelling", queued: "Queued", waiting: "Waiting", scheduled: "Scheduled",
+};
+const availabilityLabels = { available: "No active turn reported", paused: "Profile paused", retired: "Profile retired" };
+
+export function employeeActivity(employee, runs) {
   const active = runs.filter(run => run.employeeId === employee._id && activeStates.includes(run.status));
   const current = active.find(run => ["running", "cancelling"].includes(run.status)) || active[0];
-  const assigned = assignments.some(entry => entry.employeeId === employee._id && entry.status === "assigned");
-  return { runs: active, state: current?.status || (employee.status === "available" && assigned ? "assigned" : employee.status) };
+  return {
+    runs: active,
+    state: current?.status || employee.status,
+    label: current ? executionLabels[current.status] : availabilityLabels[employee.status],
+  };
 }

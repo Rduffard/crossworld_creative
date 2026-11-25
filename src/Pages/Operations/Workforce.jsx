@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { profileNames } from "./workspaces";
 import WorkforcePolicy from "./WorkforcePolicy";
 import OrganizationChart from "./OrganizationChart";
@@ -98,22 +98,50 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
   const [directory, setDirectory] = useState(null);
   const [editor, setEditor] = useState(null);
   const selection = editor || initialId;
+  const profileHeading = useRef(null);
+  const chartHeading = useRef(null);
+  const chartTrigger = useRef(null);
+  const focusProfile = useRef(false);
 
   function selectEmployee(id) {
+    focusProfile.current = true;
+    if (selection === id && !editor) {
+      if (window.matchMedia("(max-width: 768px)").matches) profileHeading.current?.focus();
+      focusProfile.current = false;
+    }
     setEditor(null);
     openRecord("employee", id);
   }
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [refreshError, setRefreshError] = useState("");
   const [version, setVersion] = useState(0);
   const [policyOpen, setPolicyOpen] = useState(false);
 
   useEffect(() => {
     let current = true;
-    api("/workforce").then((result) => { if (current) setDirectory(result); })
-      .catch((failure) => { if (current) setError(failure.message); });
-    return () => { current = false; };
+    let timer;
+    async function refresh() {
+      try {
+        const result = await api("/workforce");
+        if (current) {
+          setDirectory(result);
+          setRefreshError("");
+        }
+      } catch (failure) {
+        if (current) setRefreshError(failure.message);
+      }
+      if (current) timer = setTimeout(refresh, document.hidden ? 30_000 : 10_000);
+    }
+    refresh();
+    return () => { current = false; clearTimeout(timer); };
   }, [api, version]);
+
+  useEffect(() => {
+    if (!focusProfile.current || !profileHeading.current) return;
+    focusProfile.current = false;
+    if (window.matchMedia("(max-width: 768px)").matches) profileHeading.current.focus();
+  }, [selection, directory]);
 
   async function save(path, body, method = "POST") {
     setPending(true);
@@ -131,7 +159,7 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
     }
   }
 
-  if (!directory) return <p role={error ? "alert" : "status"}>{error || "Loading workforce…"}</p>;
+  if (!directory) return <p role={refreshError ? "alert" : "status"}>{refreshError || "Loading workforce…"}</p>;
   const { departments, employees, observedRuns = [], projectAssignments = [], roles: positions = [] } = directory;
   const employee = employees.find((entry) => entry._id === selection);
   const assignments = observedRuns.filter((run) => run.employeeId === employee?._id);
@@ -140,30 +168,40 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
   const supervisor = employees.find((entry) => entry._id === employee?.supervisorId);
   const department = departments.find((entry) => entry._id === employee?.departmentId);
   const directReports = employee ? employees.filter(entry => entry.supervisorId === employee._id) : [];
-  const state = employee ? employeeActivity(employee, observedRuns, projectAssignments).state : null;
+  const activity = employee ? employeeActivity(employee, observedRuns) : null;
   return <section className="operations__layout operations__knowledge operations__workforce" aria-label="Workforce">
     <section className="operations__panel">
-      <h2>Organization</h2>
+      <h2 ref={chartHeading} tabIndex={-1}>Organization</h2>
+      {refreshError && <p role="alert">Workforce updates unavailable. Showing the last successful refresh. {refreshError}</p>}
       <details onToggle={event => setPolicyOpen(event.currentTarget.open)}>
         <summary>Execution configuration</summary>
         {policyOpen && <WorkforcePolicy api={api} employees={employees} departments={departments} />}
       </details>
       <OrganizationChart departments={departments} employees={employees} observedRuns={observedRuns}
-        projectAssignments={projectAssignments} selection={selection} select={selectEmployee} />
+        selection={selection} select={(id, trigger) => {
+          chartTrigger.current = trigger;
+          selectEmployee(id);
+        }} />
       <div className="operations__modes">
         <button type="button" onClick={() => setEditor("employee")}>Add employee</button>
         <button type="button" onClick={() => setEditor("department")}>Add department</button>
       </div>
     </section>
     <section className="operations__panel">
-      <h2>{employee?.name || (selection === "department" ? "Add department" : "Employee profile")}</h2>
+      <h2 ref={profileHeading} tabIndex={-1}>{employee?.name || (selection === "department" ? "Add department" : "Employee profile")}</h2>
+      {employee && <button type="button" className="operations__workforce-return" onClick={() => {
+        const target = chartTrigger.current;
+        target?.focus();
+        if (!target || document.activeElement !== target) chartHeading.current?.focus();
+      }}>Back to organization</button>}
       {error && <p role="alert">{error}</p>}
       {employee && <div className="operations__profile-identity">
-        <CrewPortrait employee={employee} state={state} /><span>{state}</span>
+        <CrewPortrait employee={employee} state={activity.state} /><span>{activity.label}</span>
       </div>}
-      {position && <p><strong>{position.name}</strong>{supervisor && <> · Reports to{" "}
-        <button className="operations__source" type="button" onClick={() => selectEmployee(supervisor._id)}>{supervisor.name}</button>
-      </>}</p>}
+      {employee && <p><strong>{position?.name || roles[employee.role] || employee.role}</strong>
+        {" · Reports to "}{supervisor
+          ? <button className="operations__source" type="button" onClick={() => selectEmployee(supervisor._id)}>{supervisor.name}</button>
+          : employee.supervisorId ? "Unavailable" : "Owner"}</p>}
       {department && <p>Department · {department.name}</p>}
       {directReports.length > 0 && <details>
         <summary>{directReports.length} direct {directReports.length === 1 ? "report" : "reports"}</summary>
