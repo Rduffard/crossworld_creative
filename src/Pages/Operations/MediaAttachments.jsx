@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { requestPrivateMedia } from "../../utils/api";
 import "./MediaAttachments.css";
 
+const GlbPreview = lazy(() => import("./GlbPreview"));
 const imageTypes = ["image/png", "image/jpeg", "image/webp"];
 const formats = [...imageTypes, "video/mp4", "video/quicktime", "video/webm"];
 const accept = formats.join(",");
@@ -193,6 +194,7 @@ export function MediaComposer({ hostId, api, attachments, onChange, onBusy, disa
 
 export function MediaPreview({ id, name, mime, inspect = false }) {
   const [preview, setPreview] = useState(null);
+  const [imageScale, setImageScale] = useState(100);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const request = useRef(null);
@@ -211,25 +213,33 @@ export function MediaPreview({ id, name, mime, inspect = false }) {
       controller.signal.throwIfAborted();
       const model = data.type === "model/gltf-binary";
       if (!model && !formats.includes(data.type)) throw new Error("This file cannot be previewed.");
-      setPreview({ url: URL.createObjectURL(data), image: data.type.startsWith("image/"), model });
+      setPreview({ url: URL.createObjectURL(data), image: data.type.startsWith("image/"), model, ...(model && inspect ? { blob: data } : {}) });
     } catch (failure) {
       if (!controller.signal.aborted) setError(failure.message);
     } finally { request.current = null; setLoading(false); }
   }
 
   return <figure className="operations-media__preview">
-    {preview?.image && <img src={preview.url} alt={name || "Uploaded attachment"} />}
+    {preview?.image && (inspect ? <div className="operations-media__image-viewport" tabIndex={0} role="region" aria-label="Scrollable image">
+      <img src={preview.url} alt={name || "Uploaded attachment"} style={{ width: imageScale + "%" }} />
+    </div> : <img src={preview.url} alt={name || "Uploaded attachment"} />)}
     {preview && !preview.image && !preview.model && <video controls playsInline src={preview.url} aria-label={name || "Uploaded video"} />}
+    {preview?.blob && <Suspense fallback={<p role="status">Loading 3D inspector…</p>}>
+      <GlbPreview blob={preview.blob} name={name} />
+    </Suspense>}
     <figcaption>
       {!preview && !loading && <button type="button" onClick={open}>
-        {mime === "model/gltf-binary" ? "Prepare GLB download" : name ? `Preview ${name}` : "Preview attached image"}
+        {mime === "model/gltf-binary" ? (inspect ? "Inspect 3D model" : "Prepare GLB download") : name ? `Preview ${name}` : "Preview attached image"}
       </button>}
       {loading && <button type="button" onClick={() => request.current?.abort()}>Cancel preview loading</button>}
       {preview && <>
         {name && <span>{name}</span>}
+        {inspect && preview.image && <label>Image scale <select value={imageScale} onChange={event => setImageScale(Number(event.target.value))}>
+          {[100, 150, 200, 300].map(scale => <option key={scale} value={scale}>{scale}% of fitted width</option>)}
+        </select></label>}
         {inspect && !preview.model && <a href={preview.url} target="_blank" rel="noopener noreferrer">Open original</a>}
         {(inspect || preview.model) && <a href={preview.url} download={name || "artifact"}>Download</a>}
-        <button type="button" onClick={() => setPreview(null)}>{preview.model ? "Clear download" : "Close preview"}</button>
+        <button type="button" onClick={() => { setPreview(null); setImageScale(100); }}>{preview.model && !inspect ? "Clear download" : "Close preview"}</button>
       </>}
       {error && <p role="alert">{error}</p>}
     </figcaption>
@@ -261,10 +271,14 @@ function FrameExtractor({ api, item, available, onReady }) {
 }
 
 export function MediaLibrary({ api, openArtifact }) {
+  const gallery = typeof openArtifact === "function";
   const [records, setRecords] = useState(null);
   const [host, setHost] = useState("");
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("");
+  const [type, setType] = useState("");
+  const [project, setProject] = useState("");
+  const [projects, setProjects] = useState([]);
   async function refresh(before) {
     try {
       const data = await mediaApi(api, before ? `?before=${encodeURIComponent(before)}` : "");
@@ -278,8 +292,16 @@ export function MediaLibrary({ api, openArtifact }) {
       .catch((failure) => { if (!ignore) setError(failure.message); });
     return () => { ignore = true; };
   }, [api]);
+  useEffect(() => {
+    if (!gallery) return;
+    let current = true;
+    api("/projects").then(result => { if (current && Array.isArray(result)) setProjects(result); }).catch(() => {});
+    return () => { current = false; };
+  }, [api, gallery]);
   const active = records?.hosts.find((item) => item._id === host) || records?.hosts.find((item) => item.online);
-  const items = records?.items.filter((item) => item.state === "ready" && item.name.toLowerCase().includes(filter.toLowerCase()));
+  const items = records?.items.filter((item) => item.state === "ready" &&
+    item.name.toLowerCase().includes(filter.trim().toLowerCase()) &&
+    (!type || item.mime?.startsWith(type)) && (!project || item.projectId === project));
   return <section className="operations-media">
     <label>Storage device <select value={active?._id || ""} onChange={(event) => setHost(event.target.value)}>
       <option value="">Select device</option>
@@ -296,15 +318,29 @@ export function MediaLibrary({ api, openArtifact }) {
     {error && <p role="alert">{error}</p>}
     {!active?.online && !error && <p>No media device is currently available.</p>}
     <label>Find an upload <input type="search" value={filter} onChange={(event) => setFilter(event.target.value)} /></label>
+    {openArtifact && <>
+      <label>Asset type <select value={type} onChange={event => setType(event.target.value)}>
+        <option value="">All types</option><option value="image/">Images</option>
+        <option value="video/">Video</option><option value="model/gltf-binary">3D models</option>
+      </select></label>
+      {projects.length > 0 && <label>Project <select value={project} onChange={event => setProject(event.target.value)}>
+        <option value="">All projects</option>
+        {projects.map(entry => <option key={entry._id} value={entry._id}>{entry.name}</option>)}
+      </select></label>}
+      {items?.length === 0 && <p>No matching assets in the loaded uploads.</p>}
+    </>}
+    <div className={openArtifact ? "operations-media__gallery" : "operations-media__records"}>
     {items?.map((item) => <div className="operations-media__record" key={item._id}>
       {openArtifact ? <button type="button" onClick={() => openArtifact(item._id)}>{item.name}</button>
         : <MediaPreview id={item._id} name={item.name} />}
       {openArtifact && <small>{storageSize(item.size)} · {item.mime || "Type unavailable"}{item.review && " · " + item.review.state}</small>}
+      {openArtifact && item.createdAt && <small><time dateTime={item.createdAt}>{new Date(item.createdAt).toLocaleDateString()}</time></small>}
       {item.derivedFrom && <small>Requested offset {(item.derivedFrom.requestedOffsetMs / 1000).toFixed(3)} s · Derived video frame</small>}
       {item.mime?.startsWith("video/") && <FrameExtractor api={api} item={item}
         available={records.hosts.some((device) => device._id === item.hostId && device.online && device.videoFrames)}
         onReady={() => refresh()} />}
     </div>)}
+    </div>
     {records?.nextBefore && <button type="button" onClick={() => refresh(records.nextBefore)}>Load older uploads</button>}
   </section>;
 }

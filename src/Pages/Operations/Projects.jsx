@@ -130,9 +130,9 @@ export default function Projects({ api, initialId, openObjectives, openWorkflow,
       {!record && <h2>{selection === "new" ? "New project" : "Project details"}</h2>}
       {error && <p role="alert">{error}</p>}
       {selection && selection !== "new" && !record && !error && <p role="status">Loading project…</p>}
-      {record && <ProjectBrief key={record._id} api={api} record={record} openObjectives={openObjectives}
+      {record && <ProjectBrief key={"brief/" + record._id} api={api} record={record} openObjectives={openObjectives}
         openWorkflow={openWorkflow} openRecord={openRecord} openJob={openJob} />}
-      {(record || selection === "new") && <details key={selection} open={selection === "new" || undefined}>
+      {(record || selection === "new") && <details key={"settings/" + selection} open={selection === "new" || undefined}>
         <summary>{record ? "Project settings" : "Project configuration"}</summary>
         <form key={record ? record._id + "/" + record.revision : "new"} onSubmit={save}>
           <label>Name <input name="name" required maxLength={100} defaultValue={record?.name} /></label>

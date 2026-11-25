@@ -66,3 +66,31 @@
   max-width: 100%;
   max-height: 24rem;
 }
+.operations-media__model { min-width: 0; }
+.operations-media__model-viewport {
+  height: clamp(16rem, 52vh, 35rem);
+  margin-block-end: .65rem;
+  overflow: hidden;
+  border: 1px solid var(--ops-border);
+  border-radius: .55rem;
+  background: #18272c;
+}
+.operations-media__model-viewport canvas { display: block; width: 100%; height: 100%; }
+.operations-media__image-viewport {
+  max-height: min(65vh, 42rem);
+  overflow: auto;
+  width: 100%;
+}
+.operations-media__preview .operations-media__image-viewport img { display: block; max-width: none; max-height: none; }
+.operations-media__records, .operations-media__gallery { width: 100%; min-width: 0; }
+.operations-media__gallery {
+  display: grid;
+  gap: .65rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+.operations-media__gallery .operations-media__record {
+  align-content: start;
+  padding: .8rem;
+  border: 1px solid var(--ops-border);
+  border-radius: .5rem;
+}
