@@ -8,9 +8,11 @@ const localTime = date => new Date(+date - date.getTimezoneOffset() * 60000).toI
 export default function Missions({ api, hosts, openJob }) {
   const dialog = useRef(null);
   const submission = useRef(null);
+  const registrationAlert = useRef(null);
   const [items, setItems] = useState([]);
   const [available, setAvailable] = useState(false);
   const [error, setError] = useState("");
+  const [registrationError, setRegistrationError] = useState("");
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
   const [employees, setEmployees] = useState([]);
@@ -54,11 +56,15 @@ export default function Missions({ api, hosts, openJob }) {
     } catch (failure) { setError(failure.message); }
   }
 
-  async function mutate(request) {
+  useEffect(() => {
+    if (registrationError) registrationAlert.current?.focus();
+  }, [registrationError]);
+
+  async function mutate(request, reportError = setError) {
     setBusy(true);
-    setError("");
+    reportError("");
     try { await request(); }
-    catch (failure) { setError(failure.message); }
+    catch (failure) { reportError(failure.message); }
     finally { setBusy(false); setRefresh(value => value + 1); }
   }
 
@@ -69,6 +75,7 @@ export default function Missions({ api, hosts, openJob }) {
       const plan = custom === null ? steps : JSON.parse(custom);
       const executionPlan = Array.isArray(plan) ? { steps: plan } : {
         steps: plan?.steps, authorization: plan?.authorization, sourceConversationId: plan?.sourceConversationId,
+        completionStep: plan?.completionStep, delegatePlanning: plan?.delegatePlanning,
       };
       const body = {
         title: data.get("title"), hostId: host._id, workspace: plan?.workspace ?? "development",
@@ -77,11 +84,12 @@ export default function Missions({ api, hosts, openJob }) {
       };
       const signature = JSON.stringify(body);
       if (submission.current?.signature !== signature) submission.current = { signature, id: crypto.randomUUID() };
-      await api(Array.isArray(plan) ? "/missions" : "/missions/capability-plans",
+      await api(data.has("firstMateGrant") ? "/missions/grants" :
+        Array.isArray(plan) ? "/missions" : "/missions/capability-plans",
         { method: "POST", body: { ...body, id: submission.current.id } });
       submission.current = null;
       setCreating(false);
-    });
+    }, setRegistrationError);
   }
 
   function control(item, action, options = {}) {
@@ -126,7 +134,7 @@ export default function Missions({ api, hosts, openJob }) {
             <label>New window end<input name="renewal" type="datetime-local" required /></label>
             <button disabled={busy}>Resume in new window</button>
           </form>}
-          {["active", "paused", "expired", "blocked"].includes(item.status) && <button type="button" disabled={busy} onClick={() => {
+          {["authorized", "active", "paused", "expired", "blocked"].includes(item.status) && <button type="button" disabled={busy} onClick={() => {
             if (window.confirm("Terminate this mission permanently? An execution already admitted can finish.")) control(item, "terminate");
           }}>Terminate mission</button>}
         </div>
@@ -150,7 +158,10 @@ export default function Missions({ api, hosts, openJob }) {
         </details>
       </section>)}
       {!creating ? <button type="button" onClick={() => setCreating(true)}>Prepare mission</button> :
-        <form onSubmit={create} className="operations-missions__create">
+        <form onSubmit={create} className="operations-missions__create" onInvalid={event => {
+          const field = event.target.labels?.[0]?.textContent?.trim();
+          setRegistrationError(field ? `Check the ${field} field and try again.` : "Complete the required mission fields.");
+        }}>
           <label>Plan template<select value={template} onChange={event => {
             setTemplate(event.target.value); setCustom(null);
           }}><option value="acceptance">Hosted continuation acceptance</option>
@@ -168,7 +179,7 @@ export default function Missions({ api, hosts, openJob }) {
           </select></label>
           <label>Independent reviewer<select value={reviewer} onChange={event => {
             setReviewer(event.target.value); setCustom(null);
-          }} required>
+          }} required={custom === null}>
             <option value="">Select reviewer</option>
             {employees.map(employee => <option key={employee._id} value={employee._id}>{employee.name}</option>)}
           </select></label>
@@ -186,9 +197,11 @@ export default function Missions({ api, hosts, openJob }) {
             <p>Use <code>assignee</code> for a production employee or <code>reviewer</code> for an independent reviewer.</p>
             <label>Plan JSON<textarea rows={12} value={custom ?? JSON.stringify(steps, null, 2)}
               onChange={event => setCustom(event.target.value)} /></label>
+            {custom !== null && <label><span><input type="checkbox" name="firstMateGrant" /> Authorize First Mate to register this plan</span></label>}
           </details>
           <p>Pause and expiry prevent new dispatch. An execution already admitted can finish. Approval gates apply to their own steps.</p>
-          <button disabled={busy || !host || (custom === null && !reviewer)}>Register mission</button>
+          {registrationError && <p role="alert" tabIndex={-1} ref={registrationAlert}>{registrationError}</p>}
+          <button disabled={busy || !host}>{busy ? "Registering mission…" : "Register mission"}</button>
         </form>}
     </dialog>
   </>;
