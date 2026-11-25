@@ -22,6 +22,8 @@ function WorkspaceLinks({ page, navigate }) {
   </div>);
 }
 
+const primaryWorkspaces = ["Headquarters", "Command Center", "Office", "Blueprints", "Workforce", "Projects"];
+
 export default function OperationsShell({ page, navigate, health, paused, keyboardOpen, subscription, occupancy,
   pendingApprovals, openApprovals, request, openExecution, children }) {
   const workspaces = useRef(null);
@@ -57,7 +59,14 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
       </div>
     </header>
     <nav className="operations__navigation" aria-label="Operations workspaces">
-      <WorkspaceLinks page={page} navigate={navigate} />
+      <div>
+        {primaryWorkspaces.map(name => <button type="button" key={name} aria-current={page === name ? "page" : undefined}
+          onClick={() => navigate(name)}>{name}</button>)}
+      </div>
+      <div className="operations__navigation-more">
+        <button type="button" aria-haspopup="dialog" onClick={() => workspaces.current?.showModal()}>All workspaces</button>
+        {!primaryWorkspaces.includes(page) && <span aria-current="page">{page}</span>}
+      </div>
     </nav>
     <div className="operations__mobile-nav">
       <span>{page}{paused && <small>Dispatch paused</small>}</span>
