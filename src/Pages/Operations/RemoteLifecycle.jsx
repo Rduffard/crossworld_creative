@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const short = value => value?.slice(0, 12) || "Unavailable";
 
@@ -8,6 +8,8 @@ export default function RemoteLifecycle({ request }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [revision, setRevision] = useState(0);
+  const [staging, setStaging] = useState(null);
+  const stagingIntent = useRef(null);
 
   useEffect(() => {
     let live = true;
@@ -16,6 +18,13 @@ export default function RemoteLifecycle({ request }) {
       try {
         const result = await request("/supervisor");
         if (live) setSnapshot(result);
+        const stage = await Promise.all([
+          request("/supervisor/staging/candidate"), request("/supervisor/staging"),
+        ]).catch(failure => {
+          if (failure.status === 404) return null;
+          throw failure;
+        });
+        if (live) setStaging(stage && { candidate: stage[0], requests: stage[1] });
       } catch (failure) {
         if (live && failure.status !== 404) setError(failure.message);
       } finally {
@@ -49,12 +58,49 @@ export default function RemoteLifecycle({ request }) {
     finally { setPending(false); }
   }
 
+  async function stage(device) {
+    const candidate = staging?.candidate;
+    if (!candidate || !window.confirm("Authorize staging on " + device.label + " for reviewed manifest " + candidate.digest + "?")) return;
+    const key = device._id + "/" + candidate.commit + "/" + candidate.digest;
+    if (stagingIntent.current?.key !== key) stagingIntent.current = { key, id: crypto.randomUUID() };
+    setPending(true);
+    setError("");
+    try {
+      await request("/supervisor/staging", { method: "POST", body: {
+        id: stagingIntent.current.id, hostId: device._id, reviewedDigest: candidate.digest, commit: candidate.commit,
+      } });
+      stagingIntent.current = null;
+      setRevision(value => value + 1);
+    } catch (failure) { setError(failure.message); }
+    finally { setPending(false); }
+  }
+
   return <section className="operations__panel" aria-label="Remote worker lifecycle">
     <h3>Remote worker lifecycle</h3>
     <p>Pause dispatch and start a maintenance hold before authorizing a worker change. The independent supervisor waits for the drain.</p>
     {error && <p role="alert">{error}</p>}
     {snapshot?.devices.length === 0 && <p>No release-managed supervisor has reported in.</p>}
     {!snapshot && !error && <p>Release-managed supervisor status unavailable.</p>}
+    {staging?.candidate && <details>
+      <summary>Prepared worker candidate</summary>
+      <dl className="operations__execution-summary">
+        <div><dt>Verified commit</dt><dd>{staging.candidate.commit}</dd></div>
+        <div><dt>Manifest SHA-256</dt><dd>{staging.candidate.digest}</dd></div>
+        <div><dt>Relay version</dt><dd>{staging.candidate.relayVersion}</dd></div>
+        <div><dt>Runtime files</dt><dd>{staging.candidate.files}</dd></div>
+      </dl>
+      <p>{staging.candidate.evidence} Stage the reviewed package before authorizing activation.</p>
+      {snapshot?.devices.map(device => <p key={device._id}>
+        {device.releases.includes(staging.candidate.digest) ? device.label + " has this package."
+          : device.remoteStaging
+            ? <button type="button" disabled={pending || !device.online ||
+                staging.requests.some(item => item.hostId === device._id && item.status === "authorized")}
+                onClick={() => stage(device)}>Stage on {device.label}</button>
+            : device.label + " requires a remote-staging-capable supervisor."}
+      </p>)}
+      {staging.requests.length > 0 && <ul className="operations__feed">{staging.requests.map(item =>
+        <li key={item._id}>{short(item.digest)} · {item.status}</li>)}</ul>}
+    </details>}
     {snapshot?.devices.map(device => {
       const target = selection[device._id];
       const blocked = pending || !device.online || snapshot.requests.some(item => item.hostId === device._id &&
