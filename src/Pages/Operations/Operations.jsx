@@ -4,6 +4,7 @@ import { SubscriptionLink } from "./subscriptionUsage";
 import { requestJson } from "../../utils/api";
 import { MediaComposer, MediaLibrary } from "./MediaAttachments";
 import OperationsShell from "./OperationsShell";
+import Missions from "./Missions";
 import { profileNames, workspaceNames, workspaces } from "./workspaces";
 import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
@@ -659,9 +660,9 @@ export default function Operations() {
   const canStart = !commonDisabled && hostOnline && selectedEffort && validAssignment && prompt.length <= startLimit &&
     (recipientId ? recipient && host?.employeeConversations && host.profiles?.includes("read-only") :
       selectedProfile === profile);
-  const canContinue = !selectedJob?.blueprintTyped && !commonDisabled && canAct && selectedJob?.codexThreadId &&
+  const canContinue = !selectedJob?.missionId && !selectedJob?.blueprintTyped && !commonDisabled && canAct && selectedJob?.codexThreadId &&
     !running.includes(selectedJob.status) && prompt.length <= continuationLimit;
-  const canQueue = !selectedJob?.blueprintTyped && !commonDisabled && ["queued", "running"].includes(selectedJob?.status) && prompt.length <= continuationLimit;
+  const canQueue = !selectedJob?.missionId && !selectedJob?.blueprintTyped && !commonDisabled && ["queued", "running"].includes(selectedJob?.status) && prompt.length <= continuationLimit;
   const canSteer = !selectedJob?.blueprintTyped && !editingLocked && canAct && selectedJob?.activeTurn && selectedJob.status === "running" &&
     !["pending", "sending"].includes(selectedJob.instruction?.state) && !mediaUploading && !mediaAttachments.length &&
     validPrompt && prompt.length <= continuationLimit;
@@ -1085,6 +1086,7 @@ export default function Operations() {
       </dialog>}
       {page === "Command Center" && <>
       <div className="operations__commandbar">
+        <Missions api={api} hosts={executionHosts} openJob={openJob} />
         <button className="operations__history-button" type="button" onClick={() => {
           historyDrawer.current?.showModal();
           setHistoryOpen(true);
@@ -1175,7 +1177,7 @@ export default function Operations() {
             <Suspense fallback={<p role="status">Loading transcript…</p>}>
             <JobTranscript api={api} key={jobId} job={selectedJob} host={selectedHost} jobId={jobId} mode={mode} copy={copy} selectJob={selectJob}
               promptPreview={sessions.get(selectedJob.sessionId)?.find((turn) => turn._id === jobId)?.prompt}
-              proposal={selectedJob.studioTools && <Suspense fallback={null}>
+              proposal={selectedJob.studioTools && !selectedJob.missionId && <Suspense fallback={null}>
                 <ObjectiveProposal key={jobId} request={api} jobId={jobId} jobStatus={selectedJob.status}
                   openObjective={(id) => openSource("objective", id)} />
               </Suspense>}>

@@ -1,0 +1,8 @@
+.operations-missions { width: min(42rem, calc(100% - 1rem)); }
+.operations-missions__summary { min-width: 0; color: var(--ops-muted); font-size: .8rem; overflow-wrap: anywhere; }
+.operations-missions__record { border-top: 1px solid var(--ops-border); padding-block: .7rem; }
+.operations-missions__record h3, .operations-missions__record p { margin: .25rem 0; }
+.operations-missions__record li button { margin-inline-start: .4rem; }
+.operations-missions__controls { display: flex; gap: .4rem; flex-wrap: wrap; margin-block: .5rem; }
+.operations-missions__create textarea { width: 100%; }
+@media (max-width: 560px) { .operations-missions__summary { flex-basis: 100%; } }

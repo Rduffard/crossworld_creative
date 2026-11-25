@@ -1,0 +1,173 @@
+import { useEffect, useRef, useState } from "react";
+import { missionPlan } from "./missionPlans";
+import "./Missions.css";
+
+const titleFor = (mission, key) => mission.steps.find(step => step.key === key)?.title;
+const localTime = date => new Date(+date - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+
+export default function Missions({ api, hosts, openJob }) {
+  const dialog = useRef(null);
+  const submission = useRef(null);
+  const [items, setItems] = useState([]);
+  const [available, setAvailable] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [template, setTemplate] = useState("acceptance");
+  const [reviewer, setReviewer] = useState("");
+  const [hostId, setHostId] = useState("");
+  const [end, setEnd] = useState("");
+  const [profile, setProfile] = useState("read-only");
+  const [custom, setCustom] = useState(null);
+  const [refresh, setRefresh] = useState(0);
+  const host = hosts.find(device => device._id === hostId) || hosts.find(device => device.online);
+  const steps = missionPlan(template, reviewer, profile);
+  const active = items.find(item => item.status === "active") || items.find(item => ["paused", "expired", "blocked"].includes(item.status));
+  const summary = active && (active.reason || active.dispatchHold || titleFor(active, active.next) || active.status);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer;
+    async function poll() {
+      try {
+        const records = await api("/missions", { signal: controller.signal, cache: "no-store" });
+        if (!controller.signal.aborted) { setAvailable(true); setItems(records); }
+      } catch (failure) {
+        if (controller.signal.aborted) return;
+        if (failure.status === 404) return;
+        setError(failure.message);
+      }
+      if (!controller.signal.aborted) timer = setTimeout(poll, document.hidden ? 30000 : 5000);
+    }
+    poll();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [api, refresh]);
+
+  async function open() {
+    dialog.current?.showModal();
+    if (!end) setEnd(localTime(new Date(Date.now() + 60 * 60 * 1000)));
+    try {
+      const directory = await api("/workforce");
+      setEmployees(directory.employees.filter(employee =>
+        ["qa", "art-director"].includes(employee.role) && employee.status === "available"));
+    } catch (failure) { setError(failure.message); }
+  }
+
+  async function mutate(request) {
+    setBusy(true);
+    setError("");
+    try { await request(); }
+    catch (failure) { setError(failure.message); }
+    finally { setBusy(false); setRefresh(value => value + 1); }
+  }
+
+  function create(event) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    mutate(async () => {
+      const body = {
+        title: data.get("title"), hostId: host._id, workspace: "development",
+        effort: data.get("effort"), endsAt: new Date(end).toISOString(),
+        steps: custom === null ? steps : JSON.parse(custom), paused: data.has("paused"),
+      };
+      const signature = JSON.stringify(body);
+      if (submission.current?.signature !== signature) submission.current = { signature, id: crypto.randomUUID() };
+      await api("/missions", { method: "POST", body: { ...body, id: submission.current.id } });
+      submission.current = null;
+      setCreating(false);
+    });
+  }
+
+  function control(item, action, options = {}) {
+    return mutate(() => api("/missions/" + item._id, { method: "PATCH", body: { action, revision: item.revision, ...options } }));
+  }
+
+  function inspect(id) {
+    dialog.current?.close();
+    openJob(id, "Execution");
+  }
+
+  if (!available) return null;
+  return <>
+    <button type="button" aria-haspopup="dialog" onClick={open}>Missions</button>
+    {active && <span className="operations-missions__summary">{active.title} · {summary}</span>}
+    <dialog ref={dialog} className="operations__dialog operations-missions" aria-labelledby="operations-mission-title">
+      <header className="operations__briefing-title">
+        <h2 id="operations-mission-title">Persistent missions</h2>
+        <form method="dialog"><button>Close</button></form>
+      </header>
+      {error && <p role="alert">{error}</p>}
+      {!items.length && <p>No missions registered.</p>}
+      {items.map(item => <section className="operations-missions__record" key={item._id} aria-label={item.title}>
+        <h3>{item.title}</h3>
+        <p>{item.status} · Window ends <time dateTime={item.endsAt}>{new Date(item.endsAt).toLocaleString()}</time></p>
+        {item.reason && <p>{item.reason}</p>}
+        {item.status === "active" && item.dispatchHold && <p>{item.dispatchHold}</p>}
+        {item.status === "active" && !item.hostOnline && <p>Waiting for the relay to reconnect.</p>}
+        {item.status === "active" && item.usageHeld && <p>Waiting for subscription capacity.</p>}
+        {item.next && <p>{item.current ? "Selected step" : "Next step"} <strong>{titleFor(item, item.next)}</strong></p>}
+        {item.execution && <button type="button" onClick={() => inspect(item.execution._id)}>Inspect {item.execution.status} execution</button>}
+        {item.awaitingApprovals?.map(key => <button type="button" key={key} disabled={busy || item.status !== "active"}
+          onClick={() => control(item, "approve", { step: key })}>Approve {titleFor(item, key)}</button>)}
+        <div className="operations-missions__controls">
+          {item.status === "active" && <button type="button" disabled={busy} onClick={() => control(item, "pause")}>Pause mission</button>}
+          {item.status === "paused" && <button type="button" disabled={busy} onClick={() => control(item, "resume")}>Resume mission</button>}
+          {item.status === "expired" && <form onSubmit={event => {
+            event.preventDefault();
+            const renewal = new FormData(event.currentTarget).get("renewal");
+            control(item, "resume", { endsAt: new Date(renewal).toISOString() });
+          }}>
+            <label>New window end<input name="renewal" type="datetime-local" required /></label>
+            <button disabled={busy}>Resume in new window</button>
+          </form>}
+          {["active", "paused", "expired", "blocked"].includes(item.status) && <button type="button" disabled={busy} onClick={() => {
+            if (window.confirm("Terminate this mission permanently? An execution already admitted can finish.")) control(item, "terminate");
+          }}>Terminate mission</button>}
+        </div>
+        <details><summary>Plan and execution history</summary>
+          <ol>{item.steps.map(step => <li key={step.key}>
+            <strong>{step.title}</strong> · {item.results[step.key]?.result || (item.current?.step === step.key ? "selected" : "pending")}
+            {item.results[step.key]?.jobId && <button type="button" onClick={() => inspect(item.results[step.key].jobId)}>Inspect</button>}
+          </li>)}</ol>
+        </details>
+      </section>)}
+      {!creating ? <button type="button" onClick={() => setCreating(true)}>Prepare mission</button> :
+        <form onSubmit={create} className="operations-missions__create">
+          <label>Plan template<select value={template} onChange={event => {
+            setTemplate(event.target.value); setCustom(null);
+          }}><option value="acceptance">Hosted continuation acceptance</option>
+            <option value="foundry">Operation FOUNDRY</option></select></label>
+          <label>Mission title<input name="title" key={template}
+            defaultValue={template === "foundry" ? "Operation FOUNDRY" : "FOUNDRY continuation acceptance"} required maxLength={120} /></label>
+          <label>Relay<select value={host?._id || ""} onChange={event => setHostId(event.target.value)} required>
+            <option value="">Select relay</option>
+            {hosts.map(device => <option key={device._id} value={device._id}>{device.label}</option>)}
+          </select></label>
+          <label>Reasoning effort<select name="effort" defaultValue="low" required>
+            {host?.efforts?.map(effort => <option key={effort}>{effort}</option>)}
+          </select></label>
+          <label>Independent reviewer<select value={reviewer} onChange={event => {
+            setReviewer(event.target.value); setCustom(null);
+          }} required>
+            <option value="">Select reviewer</option>
+            {employees.map(employee => <option key={employee._id} value={employee._id}>{employee.name}</option>)}
+          </select></label>
+          {template === "foundry" && <label>Implementation permissions<select value={profile} onChange={event => {
+            setProfile(event.target.value); setCustom(null);
+          }}>
+            <option value="read-only">Read Only</option>
+            {host?.profiles?.includes("development") && <option value="development">Development editing</option>}
+          </select></label>}
+          <label>Authorize dispatch until<input type="datetime-local" required value={end} onChange={event => setEnd(event.target.value)} /></label>
+          <label><span><input type="checkbox" name="paused" /> Register paused</span></label>
+          <details><summary>Review or edit the authorized plan</summary>
+            <label>Plan JSON<textarea rows={12} value={custom ?? JSON.stringify(steps, null, 2)}
+              onChange={event => setCustom(event.target.value)} /></label>
+          </details>
+          <p>Pause and expiry prevent new dispatch. An execution already admitted can finish. Approval gates apply to their own steps.</p>
+          <button disabled={busy || !host || !reviewer}>Register mission</button>
+        </form>}
+    </dialog>
+  </>;
+}
