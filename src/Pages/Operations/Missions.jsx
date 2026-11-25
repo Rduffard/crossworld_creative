@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { missionPlan } from "./missionPlans";
+import HorizonGrant from "./HorizonGrant";
 import "./Missions.css";
 
 const titleFor = (mission, key) => mission.steps.find(step => step.key === key)?.title;
@@ -15,6 +16,8 @@ export default function Missions({ api, hosts, openJob }) {
   const [registrationError, setRegistrationError] = useState("");
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [guiding, setGuiding] = useState(false);
+  const [grantReceipt, setGrantReceipt] = useState(null);
   const [employees, setEmployees] = useState([]);
   const [template, setTemplate] = useState("acceptance");
   const [reviewer, setReviewer] = useState("");
@@ -111,6 +114,8 @@ export default function Missions({ api, hosts, openJob }) {
         <form method="dialog"><button>Close</button></form>
       </header>
       {error && <p role="alert">{error}</p>}
+      {grantReceipt && <p role="status">HORIZON scope granted. First Mate can register it in the
+        selected conversation using grant ID <code>{grantReceipt._id}</code>.</p>}
       {!items.length && <p>No missions registered.</p>}
       {items.map(item => <section className="operations-missions__record" key={item._id} aria-label={item.title}>
         <h3>{item.title}</h3>
@@ -139,6 +144,7 @@ export default function Missions({ api, hosts, openJob }) {
           }}>Terminate mission</button>}
         </div>
         <details><summary>Plan and execution history</summary>
+          {item.status === "authorized" && <p>Grant ID <code>{item._id}</code></p>}
           {item.sourceConversationId && <button type="button" onClick={() => inspect(item.sourceConversationId)}>
             Inspect source conversation
           </button>}
@@ -157,7 +163,14 @@ export default function Missions({ api, hosts, openJob }) {
           </li>)}</ol>
         </details>
       </section>)}
-      {!creating ? <button type="button" onClick={() => setCreating(true)}>Prepare mission</button> :
+      {guiding ? <HorizonGrant api={api} hosts={hosts} onCancel={() => setGuiding(false)} onGranted={receipt => {
+        setGrantReceipt(receipt);
+        setGuiding(false);
+        setRefresh(value => value + 1);
+      }} /> : !creating ? <div className="operations-missions__controls">
+        <button type="button" onClick={() => setCreating(true)}>Prepare mission</button>
+        <button type="button" onClick={() => { setGrantReceipt(null); setGuiding(true); }}>Prepare HORIZON grant</button>
+      </div> :
         <form onSubmit={create} className="operations-missions__create" onInvalid={event => {
           const field = event.target.labels?.[0]?.textContent?.trim();
           setRegistrationError(field ? `Check the ${field} field and try again.` : "Complete the required mission fields.");

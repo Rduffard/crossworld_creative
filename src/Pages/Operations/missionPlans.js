@@ -1,6 +1,24 @@
 const task = (key, title, prompt, after = [], options = {}) => ({ key, title, prompt, after, profile: "read-only", ...options });
 const after = (step, result = "pass") => [{ step, result }];
 
+export const horizonGrant = {
+  title: "HORIZON- Hosted Increment 1",
+  workspace: "development",
+  delegatePlanning: true,
+  completionStep: "close",
+  steps: [
+    task("implementation", "Forge implements guided mission grant preparation",
+      "Implement guided Operations mission grant preparation for the approved HORIZON Blueprint. Let the owner review scope and grant once without transferring raw JSON. Reuse the existing grant route, preserve locks and approval gates, and run focused practical UI verification. Edit only Operations development repositories. Record the repository, working tree revision, tests and limitations. Obtain explicit owner authorization before committing and report the exact candidate commit. Do not push before independent review or promote production assets.",
+      [], { assignee: "add4559f-de4c-4f80-acf1-04aac7f8a1a8", profile: "full-access", requires: ["read", "write"] }),
+    task("coordinate", "First Mate records evidence and commissions exact review",
+      "Resolve the exact candidate repository and full commit from the implementation evidence. Use coordinate_studio_mission to add an eligible independent read-only review bound to that candidate. Add review PASS as a dependency of close and retain existing dependencies. Record the revision receipt. Report BLOCKED if the evidence or revision capability is unavailable.",
+      after("implementation"), { requires: ["read"] }),
+    task("close", "First Mate verifies the increment and records next work",
+      "Confirm the exact implementation candidate and independent review outcome from controller records. Record outstanding corrections and the next approved HORIZON work. Report PASS only with implementation and independent review evidence. Preserve separate owner acceptance and release gates.",
+      after("coordinate"), { requires: ["read"] }),
+  ],
+};
+
 export function missionPlan(template, reviewer, profile) {
   if (template === "acceptance") return [
     task("baseline", "Inspect FOUNDRY release evidence",
