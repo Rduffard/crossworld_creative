@@ -276,7 +276,7 @@ export default function Operations() {
     if (pinnedFirstMate) return openConversation({ sessionId: pinnedFirstMate });
     const location = window.location.href;
     try {
-      const recent = await api("/jobs?archived=false&compact=true");
+      const recent = await api("/jobs?archived=false&compact=true&firstMate=true");
       if (location !== window.location.href) return;
       const turn = recent.find(isFirstMateConversation);
       if (turn) openConversation(turn);

@@ -17,7 +17,9 @@ export default function ExecutiveBriefing({
 }) {
   const current = (missions || []).filter(mission => Object.hasOwn(missionWeight, mission.status))
     .sort((a, b) => missionWeight[a.status] - missionWeight[b.status]);
-  const missionApprovals = current.reduce((count, mission) => count + (mission.awaitingApprovals?.length || 0), 0);
+  const missionApprovals = missionError ? 0 : current
+    .filter(mission => mission.status === "active")
+    .reduce((count, mission) => count + (mission.awaitingApprovals?.length || 0), 0);
   const approvals = data.approvals.length;
   const outcomes = data.recent.filter(job => job.status === "completed").slice(0, displayedOutcomes);
   const next = data.next?.[0];

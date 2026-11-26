@@ -5,6 +5,7 @@ export default function ExecutionApprovals({ api, openJob }) {
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState(null);
   const [candidateError, setCandidateError] = useState("");
+  const [decisionError, setDecisionError] = useState("");
   const [pending, setPending] = useState(false);
   const [reviewing, setReviewing] = useState(null);
   const [notice, setNotice] = useState("");
@@ -12,6 +13,7 @@ export default function ExecutionApprovals({ api, openJob }) {
   const decisionPanel = useRef(null);
   const reviewButton = useRef(null);
   const result = useRef(null);
+  const failureMessage = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -43,9 +45,13 @@ export default function ExecutionApprovals({ api, openJob }) {
     if (notice) result.current?.focus();
   }, [notice]);
 
+  useEffect(() => {
+    if (decisionError) failureMessage.current?.focus();
+  }, [decisionError]);
+
   async function decide(candidate, decision) {
     setPending(true);
-    setCandidateError("");
+    setDecisionError("");
     try {
       await api("/blueprints/runs/" + candidate.runId + "/steps/" + candidate.stepId + "/approval",
         { method: "POST", body: { jobId: candidate.jobId, decision } });
@@ -53,7 +59,7 @@ export default function ExecutionApprovals({ api, openJob }) {
       setReviewing(null);
       setNotice(`${candidate.stepName} ${decision === "approve" ? "approved" : "rejected"}.`);
       setVersion(value => value + 1);
-    } catch (failure) { setCandidateError(failure.message); }
+    } catch (failure) { setDecisionError(failure.message); }
     finally { setPending(false); }
   }
 
@@ -82,6 +88,7 @@ export default function ExecutionApprovals({ api, openJob }) {
         <button type="button" disabled={pending} aria-expanded={reviewing === candidate.jobId} onClick={event => {
           reviewButton.current = event.currentTarget;
           setNotice("");
+          if (reviewing !== candidate.jobId) setDecisionError("");
           setReviewing(candidate.jobId);
         }}>Review decision</button>
       </div>
@@ -90,6 +97,7 @@ export default function ExecutionApprovals({ api, openJob }) {
         <p>{candidate.correctionScope
           ? "Authorizing correction allows work within the scope above."
           : "Approval allows this Blueprint run to continue."}</p>
+        {decisionError && <p ref={failureMessage} role="alert" tabIndex={-1}>{decisionError}</p>}
         <div className="operations__modes">
           <button type="button" onClick={() => decide(candidate, "approve")}>
             {candidate.correctionScope ? "Authorize correction" : "Approve candidate"}
