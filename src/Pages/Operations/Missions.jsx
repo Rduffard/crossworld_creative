@@ -243,7 +243,8 @@ export default function Missions({ api, hosts, openJob }) {
         {recoveryBatch && <form onSubmit={event => {
           event.preventDefault();
           mutate(async () => {
-            const receipt = await api("/missions/endurance-recovery", { method: "POST", body: recoveryBatch });
+            const receipt = await api("/missions/endurance-recovery", { method: "POST",
+              body: { ...recoveryBatch, approveReadOnlyReviews: true } });
             setRecoveryReceipt(receipt.approvalId);
             setRecoveryBatch(null);
           });
@@ -256,7 +257,8 @@ export default function Missions({ api, hosts, openJob }) {
             </li>;
           })}</ul>
           <p>Resume these six steps and allow one delegated retry per eligible routine step within its current window.
-            Each mission keeps its execution permissions and approval gates.</p>
+            This approval limits candidate reviews and retests, including the integrated demonstration, to Read Only without fallback.
+            Existing approval gates still apply.</p>
           <button type="submit" disabled={busy}>Approve recovery for all six missions</button>
         </form>}
       </details>}
