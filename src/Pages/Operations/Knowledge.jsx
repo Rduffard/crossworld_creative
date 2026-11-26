@@ -142,6 +142,7 @@ export default function Knowledge({ api, initialId, initialWorkshop, openWorksho
           <dt>Provenance</dt><dd>{detail.status}</dd>
           <dt>Source</dt><dd>{detail.source}</dd>
           <dt>Author</dt><dd>{detail.author}</dd>
+          {detail.kind === "decision" && <><dt>Revision</dt><dd>{detail.revision ?? 0}</dd></>}
           {detail.license && <><dt>License</dt><dd>{detail.license}</dd></>}
           <dt>Recorded</dt><dd><time dateTime={detail.createdAt}>{new Date(detail.createdAt).toLocaleString()}</time></dd>
         </dl>
@@ -168,11 +169,16 @@ export default function Knowledge({ api, initialId, initialWorkshop, openWorksho
         {detail.decisionHistory?.length > 0 && <details>
           <summary>Decision history</summary>
           <ul>{detail.decisionHistory.slice().reverse().map(version => <li key={version.revision}>
-            <strong>{version.title}</strong>
-            <p>{version.summary}</p>
-            <p>{version.source}</p>
-            <p>{version.body}</p>
-            <time dateTime={version.replacedAt}>{new Date(version.replacedAt).toLocaleString()}</time>
+            <details>
+              <summary>Revision {version.revision} · {version.title}</summary>
+              <p>{version.summary}</p>
+              <dl>
+                <dt>Source</dt><dd className="operations__knowledge-text">{version.source}</dd>
+                <dt>Archived</dt><dd><time dateTime={version.replacedAt}>{new Date(version.replacedAt).toLocaleString()}</time></dd>
+                <dt>Validation evidence</dt><dd className="operations__knowledge-text">{version.evidence || "No evidence recorded for this revision."}</dd>
+              </dl>
+              <p className="operations__knowledge-text">{version.body}</p>
+            </details>
           </li>)}</ul>
         </details>}
       </article> : detailError?.id === selection ? <p role="alert">{detailError.message}</p> : <p role="status">Loading record…</p>)}
