@@ -17,7 +17,7 @@ function roomStatus(room) {
   ].filter(Boolean).join(" · ");
 }
 
-export default function VirtualOffice({ api, openEmployee, openJob, openHeadquarters, openWorkflow, messageEmployee, canMessage }) {
+export default function VirtualOffice({ api, openEmployee, openWorkforce, openEmployeeWorkflow, openJob, openHeadquarters, openWorkflow, messageEmployee, canMessage }) {
   const [snapshot, setSnapshot] = useState(null);
   const [error, setError] = useState("");
   const [roomId, setRoomId] = useState("owner");
@@ -26,6 +26,7 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
   const roomHeading = useRef(null);
   const employeeHeading = useRef(null);
   const focusEmployee = useRef(false);
+  const selectedDesk = useRef(null);
 
   useEffect(() => {
     if (!employeeId || !focusEmployee.current) return;
@@ -86,6 +87,7 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
     <div className="operations__briefing-title operations__office-toolbar">
       <div className="operations__modes">
         <button type="button" onClick={openHeadquarters}>Headquarters</button>
+        <button type="button" onClick={openWorkforce}>Workforce directory</button>
         <button type="button" onClick={openWorkflow}>Live workflow</button>
       </div>
       <label><span id="operations-office-room-label">Room</span> <select value={room.id}
@@ -145,18 +147,28 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
               onClick={() => openJob(job._id, "Execution")}>{job.title || "Open execution"}</button>)}
           </li>)}</ul>
         </> : <>
-          {!room.members.length && <p>No employees assigned.</p>}
-          <ul className="operations__office-desks" aria-label="Room workstations">{room.members.map(({ employee: member, activity }) => <li key={member._id}>
-            <button type="button" data-state={activity.state} aria-pressed={member._id === employee?._id}
-              onClick={() => inspectMember(member._id)}>
-              <span className="operations__office-desk">
-                <CrewPortrait employee={member} state={activity.state} />
-                <span className="operations__office-terminal" aria-hidden="true" />
-              </span>
-              <strong>{member.name}</strong>
-              <small>{roleLabel(member.role)} · {activity.runs.some(run => approvalsByRun.has(run._id)) ? "Approval required" : activity.label}</small>
-            </button>
-          </li>)}</ul>
+          <div className="operations__office-room">
+            <div className="operations__office-wall">
+              <h3>Workstations</h3>
+              <span>{room.members.length} assigned</span>
+            </div>
+            {!room.members.length ? <p className="operations__office-empty">No employees assigned to this room.</p> :
+              <ul className="operations__office-desks" aria-label="Room workstations">
+                {room.members.map(({ employee: member, activity }) => <li key={member._id}>
+                  <button type="button" ref={member._id === employee?._id ? selectedDesk : null}
+                    data-state={activity.state} aria-pressed={member._id === employee?._id}
+                    onClick={() => inspectMember(member._id)}>
+                    <span className="operations__office-desk">
+                      <CrewPortrait employee={member} state={activity.state} />
+                      <span className="operations__office-terminal" aria-hidden="true" />
+                    </span>
+                    <strong>{member.name}</strong>
+                    <small>{roleLabel(member.role)} · {activity.label}
+                      {activity.runs.some(run => approvalsByRun.has(run._id)) && " · Approval required"}</small>
+                  </button>
+                </li>)}
+              </ul>}
+          </div>
         </>}
         {employee && <section className="operations__crew-inspector" aria-label={employee.name + " inspector"}>
           <h3 ref={employeeHeading} tabIndex={-1}>{employee.name}</h3>
@@ -173,9 +185,14 @@ export default function VirtualOffice({ api, openEmployee, openJob, openHeadquar
           </ul>}
           <div className="operations__modes">
             <button type="button" onClick={() => openEmployee(employee._id)}>Full profile</button>
+            <button type="button" onClick={() => openEmployeeWorkflow(employee._id)}>Employee workflow</button>
             {employee.status === "available" && <button type="button" disabled={!canMessage(employee)}
               onClick={() => messageEmployee(employee)}>Conversation</button>}
           </div>
+          <button type="button" onClick={() => {
+            selectedDesk.current?.focus();
+            setEmployeeId(null);
+          }}>Back to workstation</button>
           {employee.status === "available" && !canMessage(employee) && <small>Conversation requires a compatible selected relay.</small>}
         </section>}
       </section>

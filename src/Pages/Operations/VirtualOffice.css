@@ -40,17 +40,41 @@
   font-size: .8rem;
 }
 
+.operations__office-room {
+  margin-block: 1rem;
+  padding: .65rem;
+  border: 1px solid #718278;
+  border-block: 5px solid #463932;
+  background: repeating-linear-gradient(0deg, #21342e 0 15px, #2c4037 15px 16px);
+}
+
+.operations__office-wall {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .4rem;
+  padding: .6rem;
+  color: #fff1d9;
+  background: #112420;
+  border-block-end: 3px solid #95704f;
+}
+
+.operations__office-wall h3 {
+  margin: 0;
+}
+
+.operations__office-empty {
+  margin: .75rem .4rem;
+}
+
 .operations__office-desks {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 142px), 1fr));
   list-style: none;
-  margin: 1rem 0;
-  padding: 1rem;
+  margin: .75rem 0 0;
+  padding: 0;
   gap: .75rem;
-  background: repeating-linear-gradient(0deg, #21342e 0 15px, #2c4037 15px 16px);
-  border: 1px solid #718278;
-  border-block-start: 5px solid #718278;
-  border-block-end: 4px solid #463932;
 }
 
 .operations .operations__office-desks button {
@@ -88,6 +112,22 @@
   background: linear-gradient(175deg, transparent 0 56%, #95704f 57% 80%, #553f30 81% 91%, #091511 92%);
 }
 
+.operations__office-desk .operations__crew-portrait {
+  position: relative;
+  isolation: isolate;
+  margin-block-end: .55rem;
+}
+
+.operations__office-desk .operations__crew-portrait::before {
+  position: absolute;
+  z-index: -1;
+  inset: 75% 12% -.45rem;
+  border: 1px solid currentColor;
+  border-radius: 70% 70% 20% 20%;
+  background: inherit;
+  content: "";
+}
+
 .operations__office-terminal {
   display: block;
   width: clamp(1.5rem, 4vw, 2rem);
@@ -115,6 +155,22 @@
   .operations__office-desks button[data-state="running"] .operations__office-terminal {
     animation: operations-office-terminal 2s linear infinite;
   }
+
+  .operations__office-desks button[data-state="running"] .operations__crew-portrait {
+    animation: operations-office-occupant 2s ease-in-out infinite alternate;
+  }
+
+  .operations__office-desks button[data-state="available"] .operations__crew-portrait {
+    animation: operations-office-idle 4s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes operations-office-occupant {
+  to { transform: translateY(-2px) rotate(-4deg); }
+}
+
+@keyframes operations-office-idle {
+  to { transform: translateY(-1px); }
 }
 
 @keyframes operations-office-terminal {

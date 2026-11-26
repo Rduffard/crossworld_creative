@@ -974,6 +974,7 @@ export default function Operations() {
       {page === "Workforce" && <Workforce api={api} openJob={openJob} openRecord={openSource} openWorkflow={(id) => openSource("workflow-employee", id)} messageEmployee={messageEmployee} initialId={linkedRecord?.target === page ? linkedRecord.id : null} />}
       {page === "Office" && <VirtualOffice api={api} openJob={openJob}
         openEmployee={(id) => openSource("employee", id)} openWorkflow={() => setPage("Workflow")}
+        openWorkforce={() => setPage("Workforce")} openEmployeeWorkflow={(id) => openSource("workflow-employee", id)}
         messageEmployee={messageEmployee} canMessage={employee => !!hostOnline && (employee.role === "first-mate" ||
           !!(host.employeeConversations && host.profiles?.includes("read-only")))}
         openHeadquarters={() => setPage("Headquarters")} />}
