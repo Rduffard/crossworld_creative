@@ -300,7 +300,7 @@ export default function Operations() {
     changeMode("Conversation");
   }
 
-  function setPage(target, group, id) {
+  function setPage(target, group, id, options) {
     const slug = workspaces.find(([, name]) => name === target)?.[0];
     if (!slug) return;
     const next = new URLSearchParams(params);
@@ -313,7 +313,7 @@ export default function Operations() {
       next.delete("source");
       next.delete("record");
     }
-    setParams(next);
+    setParams(next, options);
   }
 
   function messageEmployee(employee) {
@@ -960,7 +960,8 @@ export default function Operations() {
         openOffice={() => setPage("Office")} openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
         openGovernance={() => setPage("Approvals")} openJob={openJob}
-        openCommand={() => setPage("Command Center")} openSchedules={() => setPage("Schedules")} />}
+        openCommand={() => setPage("Command Center")} openMission={id => setPage("Command Center", "mission", id)}
+        openSchedules={() => setPage("Schedules")} />}
       {page === "Blueprints" && <Blueprints api={api} openJob={openJob} standalone />}
       {page === "Workflow" && <Workflow key={linkedRecord?.id || "studio"} api={api} scope={linkedRecord?.group} recordId={linkedRecord?.id}
         openRecord={openSource} openJob={openJob} />}
@@ -1150,7 +1151,9 @@ export default function Operations() {
       </dialog>}
       {page === "Command Center" && <>
       <div className="operations__commandbar">
-        <Missions api={api} hosts={snapshot.hosts.filter(entry => !entry.revokedAt && !entry.isolatedReviewSnapshot)} openJob={openJob} />
+        <Missions api={api} hosts={snapshot.hosts.filter(entry => !entry.revokedAt && !entry.isolatedReviewSnapshot)} openJob={openJob}
+          missionId={recordGroup === "mission" ? params.get("record") : null}
+          clearMission={() => setPage("Command Center", null, null, { replace: true })} />
         <button className="operations__history-button" type="button" onClick={() => {
           historyDrawer.current?.showModal();
           setHistoryOpen(true);

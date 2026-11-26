@@ -7,8 +7,12 @@ import "./Missions.css";
 const titleFor = (mission, key) => mission.steps.find(step => step.key === key)?.title;
 const localTime = date => new Date(+date - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 
-export default function Missions({ api, hosts, openJob }) {
+export default function Missions({ api, hosts, openJob, missionId, clearMission }) {
   const dialog = useRef(null);
+  const launcher = useRef(null);
+  const linkedHeading = useRef(null);
+  const closingForNavigation = useRef(false);
+  const linkedDialog = useRef(false);
   const submission = useRef(null);
   const registrationAlert = useRef(null);
   const guideButton = useRef(null);
@@ -40,6 +44,8 @@ export default function Missions({ api, hosts, openJob }) {
   const steps = missionPlan(template, reviewer, profile);
   const active = items.find(item => item.status === "active") || items.find(item => ["paused", "expired", "blocked"].includes(item.status));
   const summary = active && (active.reason || active.dispatchHold || titleFor(active, active.next) || active.status);
+  const linkedMission = missionId && items.find(item => item._id === missionId);
+  const hasLinkedMission = Boolean(linkedMission);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -60,7 +66,22 @@ export default function Missions({ api, hosts, openJob }) {
     }
     poll();
     return () => { controller.abort(); clearTimeout(timer); };
-  }, [api, refresh]);
+  }, [api, refresh, missionId]);
+
+  useEffect(() => {
+    if (missionId) {
+      if (!dialog.current.open) dialog.current.showModal();
+    } else if (linkedDialog.current && dialog.current?.open) {
+      closingForNavigation.current = true;
+      dialog.current.close();
+      launcher.current?.focus();
+    }
+    linkedDialog.current = Boolean(missionId);
+  }, [missionId]);
+
+  useEffect(() => {
+    if (hasLinkedMission) linkedHeading.current?.focus();
+  }, [missionId, hasLinkedMission]);
 
   useEffect(() => {
     if (!opened) return;
@@ -148,21 +169,31 @@ export default function Missions({ api, hosts, openJob }) {
     return mutate(() => api("/missions/" + item._id, { method: "PATCH", body: { action, revision: item.revision, ...options } }));
   }
 
-  function inspect(id) {
+  function inspect(id, view = "Execution") {
+    closingForNavigation.current = true;
     dialog.current?.close();
-    openJob(id, "Execution");
+    openJob(id, view);
   }
 
   return <>
-    <button type="button" aria-haspopup="dialog" onClick={open}>Missions</button>
+    <button type="button" ref={launcher} aria-haspopup="dialog" onClick={open}>Missions</button>
     {active && <span className="operations-missions__summary">{active.title} · {summary}</span>}
-    <dialog ref={dialog} className="operations__dialog operations-missions" aria-labelledby="operations-mission-title" onClose={() => setOpened(false)}>
+    <dialog ref={dialog} className="operations__dialog operations-missions" aria-labelledby="operations-mission-title"
+      onClose={() => {
+        setOpened(false);
+        if (closingForNavigation.current) {
+          closingForNavigation.current = false;
+          return;
+        }
+        if (missionId) clearMission();
+        launcher.current?.focus();
+      }}>
       <header className="operations__briefing-title">
         <h2 id="operations-mission-title">Persistent missions</h2>
         <form method="dialog"><button>Close</button></form>
       </header>
       {error && <p role="alert">{error}</p>}
-      {recoveryBatch && <details open>
+      {!missionId && recoveryBatch && <details open>
         <summary>Recover ENDURANCE missions</summary>
         <form onSubmit={event => {
           event.preventDefault();
@@ -184,27 +215,26 @@ export default function Missions({ api, hosts, openJob }) {
           <button type="submit" disabled={busy || !!recoveryError || !recoveryBatch.ready}>Approve recovery for all six missions</button>
         </form>
       </details>}
-      {recoveryReceipt && <p role="status">Recovery approval recorded. Receipt <code>{recoveryReceipt}</code></p>}
-      {recoveryError && <p role="alert">Could not load the prepared recovery. {recoveryError}</p>}
+      {!missionId && recoveryReceipt && <p role="status">Recovery approval recorded. Receipt <code>{recoveryReceipt}</code></p>}
+      {!missionId && recoveryError && <p role="alert">Could not load the prepared recovery. {recoveryError}</p>}
       {missionError && <p role="alert">Could not refresh the mission list. {items.length > 0 && "Showing the last successful update."}</p>}
       {(missionError || recoveryError) && <button type="button" onClick={() => setRefresh(value => value + 1)}>Retry loading missions and recovery</button>}
-      <InitiativeEnrollment api={api} onEnrolled={() => setRefresh(value => value + 1)} />
+      {!missionId && <InitiativeEnrollment api={api} onEnrolled={() => setRefresh(value => value + 1)} />}
       {grantReceipt && <section className="operations-missions__record" aria-labelledby="horizon-grant-receipt">
         <h3 id="horizon-grant-receipt" ref={receiptHeading} tabIndex={-1}>HORIZON scope granted</h3>
         <p>First Mate can register the mission in the selected conversation using grant ID <code>{grantReceipt.id}</code>.</p>
         <div className="operations-missions__controls">
           <button type="button" onClick={copyGrantId}>Copy grant ID</button>
-          <button type="button" onClick={() => {
-            dialog.current?.close();
-            openJob(grantReceipt.sourceId, "Conversation");
-          }}>Open First Mate conversation</button>
+          <button type="button" onClick={() => inspect(grantReceipt.sourceId, "Conversation")}>Open First Mate conversation</button>
         </div>
         <p role="status">{copyStatus}</p>
       </section>}
-      {!loaded && !missionError && <p role="status">Loading missions…</p>}
-      {loaded && !missionError && !items.length && <p>No missions registered.</p>}
-      {items.map(item => <section className="operations-missions__record" key={item._id} aria-label={item.title}>
-        <h3>{item.title}</h3>
+      {missionId && !linkedMission && !missionError && <p role="status">
+        {loaded ? "This mission is unavailable in the current mission list." : "Loading mission…"}
+      </p>}
+      {!missionId && loaded && !missionError && !items.length && <p>No missions registered.</p>}
+      {(missionId ? linkedMission ? [linkedMission] : [] : items).map(item => <section className="operations-missions__record" key={item._id} aria-label={item.title}>
+        <h3 ref={missionId ? linkedHeading : null} tabIndex={missionId ? -1 : undefined}>{item.title}</h3>
         {item.initiativeId && item.status === "authorized" &&
           <InitiativeDependencies api={api} initiativeId={item.initiativeId} grantId={item._id} />}
         <p>{item.status} · Window ends <time dateTime={item.endsAt}>{new Date(item.endsAt).toLocaleString()}</time></p>
@@ -231,7 +261,7 @@ export default function Missions({ api, hosts, openJob }) {
             if (window.confirm("Terminate this mission permanently? An execution already admitted can finish.")) control(item, "terminate");
           }}>Terminate mission</button>}
         </div>
-        <details><summary>Plan and execution history</summary>
+        <details open={missionId && item.status === "blocked" ? true : undefined}><summary>Plan and execution history</summary>
           {item.status === "authorized" && <p>Grant ID <code>{item._id}</code></p>}
           {item.sourceConversationId && <button type="button" onClick={() => inspect(item.sourceConversationId)}>
             Inspect source conversation
@@ -270,7 +300,7 @@ export default function Missions({ api, hosts, openJob }) {
           </li>)}</ol>
         </details>
       </section>)}
-      {guiding ? <HorizonGrant api={api} hosts={hosts} onCancel={() => {
+      {!missionId && (guiding ? <HorizonGrant api={api} hosts={hosts} onCancel={() => {
         guideFocus.current = guideButton;
         setGuiding(false);
       }} onGranted={(receipt, sourceId) => {
@@ -330,7 +360,7 @@ export default function Missions({ api, hosts, openJob }) {
           <p>Pause and expiry prevent new dispatch. An execution already admitted can finish. Approval gates apply to their own steps.</p>
           {registrationError && <p role="alert" tabIndex={-1} ref={registrationAlert}>{registrationError}</p>}
           <button disabled={busy || !host}>{busy ? "Registering mission…" : "Register mission"}</button>
-        </form>}
+        </form>)}
     </dialog>
   </>;
 }
