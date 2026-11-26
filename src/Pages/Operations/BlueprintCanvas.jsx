@@ -11,6 +11,7 @@ export default function BlueprintCanvas({ steps, types, employees, states, selec
   const gesture = useRef(null);
   const [zoom, setZoom] = useState(1);
   const [source, setSource] = useState(null);
+  const [listView, setListView] = useState(false);
   const nodes = new Map(steps.map((step, index) => [step.id, {
     ...step, ...defaultPosition(index), ...positions[step.id],
   }]));
@@ -48,13 +49,28 @@ export default function BlueprintCanvas({ steps, types, employees, states, selec
 
   return <section className="operations__blueprint-diagram" aria-label="Workflow canvas">
     <div className="operations__blueprint-tools">
+      <button type="button" aria-pressed={listView} onClick={() => {
+        setListView(value => !value);
+        setSource(null);
+      }}>Step list</button>
+      {!listView && <>
       <button type="button" onClick={fit}>Fit</button>
       <label>Zoom <input aria-label="Canvas zoom" type="range" min="35" max="150" value={Math.round(zoom * 100)}
         onChange={event => setZoom(Number(event.target.value) / 100)} /></label>
       <output>{Math.round(zoom * 100)}%</output>
       <button type="button" onClick={() => { setZoom(1); viewport.current.scrollTo(0, 0); }}>Reset view</button>
       {source && <button type="button" onClick={() => setSource(null)}>Cancel connection</button>}
+      </>}
     </div>
+    {listView ? <ol className="operations__feed" aria-label="Blueprint steps and dependencies">
+      {[...nodes.values()].map(node => <li key={node.id}>
+        <button type="button" aria-pressed={selected === node.id} onClick={() => select(node.id)}>
+          {node.name || "Untitled step"}
+        </button>
+        <small>{[types[node.type || "task"], employees.get(node.employeeId), states.get(node.id)].filter(Boolean).join(" · ")}</small>
+        {node.dependencies.length > 0 && <small>Runs after {node.dependencies.map(id => nodes.get(id)?.name || "Untitled step").join(", ")}</small>}
+      </li>)}
+    </ol> :
     <div tabIndex={0} ref={viewport} className="operations__blueprint-viewport" aria-label="Scrollable workflow"
       onPointerDown={event => { if (event.pointerType === "mouse") start(event); }}
       onPointerMove={drag} onLostPointerCapture={() => { gesture.current = null; }}>
@@ -102,6 +118,6 @@ export default function BlueprintCanvas({ steps, types, employees, states, selec
           </article>)}
         </div>
       </div>
-    </div>
+    </div>}
   </section>;
 }
