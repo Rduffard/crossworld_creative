@@ -15,7 +15,10 @@ export default function Missions({ api, hosts, openJob }) {
   const receiptHeading = useRef(null);
   const guideFocus = useRef(null);
   const [items, setItems] = useState([]);
-  const [available, setAvailable] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [missionError, setMissionError] = useState(false);
+  const [recoveryError, setRecoveryError] = useState("");
   const [error, setError] = useState("");
   const [registrationError, setRegistrationError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,11 +47,14 @@ export default function Missions({ api, hosts, openJob }) {
     async function poll() {
       try {
         const records = await api("/missions", { signal: controller.signal, cache: "no-store" });
-        if (!controller.signal.aborted) { setAvailable(true); setItems(records); }
-      } catch (failure) {
+        if (!controller.signal.aborted) {
+          setItems(records);
+          setLoaded(true);
+          setMissionError(false);
+        }
+      } catch {
         if (controller.signal.aborted) return;
-        if (failure.status === 404) return;
-        setError(failure.message);
+        setMissionError(true);
       }
       if (!controller.signal.aborted) timer = setTimeout(poll, document.hidden ? 30000 : 5000);
     }
@@ -56,9 +62,29 @@ export default function Missions({ api, hosts, openJob }) {
     return () => { controller.abort(); clearTimeout(timer); };
   }, [api, refresh]);
 
-  async function open() {
+  useEffect(() => {
+    if (!opened) return;
+    const controller = new AbortController();
+    api("/missions/endurance-recovery", { signal: controller.signal, cache: "no-store" }).then(proposal => {
+      if (controller.signal.aborted) return;
+      setRecoveryBatch(proposal?.missions ? proposal : null);
+      setRecoveryReceipt(proposal?.approvalId || "");
+      setRecoveryError("");
+    }).catch(failure => {
+      if (!controller.signal.aborted) setRecoveryError(failure.message);
+    });
+    return () => controller.abort();
+  }, [api, opened, refresh]);
+
+  function open() {
     dialog.current?.showModal();
+    setOpened(true);
     if (!end) setEnd(localTime(new Date(Date.now() + 60 * 60 * 1000)));
+  }
+
+  async function prepareMission() {
+    setError("");
+    setCreating(true);
     try {
       const directory = await api("/workforce");
       setEmployees(directory.employees.filter(employee =>
@@ -94,25 +120,6 @@ export default function Missions({ api, hosts, openJob }) {
     finally { setBusy(false); setRefresh(value => value + 1); }
   }
 
-  async function loadRecovery(event) {
-    const [file] = event.target.files;
-    setRecoveryBatch(null);
-    setRecoveryReceipt("");
-    setError("");
-    if (!file) return;
-    try {
-      if (file.size > 8192) throw new Error("Choose a recovery manifest under 8 KB.");
-      const batch = JSON.parse(await file.text());
-      if (!Array.isArray(batch.missions) || batch.missions.length !== 6 || batch.missions.some(entry =>
-        !entry || typeof entry.id !== "string" || !Number.isSafeInteger(entry.revision) ||
-        !["implement", "review"].includes(entry.step) ||
-        typeof entry.candidate !== "string" || !/^(crossworld_creative|crossworld_backend)@[a-f0-9]{40}$/.test(entry.candidate))) {
-        throw new Error("The manifest must contain six mission revisions, blocked steps and exact candidates.");
-      }
-      setRecoveryBatch({ missions: batch.missions });
-    } catch (failure) { setError(failure.message); }
-  }
-
   function create(event) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -146,16 +153,41 @@ export default function Missions({ api, hosts, openJob }) {
     openJob(id, "Execution");
   }
 
-  if (!available) return null;
   return <>
     <button type="button" aria-haspopup="dialog" onClick={open}>Missions</button>
     {active && <span className="operations-missions__summary">{active.title} · {summary}</span>}
-    <dialog ref={dialog} className="operations__dialog operations-missions" aria-labelledby="operations-mission-title">
+    <dialog ref={dialog} className="operations__dialog operations-missions" aria-labelledby="operations-mission-title" onClose={() => setOpened(false)}>
       <header className="operations__briefing-title">
         <h2 id="operations-mission-title">Persistent missions</h2>
         <form method="dialog"><button>Close</button></form>
       </header>
       {error && <p role="alert">{error}</p>}
+      {recoveryBatch && <details open>
+        <summary>Recover ENDURANCE missions</summary>
+        <form onSubmit={event => {
+          event.preventDefault();
+          mutate(async () => {
+            const missions = recoveryBatch.missions.map(({ id, step, candidate, revision }) => ({ id, step, candidate, revision }));
+            const receipt = await api("/missions/endurance-recovery", { method: "POST",
+              body: { missions, approveReadOnlyReviews: true } });
+            setRecoveryReceipt(receipt.approvalId);
+            setRecoveryBatch(null);
+          });
+        }}>
+          <ul>{recoveryBatch.missions.map(entry => <li key={entry.id}>
+            {entry.title} · {entry.step} · revision {entry.revision} · <code>{entry.candidate}</code>
+            {" · ends "}<time dateTime={entry.endsAt}>{new Date(entry.endsAt).toLocaleString()}</time>
+            {!entry.ready && " · awaiting an eligible blocked step"}
+          </li>)}</ul>
+          <p>Resume these six steps with one delegated retry per eligible routine step within its current window.
+            Reviews and retests use Read Only without fallback. Existing approval gates still apply.</p>
+          <button type="submit" disabled={busy || !!recoveryError || !recoveryBatch.ready}>Approve recovery for all six missions</button>
+        </form>
+      </details>}
+      {recoveryReceipt && <p role="status">Recovery approval recorded. Receipt <code>{recoveryReceipt}</code></p>}
+      {recoveryError && <p role="alert">Could not load the prepared recovery. {recoveryError}</p>}
+      {missionError && <p role="alert">Could not refresh the mission list. {items.length > 0 && "Showing the last successful update."}</p>}
+      {(missionError || recoveryError) && <button type="button" onClick={() => setRefresh(value => value + 1)}>Retry loading missions and recovery</button>}
       <InitiativeEnrollment api={api} onEnrolled={() => setRefresh(value => value + 1)} />
       {grantReceipt && <section className="operations-missions__record" aria-labelledby="horizon-grant-receipt">
         <h3 id="horizon-grant-receipt" ref={receiptHeading} tabIndex={-1}>HORIZON scope granted</h3>
@@ -169,7 +201,8 @@ export default function Missions({ api, hosts, openJob }) {
         </div>
         <p role="status">{copyStatus}</p>
       </section>}
-      {!items.length && <p>No missions registered.</p>}
+      {!loaded && !missionError && <p role="status">Loading missions…</p>}
+      {loaded && !missionError && !items.length && <p>No missions registered.</p>}
       {items.map(item => <section className="operations-missions__record" key={item._id} aria-label={item.title}>
         <h3>{item.title}</h3>
         {item.initiativeId && item.status === "authorized" &&
@@ -237,32 +270,6 @@ export default function Missions({ api, hosts, openJob }) {
           </li>)}</ol>
         </details>
       </section>)}
-      {items.some(item => item.status === "blocked" && item.title.startsWith("ENDURANCE - ")) && <details>
-        <summary>Recover ENDURANCE missions</summary>
-        <label>Recovery manifest <input type="file" accept=".json,application/json" disabled={busy} onChange={loadRecovery} /></label>
-        {recoveryBatch && <form onSubmit={event => {
-          event.preventDefault();
-          mutate(async () => {
-            const receipt = await api("/missions/endurance-recovery", { method: "POST",
-              body: { ...recoveryBatch, approveReadOnlyReviews: true } });
-            setRecoveryReceipt(receipt.approvalId);
-            setRecoveryBatch(null);
-          });
-        }}>
-          <ul>{recoveryBatch.missions.map(entry => {
-            const mission = items.find(item => item._id === entry.id);
-            return <li key={entry.id}>
-              {mission?.title || entry.id} · {entry.step} · revision {entry.revision} · <code>{entry.candidate}</code>
-              {mission && <> · ends <time dateTime={mission.endsAt}>{new Date(mission.endsAt).toLocaleString()}</time></>}
-            </li>;
-          })}</ul>
-          <p>Resume these six steps and allow one delegated retry per eligible routine step within its current window.
-            This approval limits candidate reviews and retests, including the integrated demonstration, to Read Only without fallback.
-            Existing approval gates still apply.</p>
-          <button type="submit" disabled={busy}>Approve recovery for all six missions</button>
-        </form>}
-      </details>}
-      {recoveryReceipt && <p role="status">Recovery approval recorded. Receipt <code>{recoveryReceipt}</code></p>}
       {guiding ? <HorizonGrant api={api} hosts={hosts} onCancel={() => {
         guideFocus.current = guideButton;
         setGuiding(false);
@@ -272,7 +279,7 @@ export default function Missions({ api, hosts, openJob }) {
         setGuiding(false);
         setRefresh(value => value + 1);
       }} /> : !creating ? <div className="operations-missions__controls">
-        <button type="button" onClick={() => setCreating(true)}>Prepare mission</button>
+        <button type="button" onClick={prepareMission}>Prepare mission</button>
         <button type="button" ref={guideButton} onClick={() => {
           setGrantReceipt(null);
           setCopyStatus("");
