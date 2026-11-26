@@ -899,7 +899,8 @@ export default function Operations() {
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
         openOffice={() => setPage("Office")} openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
-        openGovernance={() => setPage("Approvals")} openJob={openJob} />}
+        openGovernance={() => setPage("Approvals")} openJob={openJob}
+        openCommand={() => setPage("Command Center")} openSchedules={() => setPage("Schedules")} />}
       {page === "Blueprints" && <Blueprints api={api} openJob={openJob} standalone />}
       {page === "Workflow" && <Workflow key={linkedRecord?.id || "studio"} api={api} scope={linkedRecord?.group} recordId={linkedRecord?.id}
         openRecord={openSource} openJob={openJob} />}
@@ -1099,6 +1100,7 @@ export default function Operations() {
         {pendingApprovalCount > 0 && <button type="button" onClick={() => setPage("Approvals")}>
           Approvals (${pendingApprovalCount})
         </button>}
+        <button type="button" onClick={() => setPage("Headquarters")}>Briefing</button>
       </div>
       <dialog ref={historyDrawer} className="operations__dialog operations__drawer" aria-labelledby="operations-history-title"
         onClose={() => setHistoryOpen(false)}>

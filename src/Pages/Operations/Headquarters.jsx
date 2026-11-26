@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import ExecutiveBriefing from "./ExecutiveBriefing";
 import { SubscriptionLink } from "./subscriptionUsage";
 
 const time = (value) => value
@@ -12,9 +13,12 @@ function Usage({ observation, resumesAt }) {
   </div>;
 }
 
-export default function Headquarters({ api, openJob, openObjectives, openWorkforce, openOffice, openProject, openFinance, pendingGovernance, openGovernance }) {
+export default function Headquarters({ api, openJob, openObjectives, openWorkforce, openOffice, openProject, openFinance,
+  pendingGovernance, openGovernance, openCommand, openSchedules }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
+  const [missions, setMissions] = useState(null);
+  const [missionError, setMissionError] = useState(false);
   const [attentionError, setAttentionError] = useState("");
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [readLocally, setReadLocally] = useState([]);
@@ -24,6 +28,14 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
     let mounted = true;
     let timer;
     async function refresh() {
+      const missionUpdate = api("/missions").then(result => {
+        if (mounted) {
+          setMissions(result);
+          setMissionError(false);
+        }
+      }).catch(() => {
+        if (mounted) setMissionError(true);
+      });
       try {
         const result = await api("/headquarters");
         if (mounted) {
@@ -33,6 +45,7 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
       } catch (failure) {
         if (mounted) setError(failure.message);
       }
+      await missionUpdate;
       if (mounted) timer = setTimeout(refresh, document.hidden ? 30000 : 10000);
     }
     refresh();
@@ -88,10 +101,11 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
         </div>
       </div>
     </section>
+    <ExecutiveBriefing data={data} missions={missions} missionError={missionError} pendingGovernance={pendingGovernance}
+      openJob={openJob} openCommand={openCommand} openGovernance={openGovernance} openSchedules={openSchedules} time={time} />
     <section className="operations__panel operations__briefing">
       <div className="operations__briefing-title">
-        <h2>Operational briefing</h2>
-        <span>{data.paused ? "Dispatch paused" : data.observedAt ? <>As of {time(data.observedAt)}</> : null}</span>
+        <h2>Studio activity</h2>
       </div>
       <dl className="operations__counters">
         <div><dt>Hosts online</dt><dd>{hosts.online || 0}<small>{hosts.offline || 0} offline</small></dd></div>
