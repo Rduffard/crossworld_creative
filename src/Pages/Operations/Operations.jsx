@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { SubscriptionLink } from "./subscriptionUsage";
 import { requestJson } from "../../utils/api";
 import { MediaComposer, MediaLibrary } from "./MediaAttachments";
@@ -1220,6 +1220,10 @@ export default function Operations() {
                 }}>
                 {mode === "Execution" ? "Conversation" : awaitingApproval ? "Review approval" : "Inspect"}
               </button>
+              {exactJobId && mode === "Conversation" && selectedJob.sessionId &&
+                <Link className="operations__resume-link" to={conversationLink(selectedJob.sessionId)}>
+                  Open current conversation
+                </Link>}
               {permissionUnavailable && <div role="status">
                 <p>{permissionUnavailable.text}</p>
                 <p>Review any partial work, then explicitly select an eligible profile in a new conversation before sending the remaining work.</p>
@@ -1230,7 +1234,6 @@ export default function Operations() {
                 <div>
               <button type="button" onClick={() => openSource("workflow-job", jobId)}>View execution workflow</button>
               {selectedJob.sessionId && <>
-                {!conversationId && <button type="button" onClick={() => openConversation(selectedJob)}>Open current conversation</button>}
                 <button type="button" onClick={() => copy(new URL(conversationLink(selectedJob.sessionId), window.location.origin).href)}>
                   Copy conversation link
                 </button>

@@ -419,6 +419,7 @@
 .operations__conversation-title { flex: 1 1 90px; min-width: 0; overflow-wrap: anywhere; }
 .operations__conversation-title h1 { margin: 0; font-size: 1.06rem; }
 .operations__conversation-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; color: var(--ops-muted); font-size: .8rem; }
+.operations__resume-link { min-height: 44px; display: inline-flex; align-items: center; padding-inline: 8px; }
 .operations__conversation-actions { position: relative; }
 .operations__conversation-actions > summary { min-height: 42px; display: flex; align-items: center; padding-inline: 8px; }
 .operations__conversation-actions > summary::after { content: "▾"; padding-left: 6px; }
