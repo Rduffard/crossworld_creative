@@ -6,6 +6,8 @@ import { MediaComposer, MediaLibrary } from "./MediaAttachments";
 import OperationsShell from "./OperationsShell";
 import Missions from "./Missions";
 import { profileNames, workspaceNames, workspaces } from "./workspaces";
+import { conversationLink, conversationTurn, executionIdPattern as jobIdPattern, firstMateSession,
+  isFirstMateConversation, saveFirstMateSession } from "./conversationNavigation";
 import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
 } from "./promptEditor";
@@ -86,7 +88,6 @@ function ExecutionElapsed({ startedAt, finishedAt, active }) {
 }
 const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
 const modes = ["Conversation", "Execution"];
-const jobIdPattern = /^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i;
 const sourcePages = {
   "workflow-job": "Workflow", "workflow-project": "Workflow", "workflow-objective": "Workflow", "workflow-employee": "Workflow",
   report: "Reports", objective: "Objectives", "project-objectives": "Objectives", project: "Projects", knowledge: "Knowledge", employee: "Workforce" };
@@ -106,8 +107,14 @@ function localScheduleTime(value) {
 export default function Operations() {
   const [params, setParams] = useSearchParams();
   const requestedId = params.get("job");
-  const jobId = jobIdPattern.test(requestedId || "") ? requestedId : "";
-  const recipientId = !jobId && jobIdPattern.test(params.get("recipient") || "") ? params.get("recipient") : "";
+  const exactJobId = jobIdPattern.test(requestedId || "") ? requestedId : "";
+  const requestedSession = params.get("conversation");
+  const conversationId = !exactJobId && jobIdPattern.test(requestedSession || "") ? requestedSession : "";
+  const [conversation, setConversation] = useState(null);
+  const resolvedConversation = conversation?.id === conversationId ? conversation : null;
+  const jobId = exactJobId || resolvedConversation?.turnId || "";
+  const hasConversation = !!(conversationId || jobId);
+  const recipientId = !hasConversation && jobIdPattern.test(params.get("recipient") || "") ? params.get("recipient") : "";
   const page = workspaces.find(([slug]) => slug === params.get("workspace"))?.[1] || (params.size ? "Command Center" : "Headquarters");
   const scheduling = page === "Command Center" && params.get("compose") === "schedule";
   const scheduleSummary = useRef(null);
@@ -121,6 +128,10 @@ export default function Operations() {
   const [accessDenied, setAccessDenied] = useState(false);
   const [search, setSearch] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [pinnedFirstMate, setPinnedFirstMate] = useState(() => {
+    try { return firstMateSession(window.localStorage); }
+    catch { return ""; }
+  });
   const [archived, setArchived] = useState(false);
   const [history, setHistory] = useState(null);
   const [profileChoice, setProfileChoice] = useState(null);
@@ -142,13 +153,14 @@ export default function Operations() {
   const recipient = recipients.find(employee => employee._id === recipientId);
   const [assignees, setAssignees] = useState([]);
   const [employeeId, setEmployeeId] = useState("");
-  const [mode, setMode] = useState(() => {
+  const [preferredMode, setMode] = useState(() => {
     try {
       const preference = window.localStorage.getItem("cw_operations_desk_view");
       if (modes.includes(preference)) return preference;
     } catch { /* Browser storage is optional. */ }
     return "Conversation";
   });
+  const mode = conversationId ? "Conversation" : preferredMode;
   const [scheduledTime, setScheduledTime] = useState("");
   const [repeatDays, setRepeatDays] = useState(0);
   const [repeatCount, setRepeatCount] = useState(3);
@@ -158,8 +170,8 @@ export default function Operations() {
   const [workspace, setWorkspace] = useState("development");
   const [effort, setEffort] = useState("");
   const [studioEffort, setStudioEffort] = useState(null);
-  const session = job?._id === jobId ? job.sessionId : "";
-  const draftKey = session || (jobId ? null : recipientId);
+  const session = conversationId || (job?._id === jobId ? job.sessionId : "");
+  const draftKey = session || (hasConversation ? null : recipientId);
   const [storedDrafts, setDrafts] = useState({});
   const draft = storedDrafts[draftKey] ?? (draftKey === null ? { prompt: "", error: "" } : getDraft(draftKey));
   const { prompt } = draft;
@@ -243,19 +255,35 @@ export default function Operations() {
     changeMode(view);
   }
 
-  async function openConversation(turn) {
+  function openConversation(turn) {
     if (!turn.sessionId) return openJob(turn._id, "Conversation");
-    const from = window.location.href;
-    let target = turn._id;
+    selectJob(null, null, null, turn.sessionId);
+    setAssignment(null);
+    changeMode("Conversation");
+  }
+
+  function updateFirstMatePin(id) {
     try {
-      const query = new URLSearchParams({ session: turn.sessionId, compact: "true" });
-      const history = await api("/jobs?" + query);
-      const current = history.find(entry => entry.status === "running") || history[0];
-      if (current?._id) target = current._id;
-    } catch { /* The selected turn is still available when the history refresh fails. */ }
-    if (window.location.href !== from) return;
-    if (target === jobId && page === "Command Center") changeMode("Conversation");
-    else openJob(target, "Conversation");
+      saveFirstMateSession(window.localStorage, id);
+      setPinnedFirstMate(id);
+      setNotice(id ? "First Mate conversation pinned on this device." : "First Mate conversation unpinned.");
+    } catch {
+      setError("This browser could not save the First Mate shortcut.");
+    }
+  }
+
+  async function openFirstMate() {
+    if (pinnedFirstMate) return openConversation({ sessionId: pinnedFirstMate });
+    const location = window.location.href;
+    try {
+      const recent = await api("/jobs?archived=false&compact=true");
+      if (location !== window.location.href) return;
+      const turn = recent.find(isFirstMateConversation);
+      if (turn) openConversation(turn);
+      else messageEmployee(null);
+    } catch (failure) {
+      if (location === window.location.href) setError(failure.message);
+    }
   }
 
   function openSource(group, id) {
@@ -289,12 +317,13 @@ export default function Operations() {
   }
 
   function messageEmployee(employee) {
+    if (employee?.role === "first-mate") return openFirstMate();
     setAssignment(null);
-    selectJob(null, employee?.role === "first-mate" ? null : employee?._id);
+    selectJob(null, employee?._id);
     changeMode("Conversation");
   }
 
-  function selectJob(id, employee, compose) {
+  function selectJob(id, employee, compose, sessionId) {
     setProfileChoice(null);
     setOutputScope(null);
     const next = new URLSearchParams(params);
@@ -305,6 +334,8 @@ export default function Operations() {
     else next.delete("compose");
     if (employee) next.set("recipient", employee);
     else next.delete("recipient");
+    if (sessionId) next.set("conversation", sessionId);
+    else next.delete("conversation");
     if (id) {
       next.set("job", id);
       setAssignment(null);
@@ -346,13 +377,13 @@ export default function Operations() {
   }
 
   useEffect(() => {
-    if (page !== "Command Center" || jobId || assignment || accessDenied) return;
+    if (page !== "Command Center" || hasConversation || assignment || accessDenied) return;
     let current = true;
     api("/workforce").then(({ employees }) => {
       if (current) setRecipients(employees.filter(employee => employee.status === "available"));
     }).catch(failure => { if (current) setError(failure.message); });
     return () => { current = false; };
-  }, [page, jobId, assignment, accessDenied]);
+  }, [page, hasConversation, assignment, accessDenied]);
 
   useEffect(() => {
     if (!assignment) return;
@@ -364,7 +395,7 @@ export default function Operations() {
   }, [assignment]);
 
   useEffect(() => {
-    if (page !== "Command Center" || jobId || accessDenied) return;
+    if (page !== "Command Center" || hasConversation || accessDenied) return;
     const controller = new AbortController();
     api("/workforce/execution-policy", { signal: controller.signal, cache: "no-store" })
       .then(policy => {
@@ -374,7 +405,32 @@ export default function Operations() {
         if (!controller.signal.aborted) setStudioEffort("medium");
       });
     return () => controller.abort();
-  }, [page, jobId, accessDenied]);
+  }, [page, hasConversation, accessDenied]);
+
+  useEffect(() => {
+    if (page !== "Command Center" || !conversationId || accessDenied) return;
+    const controller = new AbortController();
+    let timer;
+    async function refresh() {
+      const query = new URLSearchParams({ session: conversationId, compact: "true" });
+      try {
+        const turns = await api("/jobs?" + query, { signal: controller.signal, cache: "no-store" });
+        if (controller.signal.aborted) return;
+        const turn = conversationTurn(turns);
+        setConversation({ id: conversationId, turnId: turn?._id, error: turn ? "" : "This conversation could not be found." });
+      } catch (failure) {
+        if (controller.signal.aborted) return;
+        setConversation(previous => ({
+          id: conversationId,
+          turnId: previous?.id === conversationId ? previous.turnId : undefined,
+          error: failure.message,
+        }));
+      }
+      timer = setTimeout(refresh, document.hidden ? 30_000 : 4000);
+    }
+    refresh();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [page, conversationId, accessDenied, refreshVersion]);
 
   useEffect(() => {
     let active = true;
@@ -480,7 +536,7 @@ export default function Operations() {
     });
     return () => { active = false; };
   }, [canReadPreferences, preferencesVersion]);
-  const ordinaryConversation = !jobId && !assignment && !scheduling;
+  const ordinaryConversation = !hasConversation && !assignment && !scheduling;
   const permissionContext = JSON.stringify([workspace, assignment?.id, recipientId, scheduling]);
   const savedDirectProfile = ownerPreferences === false ? directPermission
     : ownerPreferences?.directDevelopmentProfile || "read-only";
@@ -619,7 +675,11 @@ export default function Operations() {
       setOutputScope(null);
       if (recurring) setNotice("Repeating schedule saved. Find it under Upcoming work.");
       else {
-        selectJob(_id);
+        if (scheduledAt === undefined) {
+          const sessionId = parent?.sessionId || _id;
+          if (conversationId === sessionId) setRefreshVersion(value => value + 1);
+          else openConversation({ _id, sessionId });
+        } else selectJob(_id);
         if (queue) setNotice("Follow-up queued in this conversation.");
       }
       if (!parent && assignment) setAssignment(null);
@@ -657,7 +717,7 @@ export default function Operations() {
   if (!snapshot) return <main className="operations"><h1>Crossworld Operations</h1><p role="status">{relayError || "Checking Operations access…"}</p></main>;
 
   const commonDisabled = !workerEnabled || editingLocked || mediaUploading || !validPrompt || !!relayError;
-  const canStart = !commonDisabled && hostOnline && selectedEffort && validAssignment && prompt.length <= startLimit &&
+  const canStart = !hasConversation && !commonDisabled && hostOnline && selectedEffort && validAssignment && prompt.length <= startLimit &&
     (recipientId ? recipient && host?.employeeConversations && host.profiles?.includes("read-only") :
       selectedProfile === profile);
   const canContinue = !selectedJob?.missionId && !selectedJob?.blueprintTyped && !commonDisabled && canAct && selectedJob?.codexThreadId &&
@@ -832,7 +892,7 @@ export default function Operations() {
             const latest = turns[0];
             const preview = (turns.find((entry) => !entry.parentId)?.prompt || latest.prompt || "").trim().replace(/\s+/g, " ");
             const label = latest.title || (preview.length > 64 ? preview.slice(0, 63).trimEnd() + "…" : preview);
-            const active = turns.some(entry => entry._id === jobId) || selectedJob?.sessionId === id;
+            const active = conversationId === id || turns.some(entry => entry._id === jobId) || selectedJob?.sessionId === id;
             const employee = latest.conversationActor?.name || latest.assigneeName || latest.studioActor?.name;
             return <li key={id}>
               <button type="button" aria-pressed={active} onClick={() => openConversation(latest)}>
@@ -1094,6 +1154,10 @@ export default function Operations() {
           historyDrawer.current?.showModal();
           setHistoryOpen(true);
         }}>History</button>
+        <button type="button" className="operations__first-mate-button" onClick={openFirstMate}
+          aria-current={pinnedFirstMate && session === pinnedFirstMate ? "location" : undefined}>
+          First Mate
+        </button>
         <button type="button" aria-label="New conversation" onClick={() => { setAssignment(null); selectJob(null); }}>
           New<span className="operations__desktop-label"> conversation</span>
         </button>
@@ -1115,10 +1179,15 @@ export default function Operations() {
           <button type="button" onClick={() => setPage("Schedules")}>Open schedules</button>
         </aside>
         <div className="operations__channel">
-          {!jobId && <div className="operations__welcome">
+          {!hasConversation && <div className="operations__welcome">
             <h1>Command Center</h1>
             <p>Send a message to start a conversation, or open one from history.</p>
           </div>}
+          {resolvedConversation?.error && <p className="operations__message-error" role="status">{resolvedConversation.error}</p>}
+          {conversationId && !jobId && !resolvedConversation?.error &&
+            <p className="operations__loading" role="status">Finding the current conversation turn…</p>}
+          {conversationId && conversationId === pinnedFirstMate && !jobId && resolvedConversation?.error &&
+            <button type="button" onClick={() => updateFirstMatePin("")}>Unpin First Mate conversation</button>}
           {transcriptError?.jobId === jobId && <p role="status">Conversation sync · {transcriptError.message}</p>}
           {jobId && !selectedJob && !error && transcriptError?.jobId !== jobId && <p className="operations__loading" role="status">Loading conversation…</p>}
           {selectedJob && <section className="operations__transcript">
@@ -1146,6 +1215,7 @@ export default function Operations() {
               <button type="button" className="operations__inspect-toggle"
                 onClick={() => {
                   if (mode === "Execution") openConversation(selectedJob);
+                  else if (conversationId) openJob(jobId, "Execution");
                   else changeMode("Execution");
                 }}>
                 {mode === "Execution" ? "Conversation" : awaitingApproval ? "Review approval" : "Inspect"}
@@ -1159,6 +1229,16 @@ export default function Operations() {
                 <summary>Actions</summary>
                 <div>
               <button type="button" onClick={() => openSource("workflow-job", jobId)}>View execution workflow</button>
+              {selectedJob.sessionId && <>
+                {!conversationId && <button type="button" onClick={() => openConversation(selectedJob)}>Open current conversation</button>}
+                <button type="button" onClick={() => copy(new URL(conversationLink(selectedJob.sessionId), window.location.origin).href)}>
+                  Copy conversation link
+                </button>
+                {isFirstMateConversation(selectedJob) && <button type="button" onClick={() =>
+                  updateFirstMatePin(pinnedFirstMate === selectedJob.sessionId ? "" : selectedJob.sessionId)}>
+                  {pinnedFirstMate === selectedJob.sessionId ? "Unpin First Mate conversation" : "Pin as First Mate conversation"}
+                </button>}
+              </>}
               <button type="button" disabled={busy} onClick={() => {
                 const title = window.prompt("Session name", selectedJob.title || "");
                 if (title?.trim()) action(async () => {
@@ -1240,7 +1320,7 @@ export default function Operations() {
             </JobTranscript>
             </Suspense>
           </section>}
-          {(!selectedJob || mode !== "Execution") && composer}
+          {(!hasConversation || (jobId && mode !== "Execution")) && composer}
         </div>
       </div>
       </>}

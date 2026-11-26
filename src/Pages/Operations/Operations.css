@@ -371,6 +371,10 @@
   border-bottom: 1px solid var(--ops-border);
 }
 .operations__commandbar .operations__history-button { display: none; }
+.operations__commandbar .operations__first-mate-button {
+  border-color: var(--ops-brass);
+  color: var(--ops-brass);
+}
 .operations__command-layout {
   flex: 1;
   min-height: 0;
@@ -586,6 +590,8 @@
   .operations__wordmark { font-size: .8rem; white-space: nowrap; }
   .operations__desktop-label { display: none; }
   .operations__commandbar, .operations__transcript > header { padding: 4px 8px; }
+  .operations__conversation-title { flex-basis: 100%; }
+  .operations__conversation-actions { margin-inline-start: auto; }
   #operations-composer { padding-inline: 8px; max-height: 57%; }
   .operations__editor textarea[rows="3"] { max-height: 4rem; }
   .operations__prompt-actions button { flex: 1 1 auto; }
