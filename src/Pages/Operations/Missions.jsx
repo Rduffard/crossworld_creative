@@ -20,6 +20,7 @@ export default function Missions({ api, hosts, openJob, missionId, clearMission 
   const guideFocus = useRef(null);
   const [items, setItems] = useState([]);
   const [available, setAvailable] = useState(false);
+  const [pollError, setPollError] = useState("");
   const [error, setError] = useState("");
   const [registrationError, setRegistrationError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -48,11 +49,15 @@ export default function Missions({ api, hosts, openJob, missionId, clearMission 
     async function poll() {
       try {
         const records = await api("/missions", { signal: controller.signal, cache: "no-store" });
-        if (!controller.signal.aborted) { setAvailable(true); setItems(records); }
+        if (!controller.signal.aborted) {
+          setAvailable(true);
+          setItems(records);
+          setPollError("");
+        }
       } catch (failure) {
         if (controller.signal.aborted) return;
         if (failure.status === 404 && !missionId) return;
-        setError(failure.message);
+        setPollError(failure.message);
       }
       if (!controller.signal.aborted) timer = setTimeout(poll, document.hidden ? 30000 : 5000);
     }
@@ -165,6 +170,7 @@ export default function Missions({ api, hosts, openJob, missionId, clearMission 
         <form method="dialog"><button>Close</button></form>
       </header>
       {error && <p role="alert">{error}</p>}
+      {pollError && <p role="alert">{pollError}</p>}
       {!missionId && <InitiativeEnrollment api={api} onEnrolled={() => setRefresh(value => value + 1)} />}
       {grantReceipt && <section className="operations-missions__record" aria-labelledby="horizon-grant-receipt">
         <h3 id="horizon-grant-receipt" ref={receiptHeading} tabIndex={-1}>HORIZON scope granted</h3>
@@ -175,7 +181,7 @@ export default function Missions({ api, hosts, openJob, missionId, clearMission 
         </div>
         <p role="status">{copyStatus}</p>
       </section>}
-      {missionId && !linkedMission && !error && <p role="status">
+      {missionId && !linkedMission && !pollError && !error && <p role="status">
         {available ? "This mission is unavailable in the current mission list." : "Loading mission…"}
       </p>}
       {!missionId && !items.length && <p>No missions registered.</p>}

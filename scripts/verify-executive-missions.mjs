@@ -34,6 +34,8 @@ try {
     };
     const writes = [];
     const errors = [];
+    const pollFailure = "Mission list temporarily unavailable.";
+    let failNextLinkedPoll = true;
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     page.setDefaultTimeout(15000);
     page.on("pageerror", error => errors.push(error.message));
@@ -47,6 +49,11 @@ try {
         "access-control-allow-methods": "GET,HEAD,PATCH,OPTIONS" };
       if (method === "OPTIONS") return route.fulfill({ status: 204, headers });
       if (method === "HEAD" && url.pathname === "/operations/hosts") return route.fulfill({ status: 200, headers });
+      if (method === "GET" && url.pathname === "/operations/missions" && failNextLinkedPoll &&
+        new URL(page.url()).searchParams.get("record") === activeId) {
+        failNextLinkedPoll = false;
+        return route.fulfill({ status: 503, headers, json: { message: pollFailure } });
+      }
       if (method !== "GET") {
         const id = url.pathname.split("/").at(-1);
         const body = request.postDataJSON();
@@ -85,8 +92,11 @@ try {
     const decision = briefing.getByRole("button", { name: "Review decisions for Blueprint production pilot" });
     await decision.click().catch(async error => { console.error(page.url(), await page.locator("body").innerText(), errors); throw error; });
     const dialog = page.getByRole("dialog", { name: "Persistent missions" });
+    const pollAlert = dialog.getByRole("alert").filter({ hasText: pollFailure });
+    await pollAlert.waitFor();
     const approve = dialog.getByRole("button", { name: "Approve Independent review" });
     await approve.waitFor();
+    await pollAlert.waitFor({ state: "hidden" });
     assert.equal(new URL(page.url()).searchParams.get("record"), activeId);
     assert.equal(await dialog.getByRole("region", { name: blocked.title }).count(), 0);
     assert.equal(writes.length, 0);
@@ -130,7 +140,7 @@ try {
     });
     assert.equal(writes.length, 3);
     assert.deepEqual(errors, []);
-    console.log(`${width}px: focused approval, conflict/retry, blocker, reload, evidence, recovery passed`);
+    console.log(`${width}px: poll recovery, focused approval, conflict/retry, blocker, reload, evidence, recovery passed`);
     await page.close();
   }
 } finally {
