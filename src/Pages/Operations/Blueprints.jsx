@@ -16,10 +16,14 @@ export default function Blueprints({ api, openJob, standalone = false }) {
   const [run, setRun] = useState({ objectiveId: "", hostId: "", workspace: "development" });
   const [scopedCorrection, setScopedCorrection] = useState(false);
   const [selection, setSelection] = useState(null);
+  const [runSelection, setRunSelection] = useState("");
   const [palette, setPalette] = useState("");
   const selected = draft.steps.find(step => step.id === selection) || draft.steps[0];
-  const latest = data?.runs.find(item => item.blueprintId === draft._id && item.revision === draft.revision);
-  const selectedRunStep = !dirty && latest?.steps.find(step => step.id === selected.id);
+  const revisionRuns = dirty ? [] : (data?.runs || [])
+    .filter(item => item.blueprintId === draft._id && item.revision === draft.revision);
+  const inspectedRun = revisionRuns.find(item => item._id === runSelection) ||
+    revisionRuns.find(item => item.status === "active") || revisionRuns[0];
+  const selectedRunStep = inspectedRun?.steps.find(step => step.id === selected.id);
   const hasCorrection = draft.steps.some(step => step.type === "correction");
   const supportsScopedCorrection = data?.devices.find(item => item._id === run.hostId)?.profiles?.includes("scoped");
 
@@ -55,6 +59,7 @@ export default function Blueprints({ api, openJob, standalone = false }) {
   function openDraft(saved) {
     setDraft(saved || newBlueprint());
     setSelection(null);
+    setRunSelection("");
     setDirty(!saved);
     setProblem("");
     setNotice("");
@@ -158,10 +163,17 @@ export default function Blueprints({ api, openJob, standalone = false }) {
         <fieldset disabled={pending}>
           <legend>Workflow definition</legend>
           <label>Name <input value={draft.name} maxLength={120} required onChange={event => change({ name: event.target.value })} /></label>
+          {inspectedRun && <label>Run shown on the workflow
+            <select value={inspectedRun._id} onChange={event => setRunSelection(event.target.value)}>
+              {revisionRuns.map(item => <option key={item._id} value={item._id}>
+                {item.status} · {item.createdAt ? new Date(item.createdAt).toLocaleString() : item._id}
+              </option>)}
+            </select>
+          </label>}
           <div className="operations__blueprint-editor">
           <BlueprintCanvas key={draft._id} steps={draft.steps} types={stepTypes}
             employees={new Map(data.employees.map(employee => [employee._id, employee.name]))}
-            states={new Map((dirty ? [] : latest?.steps || []).map(step => [step.id, step.status]))}
+            states={new Map((inspectedRun?.steps || []).map(step => [step.id, step.status]))}
             selected={selected.id} select={setSelection} connect={connect} positions={draft.layout || {}}
             move={(id, position) => {
               setDraft(previous => ({ ...previous, layout: { ...previous.layout, [id]: position } }));
