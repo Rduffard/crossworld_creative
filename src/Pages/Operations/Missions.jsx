@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import InitiativeEnrollment from "./InitiativeEnrollment";
 import { missionPlan } from "./missionPlans";
 import "./Missions.css";
 
@@ -111,6 +112,7 @@ export default function Missions({ api, hosts, openJob }) {
         <form method="dialog"><button>Close</button></form>
       </header>
       {error && <p role="alert">{error}</p>}
+      <InitiativeEnrollment api={api} onEnrolled={() => setRefresh(value => value + 1)} />
       {!items.length && <p>No missions registered.</p>}
       {items.map(item => <section className="operations-missions__record" key={item._id} aria-label={item.title}>
         <h3>{item.title}</h3>
