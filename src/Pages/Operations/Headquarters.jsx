@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import ExecutiveBriefing from "./ExecutiveBriefing";
+import ExecutiveService from "./ExecutiveService";
 import { SubscriptionLink } from "./subscriptionUsage";
 
 const time = (value) => value
@@ -52,7 +53,11 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
     return () => { mounted = false; clearTimeout(timer); };
   }, [api]);
 
-  if (!data) return <p role={error ? "alert" : "status"}>{error || "Loading headquarters…"}</p>;
+  const executiveService = <ExecutiveService key="executive-service" api={api} openJob={openJob} />;
+  if (!data) return <section className="operations__headquarters" aria-label="Headquarters">
+    {executiveService}
+    <p role={error ? "alert" : "status"}>{error || "Loading headquarters…"}</p>
+  </section>;
 
   const { hosts, jobs, approvals, recent, workforce = [], next = [], objectives = {}, activeProjects, finance } = data;
   const incidents = recent.filter((entry) => ["failed", "interrupted"].includes(entry.status));
@@ -101,6 +106,7 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
         </div>
       </div>
     </section>
+    {executiveService}
     <ExecutiveBriefing data={data} missions={missions} missionError={missionError} pendingGovernance={pendingGovernance}
       openJob={openJob} openCommand={openCommand} openMission={openMission}
       openGovernance={openGovernance} openSchedules={openSchedules} time={time} />
