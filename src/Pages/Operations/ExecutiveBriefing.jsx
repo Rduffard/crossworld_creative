@@ -13,13 +13,12 @@ function newestExecution(mission) {
 }
 
 export default function ExecutiveBriefing({
-  data, missions, missionError, pendingGovernance, openJob, openCommand, openGovernance, openSchedules, time,
+  data, missions, missionError, pendingGovernance, openJob, openCommand, openMission, openGovernance, openSchedules, time,
 }) {
   const current = (missions || []).filter(mission => Object.hasOwn(missionWeight, mission.status))
     .sort((a, b) => missionWeight[a.status] - missionWeight[b.status]);
-  const missionApprovals = missionError ? 0 : current
-    .filter(mission => mission.status === "active")
-    .reduce((count, mission) => count + (mission.awaitingApprovals?.length || 0), 0);
+  const missionDecisions = missionError ? [] : current.filter(mission =>
+    mission.status === "active" && mission.awaitingApprovals?.length);
   const approvals = data.approvals.length;
   const outcomes = data.recent.filter(job => job.status === "completed").slice(0, displayedOutcomes);
   const next = data.next?.[0];
@@ -45,12 +44,16 @@ export default function ExecutiveBriefing({
             </button>
             <small>Expires {time(new Date(entry.approval.expiresAt).toISOString())}</small>
           </li>)}
-          {missionApprovals > 0 && <li><button type="button" className="operations__source" onClick={openCommand}>
-            {missionApprovals} {missionApprovals === 1 ? "mission step awaiting approval" : "mission steps awaiting approval"}
-          </button></li>}
+          {missionDecisions.map(mission => <li key={mission._id}>
+            <button type="button" className="operations__source" onClick={() => openMission(mission._id)}>
+              Review decisions for {mission.title}
+            </button>
+            <small>{mission.awaitingApprovals.length === 1 ? "1 mission step awaiting approval"
+              : `${mission.awaitingApprovals.length} mission steps awaiting approval`}</small>
+          </li>)}
         </ul>
         {approvals > 3 && <p>{approvals - 3} more execution requests in Attention below.</p>}
-        {pendingGovernance === 0 && approvals === 0 && missionApprovals === 0 && missions && !missionError && <p>No decisions pending.</p>}
+        {pendingGovernance === 0 && approvals === 0 && !missionDecisions.length && missions && !missionError && <p>No decisions pending.</p>}
       </section>
       <section>
         <h3>Missions</h3>
@@ -63,7 +66,9 @@ export default function ExecutiveBriefing({
             const nextStep = mission.steps?.find(step => step.key === mission.next)?.title;
             const detail = mission.reason || mission.dispatchHold || nextStep;
             return <li key={mission._id} data-state={mission.status}>
-              {execution
+              {mission.status === "blocked"
+                ? <button type="button" className="operations__source" onClick={() => openMission(mission._id)}>{mission.title}</button>
+                : execution
                 ? <button type="button" className="operations__source" onClick={() => openJob(execution, "Execution")}>{mission.title}</button>
                 : <strong>{mission.title}</strong>}
               <small><strong>{mission.status}</strong>{detail && ` · ${detail}`}</small>
