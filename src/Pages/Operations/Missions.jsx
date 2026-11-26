@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import InitiativeEnrollment, { InitiativeDependencies } from "./InitiativeEnrollment";
 import { missionPlan } from "./missionPlans";
+import HorizonGrant from "./HorizonGrant";
 import "./Missions.css";
 
 const titleFor = (mission, key) => mission.steps.find(step => step.key === key)?.title;
@@ -10,12 +11,18 @@ export default function Missions({ api, hosts, openJob }) {
   const dialog = useRef(null);
   const submission = useRef(null);
   const registrationAlert = useRef(null);
+  const guideButton = useRef(null);
+  const receiptHeading = useRef(null);
+  const guideFocus = useRef(null);
   const [items, setItems] = useState([]);
   const [available, setAvailable] = useState(false);
   const [error, setError] = useState("");
   const [registrationError, setRegistrationError] = useState("");
   const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [guiding, setGuiding] = useState(false);
+  const [grantReceipt, setGrantReceipt] = useState(null);
+  const [copyStatus, setCopyStatus] = useState("");
   const [employees, setEmployees] = useState([]);
   const [template, setTemplate] = useState("acceptance");
   const [reviewer, setReviewer] = useState("");
@@ -60,6 +67,22 @@ export default function Missions({ api, hosts, openJob }) {
   useEffect(() => {
     if (registrationError) registrationAlert.current?.focus();
   }, [registrationError]);
+
+  useEffect(() => {
+    if (!guiding) {
+      guideFocus.current?.current?.focus();
+      guideFocus.current = null;
+    }
+  }, [guiding]);
+
+  async function copyGrantId() {
+    try {
+      await navigator.clipboard.writeText(grantReceipt.id);
+      setCopyStatus("Grant ID copied.");
+    } catch {
+      setCopyStatus("Copy unavailable. Select and copy the grant ID above.");
+    }
+  }
 
   async function mutate(request, reportError = setError) {
     setBusy(true);
@@ -113,6 +136,18 @@ export default function Missions({ api, hosts, openJob }) {
       </header>
       {error && <p role="alert">{error}</p>}
       <InitiativeEnrollment api={api} onEnrolled={() => setRefresh(value => value + 1)} />
+      {grantReceipt && <section className="operations-missions__record" aria-labelledby="horizon-grant-receipt">
+        <h3 id="horizon-grant-receipt" ref={receiptHeading} tabIndex={-1}>HORIZON scope granted</h3>
+        <p>First Mate can register the mission in the selected conversation using grant ID <code>{grantReceipt.id}</code>.</p>
+        <div className="operations-missions__controls">
+          <button type="button" onClick={copyGrantId}>Copy grant ID</button>
+          <button type="button" onClick={() => {
+            dialog.current?.close();
+            openJob(grantReceipt.sourceId, "Conversation");
+          }}>Open First Mate conversation</button>
+        </div>
+        <p role="status">{copyStatus}</p>
+      </section>}
       {!items.length && <p>No missions registered.</p>}
       {items.map(item => <section className="operations-missions__record" key={item._id} aria-label={item.title}>
         <h3>{item.title}</h3>
@@ -143,6 +178,7 @@ export default function Missions({ api, hosts, openJob }) {
           }}>Terminate mission</button>}
         </div>
         <details><summary>Plan and execution history</summary>
+          {item.status === "authorized" && <p>Grant ID <code>{item._id}</code></p>}
           {item.sourceConversationId && <button type="button" onClick={() => inspect(item.sourceConversationId)}>
             Inspect source conversation
           </button>}
@@ -180,7 +216,22 @@ export default function Missions({ api, hosts, openJob }) {
           </li>)}</ol>
         </details>
       </section>)}
-      {!creating ? <button type="button" onClick={() => setCreating(true)}>Prepare mission</button> :
+      {guiding ? <HorizonGrant api={api} hosts={hosts} onCancel={() => {
+        guideFocus.current = guideButton;
+        setGuiding(false);
+      }} onGranted={(receipt, sourceId) => {
+        guideFocus.current = receiptHeading;
+        setGrantReceipt({ id: receipt._id, sourceId });
+        setGuiding(false);
+        setRefresh(value => value + 1);
+      }} /> : !creating ? <div className="operations-missions__controls">
+        <button type="button" onClick={() => setCreating(true)}>Prepare mission</button>
+        <button type="button" ref={guideButton} onClick={() => {
+          setGrantReceipt(null);
+          setCopyStatus("");
+          setGuiding(true);
+        }}>Prepare HORIZON grant</button>
+      </div> :
         <form onSubmit={create} className="operations-missions__create" onInvalid={event => {
           const field = event.target.labels?.[0]?.textContent?.trim();
           setRegistrationError(field ? `Check the ${field} field and try again.` : "Complete the required mission fields.");

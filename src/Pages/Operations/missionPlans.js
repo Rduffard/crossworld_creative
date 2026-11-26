@@ -1,6 +1,19 @@
 const task = (key, title, prompt, after = [], options = {}) => ({ key, title, prompt, after, profile: "read-only", ...options });
 const after = (step, result = "pass") => [{ step, result }];
 
+export const horizonGrant = {
+  title: "HORIZON hosted grant verification",
+  workspace: "development",
+  completionStep: "close",
+  steps: [
+    task("dispatch", "Verify a disposable read-only dispatch",
+      "Return evidence that this disposable HORIZON grant dispatched a Read Only turn. Report this turn only. Use no tools and make no changes. End with MISSION_RESULT: PASS.",
+      [], { requires: ["read"] }),
+    task("close", "Record the grant verification result",
+      "Use the previous step result in the mission context to confirm whether the disposable dispatch passed. Use no tools and make no changes. End with MISSION_RESULT: PASS if the dispatch passed, otherwise MISSION_RESULT: BLOCKED.",
+      after("dispatch"), { requires: ["read"] }),
+  ],
+};
 export function missionPlan(template, reviewer, profile) {
   if (template === "acceptance") return [
     task("baseline", "Inspect FOUNDRY release evidence",

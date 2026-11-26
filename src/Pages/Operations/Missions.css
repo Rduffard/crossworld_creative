@@ -5,4 +5,7 @@
 .operations-missions__record li button { margin-inline-start: .4rem; }
 .operations-missions__controls { display: flex; gap: .4rem; flex-wrap: wrap; margin-block: .5rem; }
 .operations-missions__create textarea { width: 100%; }
+.operations-missions__create fieldset { min-width: 0; }
+.operations-missions__create select { max-width: 100%; }
+.operations-missions code { overflow-wrap: anywhere; }
 @media (max-width: 560px) { .operations-missions__summary { flex-basis: 100%; } }
