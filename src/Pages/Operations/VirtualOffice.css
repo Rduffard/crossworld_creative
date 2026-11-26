@@ -153,15 +153,15 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .operations__office-desks button[data-state="running"] .operations__office-terminal {
-    animation: operations-office-terminal 2s linear infinite;
+    animation: operations-office-terminal 2s linear 2;
   }
 
   .operations__office-desks button[data-state="running"] .operations__crew-portrait {
-    animation: operations-office-occupant 2s ease-in-out infinite alternate;
+    animation: operations-office-occupant 2s ease-in-out 2 alternate;
   }
 
   .operations__office-desks button[data-state="available"] .operations__crew-portrait {
-    animation: operations-office-idle 4s ease-in-out infinite alternate;
+    animation: operations-office-idle 2s ease-in-out 2 alternate;
   }
 }
 
