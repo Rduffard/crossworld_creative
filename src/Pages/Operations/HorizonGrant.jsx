@@ -10,6 +10,7 @@ const inheritedRoutes = [
 export default function HorizonGrant({ api, hosts, onGranted, onCancel }) {
   const request = useRef(null);
   const sourceSelect = useRef(null);
+  const errorMessage = useRef(null);
   const [jobs, setJobs] = useState(null);
   const [sourceId, setSourceId] = useState("");
   const [end, setEnd] = useState("");
@@ -17,6 +18,10 @@ export default function HorizonGrant({ api, hosts, onGranted, onCancel }) {
   const [error, setError] = useState("");
 
   useEffect(() => { sourceSelect.current?.focus(); }, []);
+
+  useEffect(() => {
+    if (error) errorMessage.current?.focus();
+  }, [error]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -97,9 +102,9 @@ export default function HorizonGrant({ api, hosts, onGranted, onCancel }) {
         </details>
       </li>)}</ol>
       <p>First Mate can register this disposable plan from the selected conversation. Both turns use Read Only and ask for a text result.</p>
+      {error && <p ref={errorMessage} role="alert" tabIndex={-1}>{error}</p>}
       <button disabled={!relay?.efforts?.length}>{busy ? "Saving grant…" : "Grant HORIZON scope"}</button>
       <button type="button" onClick={onCancel}>Cancel</button>
     </fieldset>
-    {error && <p role="alert">{error}</p>}
   </form>;
 }
