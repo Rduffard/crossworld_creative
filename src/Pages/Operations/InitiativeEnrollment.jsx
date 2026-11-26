@@ -1,4 +1,36 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+
+const dependencyMessages = {
+  pending: "Waiting for predecessor",
+  "needs-attention": "Predecessor needs attention",
+  "cannot-continue": "Cannot continue through predecessor",
+};
+
+export function InitiativeDependencies({ api, initiativeId, grantId }) {
+  const [result, setResult] = useState(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    async function refresh() {
+      try {
+        const initiative = await api("/missions/initiatives/" + initiativeId, { signal: controller.signal, cache: "no-store" });
+        if (!controller.signal.aborted) {
+          setResult(initiative.missions.find(mission => mission.grantId === grantId)?.dependencies ?? []);
+        }
+      } catch (failure) {
+        if (!controller.signal.aborted) setResult(failure.status === 404 ? "Waiting for initiative enrollment." :
+          "Initiative dependency status is temporarily unavailable.");
+      }
+    }
+    refresh();
+    const timer = setInterval(refresh, 15000);
+    return () => { controller.abort(); clearInterval(timer); };
+  }, [api, initiativeId, grantId]);
+  if (typeof result === "string") return <p>{result}</p>;
+  const waiting = result?.filter(item => item.state !== "passed");
+  return waiting?.length ? <ul aria-label="Initiative dependencies">
+    {waiting.map(item => <li key={item.id}>{dependencyMessages[item.state]} <strong>{item.title || item.id}</strong> ({item.status})</li>)}
+  </ul> : null;
+}
 
 function prepare(input) {
   const { initiative, grantDefaults, grants } = input ?? {};
@@ -52,7 +84,7 @@ export default function InitiativeEnrollment({ api, onEnrolled }) {
       for (const grant of plan.grants) {
         await api("/missions/grants", { method: "POST", body: { ...grant, endsAt } });
       }
-      const result = await api("/missions/initiatives", { method: "POST", body: plan.initiative });
+      const result = await api("/missions/initiatives", { method: "POST", body: { ...plan.initiative, approvePlan: true } });
       setReceipt(result);
       onEnrolled();
     } catch (failure) {
@@ -68,7 +100,7 @@ export default function InitiativeEnrollment({ api, onEnrolled }) {
       <label>Initiative file<input type="file" accept=".json,application/json" onChange={select} disabled={busy} /></label>
       {plan && <>
         <h3>{plan.initiative.title}</h3>
-        <p>{plan.initiative.blueprintRevision} · Anchor {plan.initiative.anchorId}</p>
+        <p>Blueprint reference {plan.initiative.blueprintRevision} · Anchor {plan.initiative.anchorId}</p>
         {plan.grants.map(grant => <details key={grant.id}>
           <summary>{grant.title}</summary>
           <p>{grant.workspace} · Relay {grant.hostId} · Source conversation {grant.sourceConversationId}</p>
@@ -81,7 +113,8 @@ export default function InitiativeEnrollment({ api, onEnrolled }) {
         </details>)}
         <label>Authorize dispatch until<input type="datetime-local" required value={end}
           onChange={event => setEnd(event.target.value)} disabled={busy || !!receipt} /></label>
-        <button disabled={busy || !!receipt}>Enroll initiative</button>
+        <p>Approval authorizes these exact mission grants and dependencies within the selected window. Step approval gates still apply.</p>
+        <button disabled={busy || !!receipt}>Approve and enroll initiative</button>
       </>}
       {error && <p role="alert">{error}</p>}
       {receipt && <p role="status">Initiative enrolled. The controller will register eligible missions on the relay.</p>}

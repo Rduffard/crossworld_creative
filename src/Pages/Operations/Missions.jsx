@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import InitiativeEnrollment from "./InitiativeEnrollment";
+import InitiativeEnrollment, { InitiativeDependencies } from "./InitiativeEnrollment";
 import { missionPlan } from "./missionPlans";
 import "./Missions.css";
 
@@ -118,6 +118,8 @@ export default function Missions({ api, hosts, openJob }) {
         <h3>{item.title}</h3>
         <p>{item.status} · Window ends <time dateTime={item.endsAt}>{new Date(item.endsAt).toLocaleString()}</time></p>
         {item.reason && <p>{item.reason}</p>}
+        {item.initiativeId && item.status === "authorized" &&
+          <InitiativeDependencies api={api} initiativeId={item.initiativeId} grantId={item._id} />}
         {item.status === "active" && item.dispatchHold && <p>{item.dispatchHold}</p>}
         {item.status === "active" && !item.hostOnline && <p>Waiting for the relay to reconnect.</p>}
         {item.status === "active" && item.usageHeld && <p>Waiting for subscription capacity.</p>}
