@@ -31,6 +31,8 @@ export default function Missions({ api, hosts, openJob }) {
   const [profile, setProfile] = useState("read-only");
   const [custom, setCustom] = useState(null);
   const [refresh, setRefresh] = useState(0);
+  const [recoveryBatch, setRecoveryBatch] = useState(null);
+  const [recoveryReceipt, setRecoveryReceipt] = useState("");
   const host = hosts.find(device => device._id === hostId) || hosts.find(device => device.online && !device.missionOnly);
   const steps = missionPlan(template, reviewer, profile);
   const active = items.find(item => item.status === "active") || items.find(item => ["paused", "expired", "blocked"].includes(item.status));
@@ -90,6 +92,25 @@ export default function Missions({ api, hosts, openJob }) {
     try { await request(); }
     catch (failure) { reportError(failure.message); }
     finally { setBusy(false); setRefresh(value => value + 1); }
+  }
+
+  async function loadRecovery(event) {
+    const [file] = event.target.files;
+    setRecoveryBatch(null);
+    setRecoveryReceipt("");
+    setError("");
+    if (!file) return;
+    try {
+      if (file.size > 8192) throw new Error("Choose a recovery manifest under 8 KB.");
+      const batch = JSON.parse(await file.text());
+      if (!Array.isArray(batch.missions) || batch.missions.length !== 6 || batch.missions.some(entry =>
+        !entry || typeof entry.id !== "string" || !Number.isSafeInteger(entry.revision) ||
+        !["implement", "review"].includes(entry.step) ||
+        typeof entry.candidate !== "string" || !/^(crossworld_creative|crossworld_backend)@[a-f0-9]{40}$/.test(entry.candidate))) {
+        throw new Error("The manifest must contain six mission revisions, blocked steps and exact candidates.");
+      }
+      setRecoveryBatch({ missions: batch.missions });
+    } catch (failure) { setError(failure.message); }
   }
 
   function create(event) {
@@ -216,6 +237,30 @@ export default function Missions({ api, hosts, openJob }) {
           </li>)}</ol>
         </details>
       </section>)}
+      {items.some(item => item.status === "blocked" && item.title.startsWith("ENDURANCE - ")) && <details>
+        <summary>Recover ENDURANCE missions</summary>
+        <label>Recovery manifest <input type="file" accept=".json,application/json" disabled={busy} onChange={loadRecovery} /></label>
+        {recoveryBatch && <form onSubmit={event => {
+          event.preventDefault();
+          mutate(async () => {
+            const receipt = await api("/missions/endurance-recovery", { method: "POST", body: recoveryBatch });
+            setRecoveryReceipt(receipt.approvalId);
+            setRecoveryBatch(null);
+          });
+        }}>
+          <ul>{recoveryBatch.missions.map(entry => {
+            const mission = items.find(item => item._id === entry.id);
+            return <li key={entry.id}>
+              {mission?.title || entry.id} · {entry.step} · revision {entry.revision} · <code>{entry.candidate}</code>
+              {mission && <> · ends <time dateTime={mission.endsAt}>{new Date(mission.endsAt).toLocaleString()}</time></>}
+            </li>;
+          })}</ul>
+          <p>Resume these six steps and allow one delegated retry per eligible routine step within its current window.
+            Each mission keeps its execution permissions and approval gates.</p>
+          <button type="submit" disabled={busy}>Approve recovery for all six missions</button>
+        </form>}
+      </details>}
+      {recoveryReceipt && <p role="status">Recovery approval recorded. Receipt <code>{recoveryReceipt}</code></p>}
       {guiding ? <HorizonGrant api={api} hosts={hosts} onCancel={() => {
         guideFocus.current = guideButton;
         setGuiding(false);
