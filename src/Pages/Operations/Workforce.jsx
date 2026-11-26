@@ -4,6 +4,7 @@ import WorkforcePolicy from "./WorkforcePolicy";
 import OrganizationChart from "./OrganizationChart";
 import CrewPortrait from "./CrewPortrait";
 import { employeeActivity } from "./crewActivity";
+import "./WorkforceDirectory.css";
 
 const roles = {
   worker: "Worker", lead: "Department lead", "first-mate": "First Mate", "art-director": "Art Director", qa: "Quality assurance", air: "AIR",
@@ -94,6 +95,52 @@ function ReportingForm({ employee, employees, pending, save }) {
   </details>;
 }
 
+function WorkforceDirectory({ departments, employees, observedRuns, positions, selection, select }) {
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("");
+  const query = search.trim().toLocaleLowerCase();
+  const departmentNames = new Map(departments.map(department => [department._id, department.name]));
+  const positionNames = new Map(positions.map(position => [position.key, position.name]));
+  const matching = employees.map(employee => ({
+    employee,
+    position: positionNames.get(employee.role) || roles[employee.role] || employee.role,
+    department: departmentNames.get(employee.departmentId) || "No department",
+  })).filter(({ employee, position, department }) =>
+    (!status || employee.status === status) &&
+    [employee.name, position, department].some(value => value.toLocaleLowerCase().includes(query)));
+
+  return <section className="operations__workforce-directory" aria-label="Workforce directory">
+    <div className="operations__workforce-directory-filters">
+      <label htmlFor="workforce-search">Find employees</label>
+      <input id="workforce-search" type="search" value={search} placeholder="Name, position, or department"
+        onChange={event => setSearch(event.target.value)} />
+      <label htmlFor="workforce-directory-status">Profile status</label>
+      <select id="workforce-directory-status" value={status} onChange={event => setStatus(event.target.value)}>
+        <option value="">All statuses</option>
+        <option value="available">Available</option>
+        <option value="paused">Paused</option>
+        <option value="retired">Retired</option>
+      </select>
+    </div>
+    <p role="status">{matching.length
+      ? `${matching.length} of ${employees.length} employees`
+      : "No employees match these filters."}</p>
+    {matching.length > 0 && <ul className="operations__crew-list">
+      {matching.map(({ employee, position, department }) => {
+        const activity = employeeActivity(employee, observedRuns);
+        return <li key={employee._id}>
+          <button type="button" aria-pressed={selection === employee._id}
+            onClick={event => select(employee._id, event.currentTarget)}>
+            <CrewPortrait employee={employee} state={activity.state} />
+            <span><strong>{employee.name}</strong><small>{position} · {department}</small>
+              <small>{activity.label}</small></span>
+          </button>
+        </li>;
+      })}
+    </ul>}
+  </section>;
+}
+
 export default function Workforce({ api, openJob, openRecord, openWorkflow, messageEmployee, initialId }) {
   const [directory, setDirectory] = useState(null);
   const [editor, setEditor] = useState(null);
@@ -103,10 +150,10 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
   const chartTrigger = useRef(null);
   const focusProfile = useRef(false);
 
-  function selectEmployee(id) {
-    focusProfile.current = true;
+  function selectEmployee(id, focus = "mobile") {
+    focusProfile.current = focus;
     if (selection === id && !editor) {
-      if (window.matchMedia("(max-width: 768px)").matches) profileHeading.current?.focus();
+      if (focus === "always" || window.matchMedia("(max-width: 768px)").matches) profileHeading.current?.focus();
       focusProfile.current = false;
     }
     setEditor(null);
@@ -117,6 +164,7 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
   const [refreshError, setRefreshError] = useState("");
   const [version, setVersion] = useState(0);
   const [policyOpen, setPolicyOpen] = useState(false);
+  const [view, setView] = useState("chart");
 
   useEffect(() => {
     let current = true;
@@ -139,8 +187,9 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
 
   useEffect(() => {
     if (!focusProfile.current || !profileHeading.current) return;
+    const focus = focusProfile.current;
     focusProfile.current = false;
-    if (window.matchMedia("(max-width: 768px)").matches) profileHeading.current.focus();
+    if (focus === "always" || window.matchMedia("(max-width: 768px)").matches) profileHeading.current.focus();
   }, [selection, directory]);
 
   async function save(path, body, method = "POST") {
@@ -177,11 +226,21 @@ export default function Workforce({ api, openJob, openRecord, openWorkflow, mess
         <summary>Execution configuration</summary>
         {policyOpen && <WorkforcePolicy api={api} employees={employees} departments={departments} />}
       </details>
-      <OrganizationChart departments={departments} employees={employees} observedRuns={observedRuns}
-        selection={selection} select={(id, trigger) => {
-          chartTrigger.current = trigger;
-          selectEmployee(id);
-        }} />
+      <div className="operations__modes operations__workforce-view">
+        <button type="button" aria-pressed={view === "chart"} onClick={() => setView("chart")}>Reporting chart</button>
+        <button type="button" aria-pressed={view === "directory"} onClick={() => setView("directory")}>Employee directory</button>
+      </div>
+      {view === "chart"
+        ? <OrganizationChart departments={departments} employees={employees} observedRuns={observedRuns}
+          selection={selection} select={(id, trigger) => {
+            chartTrigger.current = trigger;
+            selectEmployee(id);
+          }} />
+        : <WorkforceDirectory departments={departments} employees={employees} positions={positions} observedRuns={observedRuns}
+          selection={selection} select={(id, trigger) => {
+            chartTrigger.current = trigger;
+            selectEmployee(id, "always");
+          }} />}
       <div className="operations__modes">
         <button type="button" onClick={() => setEditor("employee")}>Add employee</button>
         <button type="button" onClick={() => setEditor("department")}>Add department</button>

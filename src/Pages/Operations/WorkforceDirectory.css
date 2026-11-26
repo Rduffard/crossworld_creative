@@ -1,0 +1,26 @@
+.operations__workforce-view {
+  margin-block: .75rem;
+}
+
+.operations__workforce-directory {
+  margin-block: .75rem 1rem;
+}
+
+.operations__workforce-directory-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: .3rem;
+}
+
+.operations .operations__workforce-directory-filters :is(input, select) {
+  width: 100%;
+  min-height: 44px;
+}
+
+.operations__workforce-directory-filters label:not(:first-child) {
+  margin-block-start: .5rem;
+}
+
+.operations .operations__workforce-directory .operations__crew-list button {
+  width: 100%;
+}
