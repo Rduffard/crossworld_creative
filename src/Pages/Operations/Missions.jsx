@@ -116,10 +116,10 @@ export default function Missions({ api, hosts, openJob }) {
       {!items.length && <p>No missions registered.</p>}
       {items.map(item => <section className="operations-missions__record" key={item._id} aria-label={item.title}>
         <h3>{item.title}</h3>
-        <p>{item.status} · Window ends <time dateTime={item.endsAt}>{new Date(item.endsAt).toLocaleString()}</time></p>
-        {item.reason && <p>{item.reason}</p>}
         {item.initiativeId && item.status === "authorized" &&
           <InitiativeDependencies api={api} initiativeId={item.initiativeId} grantId={item._id} />}
+        <p>{item.status} · Window ends <time dateTime={item.endsAt}>{new Date(item.endsAt).toLocaleString()}</time></p>
+        {item.reason && <p>{item.reason}</p>}
         {item.status === "active" && item.dispatchHold && <p>{item.dispatchHold}</p>}
         {item.status === "active" && !item.hostOnline && <p>Waiting for the relay to reconnect.</p>}
         {item.status === "active" && item.usageHeld && <p>Waiting for subscription capacity.</p>}
