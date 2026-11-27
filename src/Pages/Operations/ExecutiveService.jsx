@@ -6,14 +6,14 @@ const serviceStates = ["Working", "Standing By", "Awaiting Decision", "Paused"];
 const orchestrationStates = { healthy: "Healthy", degraded: "Degraded", stale: "Stale" };
 
 function serviceDate(value) {
-  if (typeof value !== "string" || !value.trim()) return null;
+  if (typeof value !== "number" && (typeof value !== "string" || !value.trim())) return null;
   const date = new Date(value);
   return Number.isNaN(+date) ? null : date;
 }
 
-function ServiceTime({ label, value, date = serviceDate(value) }) {
+function ServiceTime({ label, date }) {
   if (!date) return null;
-  return <div><dt>{label}</dt><dd><time dateTime={value}>{date.toLocaleString()}</time></dd></div>;
+  return <div><dt>{label}</dt><dd><time dateTime={date.toISOString()}>{date.toLocaleString()}</time></dd></div>;
 }
 
 export default function ExecutiveService({ api, openJob, openMission }) {
@@ -71,6 +71,8 @@ export default function ExecutiveService({ api, openJob, openMission }) {
   }
 
   const orchestration = service?.orchestration;
+  const lastReview = serviceDate(service?.lastReviewAt);
+  const nextReview = serviceDate(service?.nextReviewAt);
   const healthStatus = typeof orchestration?.status === "string" && Object.hasOwn(orchestrationStates, orchestration.status)
     ? orchestrationStates[orchestration.status] : null;
   const lastCheck = serviceDate(orchestration?.finishedAt);
@@ -78,6 +80,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
   const { onlineRelays, relayCount } = orchestration ?? {};
   const hasRelayCounts = Number.isInteger(onlineRelays) && Number.isInteger(relayCount) &&
     onlineRelays >= 0 && onlineRelays <= relayCount;
+  const hasHealthMetrics = lastCheck || nextCheck || hasRelayCounts;
   return <section className="operations__panel operations__briefing" aria-labelledby="operations-executive-service-title">
     <div className="operations__briefing-title">
       <h2 id="operations-executive-service-title">First Mate service</h2>
@@ -87,17 +90,20 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     {statusError && <p role="alert">Service status unavailable. {statusError}</p>}
     {updateError && <p role="alert">Could not confirm the service update. {updateError}</p>}
     {service?.reason && <p>{service.reason}</p>}
-    {(service?.lastReviewAt || service?.nextReviewAt) && <dl className="operations__counters">
-      <ServiceTime label="Last review" value={service.lastReviewAt} />
-      <ServiceTime label="Next review" value={service.nextReviewAt} />
+    {(lastReview || nextReview) && <dl className="operations__counters">
+      <ServiceTime label="Last review" date={lastReview} />
+      <ServiceTime label="Next review" date={nextReview} />
     </dl>}
     {service && <section className="operations__orchestration" aria-labelledby="operations-orchestration-title">
       <h3 id="operations-orchestration-title">Orchestration health</h3>
-      <p role="status"><strong>{healthStatus || "Orchestration health unavailable"}{healthStatus && statusError && " (last known)"}</strong></p>
+      <p role="status">
+        <strong>{healthStatus || "Unavailable"}{healthStatus && statusError && " (last known)"}</strong>
+        {!healthStatus && statusError && hasHealthMetrics && <>. Metrics shown are last known.</>}
+      </p>
       {typeof orchestration?.reason === "string" && orchestration.reason && <p>{orchestration.reason}</p>}
-      {(lastCheck || nextCheck || hasRelayCounts) && <dl className="operations__counters">
-        <ServiceTime label="Last check" value={orchestration.finishedAt} date={lastCheck} />
-        <ServiceTime label="Next check" value={orchestration.nextSweepAt} date={nextCheck} />
+      {hasHealthMetrics && <dl className="operations__counters">
+        <ServiceTime label="Last check" date={lastCheck} />
+        <ServiceTime label="Next check" date={nextCheck} />
         {hasRelayCounts && <div><dt>Relays online</dt><dd>{onlineRelays} of {relayCount}</dd></div>}
       </dl>}
     </section>}
