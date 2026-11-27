@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { SubscriptionLink } from "./subscriptionUsage";
 import { requestJson } from "../../utils/api";
@@ -11,6 +11,7 @@ import { conversationLink, conversationTurn, executionIdPattern as jobIdPattern,
 import {
   ATTACHMENT_BYTES, LEGACY_PROMPT_LIMIT, PROMPT_LIMIT, importPromptFile, loadPromptDraft, savePromptDraft,
 } from "./promptEditor";
+import { turnActor } from "./timelineEntries.js";
 import "./Operations.css";
 import "./Conversation.css";
 
@@ -87,6 +88,7 @@ function ExecutionElapsed({ startedAt, finishedAt, active }) {
   </small>;
 }
 const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
+const mobileConversationQuery = "(max-width: 900px)";
 const modes = ["Conversation", "Execution"];
 const sourcePages = {
   "workflow-job": "Workflow", "workflow-project": "Workflow", "workflow-objective": "Workflow", "workflow-employee": "Workflow",
@@ -160,7 +162,21 @@ export default function Operations() {
     } catch { /* Browser storage is optional. */ }
     return "Conversation";
   });
-  const mode = conversationId ? "Conversation" : preferredMode;
+  const [compact, setCompact] = useState(() => window.matchMedia(mobileConversationQuery).matches);
+  const [conversationLayout, setConversationLayout] = useState(null);
+  const [inspection, setInspection] = useState("");
+  const conversationKey = conversationId || jobId;
+  const mode = conversationId || (compact && inspection !== exactJobId) ? "Conversation" : preferredMode;
+  const conversationExpanded = !!conversationKey && mode === "Conversation" &&
+    (conversationLayout?.key === conversationKey ? conversationLayout.expanded : compact);
+
+  useEffect(() => {
+    const query = window.matchMedia(mobileConversationQuery);
+    const sync = () => setCompact(query.matches);
+    sync();
+    query.addEventListener("change", sync);
+    return () => query.removeEventListener("change", sync);
+  }, []);
   const [scheduledTime, setScheduledTime] = useState("");
   const [repeatDays, setRepeatDays] = useState(0);
   const [repeatCount, setRepeatCount] = useState(3);
@@ -176,6 +192,28 @@ export default function Operations() {
   const draft = storedDrafts[draftKey] ?? (draftKey === null ? { prompt: "", error: "" } : getDraft(draftKey));
   const { prompt } = draft;
   const [expanded, setExpanded] = useState(false);
+  const promptInput = useRef(null);
+  const composerAvailable = !!snapshot && !accessDenied && page === "Command Center";
+  useLayoutEffect(() => {
+    const node = promptInput.current;
+    if (!node || !compact || !jobId || expanded) return;
+    let width;
+    function fit() {
+      width = node.clientWidth;
+      node.style.height = "auto";
+      node.style.height = node.scrollHeight + node.offsetHeight - node.clientHeight + "px";
+    }
+    fit();
+    const observer = new ResizeObserver(() => {
+      if (node.clientWidth !== width) fit();
+    });
+    observer.observe(node, { box: "border-box" });
+    return () => {
+      observer.disconnect();
+      node.style.removeProperty("height");
+    };
+  }, [prompt, compact, jobId, expanded, mode, composerAvailable]);
+
   const [importing, setImporting] = useState(false);
   const [attachment, setAttachment] = useState({});
   const [mediaDrafts, setMediaDrafts] = useState({});
@@ -217,18 +255,31 @@ export default function Operations() {
   }
 
   useEffect(() => {
+    if (!conversationExpanded || page !== "Command Center") return;
+    const meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) return;
+    const previous = meta.content;
+    meta.content = previous + ", viewport-fit=cover";
+    return () => { meta.content = previous; };
+  }, [conversationExpanded, page]);
+
+  useEffect(() => {
     const viewport = window.visualViewport;
     if (!viewport) return;
     const sync = () => {
       if (viewport.scale === 1) document.documentElement.style.setProperty("--operations-viewport", `${viewport.height}px`);
       else document.documentElement.style.removeProperty("--operations-viewport");
+      document.documentElement.style.setProperty("--operations-viewport-top", (viewport.scale === 1 ? viewport.offsetTop : 0) + "px");
       setKeyboardOpen(viewport.scale === 1 && window.innerHeight - viewport.height > 120 &&
         ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName));
     };
     sync();
     viewport.addEventListener("resize", sync);
+    viewport.addEventListener("scroll", sync);
     return () => {
       viewport.removeEventListener("resize", sync);
+      viewport.removeEventListener("scroll", sync);
+      document.documentElement.style.removeProperty("--operations-viewport-top");
       document.documentElement.style.removeProperty("--operations-viewport");
     };
   }, []);
@@ -252,6 +303,7 @@ export default function Operations() {
 
   function openJob(id, view) {
     selectJob(id);
+    setInspection(view === "Execution" ? id : "");
     changeMode(view);
   }
 
@@ -324,6 +376,8 @@ export default function Operations() {
   }
 
   function selectJob(id, employee, compose, sessionId) {
+    setConversationLayout(null);
+    setInspection("");
     setProfileChoice(null);
     setOutputScope(null);
     const next = new URLSearchParams(params);
@@ -731,8 +785,24 @@ export default function Operations() {
       ? { label: "Queue follow-up", enabled: canQueue, run: () => submit(selectedJob, true) }
       : { label: "Send follow-up", enabled: canContinue, run: () => submit(selectedJob) };
 
+  const compactComposer = compact && !!jobId && mode === "Conversation";
+  const editorToggle = <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
+    onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>;
+  const attachmentControls = <details className="operations__prompt-file">
+    <summary>Attachments{mediaAttachments.length ? ` (${mediaAttachments.length})` : ""}</summary>
+    <div className="operations__attachment-options">
+      {mediaKey && <MediaComposer key={mediaKey} hostId={mediaHostId} api={api} attachments={mediaAttachments} disabled={editingLocked}
+        onChange={(items) => setMediaDrafts((current) => ({ ...current, [mediaKey]: items }))}
+        onBusy={(next) => setUploadingDraft((current) => next ? mediaKey : current === mediaKey ? null : current)} />}
+      <label>Import Markdown or text into the prompt
+        <input type="file" accept=".md,.markdown,.txt" disabled={editingLocked || draftKey === null} onChange={attachFile} />
+      </label>
+      <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
+    </div>
+  </details>;
+
   const composer = (
-  <form id="operations-composer" onSubmit={(event) => {
+  <form id="operations-composer" data-compact={compactComposer} onSubmit={(event) => {
     event.preventDefault();
     if (!scheduling && send.enabled) send.run();
   }}>
@@ -758,10 +828,10 @@ export default function Operations() {
     <div className="operations__editor">
       <div className="operations__composer-heading">
         <label htmlFor="operations-prompt">Message</label>
-        <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
-          onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>
+        {!compactComposer && editorToggle}
       </div>
-      <textarea id="operations-prompt" required readOnly={editingLocked || draftKey === null} rows={expanded ? 12 : 2}
+      <textarea id="operations-prompt" ref={promptInput} required readOnly={editingLocked || draftKey === null}
+        rows={expanded ? 12 : compactComposer ? 1 : 2}
         value={prompt} spellCheck={false} autoCapitalize="off"
         placeholder={canSteer ? "Steer this execution or queue a follow-up" : jobId ? "Write a follow-up" : "Message the studio"}
         aria-invalid={!!promptError} aria-describedby="operations-prompt-count"
@@ -837,16 +907,7 @@ export default function Operations() {
         ? "The selected relay has not verified this profile."
         : profileNames[selectedProfile]}
     </p>}
-    <details className="operations__prompt-file">
-      <summary>Attachments{mediaAttachments.length ? ` (${mediaAttachments.length})` : ""}</summary>
-      {mediaKey && <MediaComposer key={mediaKey} hostId={mediaHostId} api={api} attachments={mediaAttachments} disabled={editingLocked}
-        onChange={(items) => setMediaDrafts((current) => ({ ...current, [mediaKey]: items }))}
-        onBusy={(next) => setUploadingDraft((current) => next ? mediaKey : current === mediaKey ? null : current)} />}
-      <label>Import Markdown or text into the prompt
-        <input type="file" accept=".md,.markdown,.txt" disabled={editingLocked || draftKey === null} onChange={attachFile} />
-      </label>
-      <p>UTF-8 files up to {ATTACHMENT_BYTES.toLocaleString()} bytes are added to the prompt.</p>
-    </details>
+    {!compactComposer && attachmentControls}
     {snapshot?.schedule && !assignment && !jobId && !recipientId && !scheduling && <button type="button"
       onClick={() => selectJob(null, null, "schedule")}>Schedule a new session</button>}
     {scheduling && snapshot?.schedule && !assignment && !jobId && !recipientId && <details className="operations__schedule" open>
@@ -873,6 +934,7 @@ export default function Operations() {
     </details>}
     </div>
     <div className="operations__prompt-actions">
+      {compactComposer && <>{attachmentControls}{editorToggle}</>}
       {selectedJob?.profile === "full-access" && <small className="operations__composer-permission">Full Access follow-up</small>}
       {selectedJob?.status === "running" && <button type="button" disabled={!canSteer}
         onClick={steer}>Steer current task</button>}
@@ -948,7 +1010,7 @@ export default function Operations() {
     open: total.open + Math.max(0, entry.relaySlots - entry.activeSlots),
   }), { active: 0, open: 0 }) : null;
 
-  return <OperationsShell page={page} navigate={setPage} keyboardOpen={keyboardOpen} paused={snapshot.dispatch?.paused} health={{
+  return <OperationsShell page={page} navigate={setPage} keyboardOpen={keyboardOpen} conversationExpanded={conversationExpanded && !!selectedJob && page === "Command Center"} paused={snapshot.dispatch?.paused} health={{
     online: !!hostOnline,
     label: relayError ? "API unavailable" : hostOnline ? "Relay online" : "Relay offline",
   }} occupancy={occupancy} pendingApprovals={pendingApprovalCount} openApprovals={() => setPage("Approvals")}
@@ -1194,10 +1256,11 @@ export default function Operations() {
             <button type="button" onClick={() => updateFirstMatePin("")}>Unpin First Mate conversation</button>}
           {transcriptError?.jobId === jobId && <p role="status">Conversation sync · {transcriptError.message}</p>}
           {jobId && !selectedJob && !error && transcriptError?.jobId !== jobId && <p className="operations__loading" role="status">Loading conversation…</p>}
-          {selectedJob && <section className="operations__transcript">
+          {selectedJob && <section className="operations__transcript" id="operations-conversation-panel">
             <header>
               <div className="operations__conversation-title">
                 <h1>{selectedJob.title || "Conversation"}</h1>
+                <strong className="operations__conversation-agent">{turnActor(selectedJob)}</strong>
                 <div className="operations__conversation-status">
                 <span role="status">
                   {selectedJob.status === "running" && selectedHost?.online && <span className="operations__processing" aria-hidden="true" />}
@@ -1206,7 +1269,7 @@ export default function Operations() {
                 <ExecutionElapsed startedAt={selectedJob.startedAt} finishedAt={selectedJob.finishedAt} active={selectedJob.status === "running"} />
                 </div>
               </div>
-              {running.includes(selectedJob.status) && <button type="button" disabled={busy || selectedJob.status === "cancelling"}
+              {running.includes(selectedJob.status) && <button className="operations__execution-cancel" type="button" disabled={busy || selectedJob.status === "cancelling"}
                 onClick={() => action(async () => {
                   if (selectedJob.status === "scheduled") {
                     try { await api(`/schedule/${jobId}`, { method: "DELETE" }); }
@@ -1220,7 +1283,7 @@ export default function Operations() {
                 onClick={() => {
                   if (mode === "Execution") openConversation(selectedJob);
                   else if (conversationId) openJob(jobId, "Execution");
-                  else changeMode("Execution");
+                  else { setInspection(jobId); changeMode("Execution"); }
                 }}>
                 {mode === "Execution" ? "Conversation" : awaitingApproval ? "Review approval" : "Inspect"}
               </button>
@@ -1233,6 +1296,11 @@ export default function Operations() {
                 <p>Review any partial work, then explicitly select an eligible profile in a new conversation before sending the remaining work.</p>
                 <button type="button" onClick={() => messageEmployee(null)}>Open a new conversation</button>
               </div>}
+              {mode === "Conversation" && <button className="operations__conversation-layout-toggle" type="button"
+                aria-expanded={conversationExpanded} aria-controls="operations-conversation-panel"
+                onClick={() => setConversationLayout({ key: conversationKey, expanded: !conversationExpanded })}>
+                {conversationExpanded ? "Exit expanded view" : "Expand conversation"}
+              </button>}
               <details className="operations__conversation-actions">
                 <summary>Actions</summary>
                 <div>

@@ -62,6 +62,7 @@ export default function ConversationTimeline({ api, job, copy, proposal, promptP
   const [latest, setLatest] = useState(false);
   const scrolling = useRef(null);
   const anchor = useRef(null);
+  const content = useRef(null);
   const pinned = useRef(true);
   const cached = useRef(new Map());
 
@@ -145,6 +146,17 @@ export default function ConversationTimeline({ api, job, copy, proposal, promptP
     }
   }, [timeline, loading, visible]);
 
+  useLayoutEffect(() => {
+    const node = scrolling.current;
+    if (!visible || !node) return;
+    const observer = new ResizeObserver(() => {
+      if (pinned.current) node.scrollTop = node.scrollHeight;
+    });
+    observer.observe(node);
+    observer.observe(content.current);
+    return () => observer.disconnect();
+  }, [visible]);
+
   function jump() {
     const node = scrolling.current;
     node.scrollTop = node.scrollHeight;
@@ -159,7 +171,7 @@ export default function ConversationTimeline({ api, job, copy, proposal, promptP
         pinned.current = node.scrollHeight - node.scrollTop - node.clientHeight < 48;
         setLatest(!pinned.current);
       }}>
-      <div className="operations__timeline-content">
+      <div className="operations__timeline-content" ref={content}>
         <div className="operations__timeline-pagination">
           {cursor && <button type="button" disabled={loading} onClick={earlier}>
             {loading ? "Loading earlier messages…" : "Load earlier messages"}

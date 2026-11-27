@@ -24,7 +24,7 @@ function WorkspaceLinks({ page, navigate }) {
 
 const primaryWorkspaces = ["Headquarters", "Command Center", "Office", "Blueprints", "Workforce", "Projects"];
 
-export default function OperationsShell({ page, navigate, health, paused, keyboardOpen, subscription, occupancy,
+export default function OperationsShell({ page, navigate, health, paused, keyboardOpen, conversationExpanded, subscription, occupancy,
   pendingApprovals, openApprovals, request, openExecution, children }) {
   const workspaces = useRef(null);
   const executions = useRef(null);
@@ -37,7 +37,7 @@ export default function OperationsShell({ page, navigate, health, paused, keyboa
     requestAnimationFrame(() => workspace.current?.focus());
   }
 
-  return <main className="operations operations--shell" data-workspace={page} data-keyboard={keyboardOpen}>
+  return <main className="operations operations--shell" data-workspace={page} data-keyboard={keyboardOpen} data-conversation-expanded={conversationExpanded}>
     <a className="operations__skip" href="#operations-workspace">Skip to workspace</a>
     <header className="operations__topbar">
       <button type="button" className="operations__wordmark" onClick={() => navigate("Headquarters")}>Crossworld <span>Operations</span></button>
