@@ -55,8 +55,10 @@ export default function ExecutiveService({ api, openJob, openMission }) {
   async function changePause() {
     setSaving(true);
     setUpdateError("");
+    let changeSaved = false;
     try {
       await api("/executive-service", { method: "PATCH", body: { paused: !service.paused } });
+      changeSaved = true;
       const result = await api("/executive-service");
       if (!serviceStates.includes(result?.state) || typeof result.paused !== "boolean") {
         throw new Error("The service status response is incomplete.");
@@ -64,7 +66,8 @@ export default function ExecutiveService({ api, openJob, openMission }) {
       setService(result);
       setStatusError("");
     } catch (error) {
-      setUpdateError(error.message);
+      if (changeSaved) setStatusError(error.message || "Refresh to confirm the service change.");
+      else setUpdateError(error.message);
     } finally {
       setSaving(false);
     }
