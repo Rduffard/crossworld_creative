@@ -122,9 +122,11 @@ export default function MaintenanceControls({ request }) {
     </div>
     <div id="dispatch-pause" tabIndex={-1} role="group" aria-labelledby="dispatch-pause-label">
       <h4 id="dispatch-pause-label">Dispatch pause</h4>
-      {dispatch && <p>{dispatchIsStale && <small>Last known · </small>}{dispatch.paused ? "Paused by owner" : "Unpaused by owner"}</p>}
       <dl className="operations__execution-summary">
         <div><dt>Effective dispatch</dt><dd>{effectiveDispatch}</dd></div>
+        {dispatch && <div><dt>Owner pause setting</dt><dd>
+          {dispatchIsStale && <small>Last known · </small>}{dispatch.paused ? "On" : "Off"}
+        </dd></div>}
       </dl>
       {dispatchError && <p role="alert">Dispatch pause status unavailable. {dispatchError}</p>}
       {((!dispatch && !dispatchError) || pending === "dispatch-pause" || refreshingDispatch) && <p role="status">

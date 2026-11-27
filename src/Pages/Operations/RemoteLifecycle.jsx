@@ -72,7 +72,7 @@ export default function RemoteLifecycle({ request }) {
     {!maintenance && !maintenanceError && <p role="status">Checking maintenance status…</p>}
     {maintenance && <dl className="operations__execution-summary">
       <div>
-        <dt><a href={infrastructure + "#dispatch-pause"}>Dispatch</a></dt>
+        <dt><a href={infrastructure + "#dispatch-pause"}>Owner pause required for worker actions</a></dt>
         <dd>{maintenance.paused ? "Paused" : "Pause required"}</dd>
       </div>
       <div>
