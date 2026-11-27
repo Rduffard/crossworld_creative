@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { deploymentRuns } from "./engineeringWorkflows";
 import "./finance.css";
 
 const sections = {
@@ -11,8 +12,8 @@ const sections = {
 
 function DeploymentWorkflows({ repo }) {
   const workflows = repo.details?.workflows;
-  const runs = workflows?.items?.filter(item => /\bdeploy(?:ment|ing)?\b/i.test(item.name));
-  if (!runs?.length) return null;
+  const runs = deploymentRuns(repo);
+  if (!runs.length) return null;
   return <details>
     <summary>Deployment workflows</summary>
     <p>GitHub workflow outcomes. Live environment health is unavailable in this feed.</p>

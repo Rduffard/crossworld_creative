@@ -1024,7 +1024,8 @@ export default function Operations() {
     snapshot.hosts.find(entry => !entry.revokedAt && entry.usage)?.usage} />}>
       <Suspense fallback={<p role="status">Loading workspace…</p>}>
       {page === "Headquarters" && <Headquarters api={api} openObjectives={() => setPage("Objectives")} openWorkforce={() => setPage("Workforce")}
-        openOffice={() => setPage("Office")} openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
+        focusBriefing={recordGroup === "briefing"} openOffice={() => setPage("Office")}
+        openProject={(id) => openSource("project", id)} openFinance={() => setPage("Finance")}
         pendingGovernance={governance?.requests.filter((request) => request.state === "pending").length}
         openGovernance={() => setPage("Approvals")} openJob={openJob}
         openCommand={() => setPage("Command Center")} openMission={id => setPage("Command Center", "mission", id)}
@@ -1217,7 +1218,11 @@ export default function Operations() {
         {error && <p role="alert">{error}</p>}
       </dialog>}
       {page === "Command Center" && <>
-      <div className="operations__commandbar">
+      <nav className="operations__commandbar" aria-label="Command Center shortcuts">
+        <button type="button" className="operations__first-mate-button" onClick={openFirstMate}
+          aria-current={pinnedFirstMate && session === pinnedFirstMate ? "location" : undefined}>
+          First Mate
+        </button>
         <Missions api={api} hosts={snapshot.hosts.filter(entry => !entry.revokedAt && !entry.isolatedReviewSnapshot)} openJob={openJob}
           missionId={recordGroup === "mission" ? params.get("record") : null}
           clearMission={() => setPage("Command Center", null, null, { replace: true })} />
@@ -1225,18 +1230,14 @@ export default function Operations() {
           historyDrawer.current?.showModal();
           setHistoryOpen(true);
         }}>History</button>
-        <button type="button" className="operations__first-mate-button" onClick={openFirstMate}
-          aria-current={pinnedFirstMate && session === pinnedFirstMate ? "location" : undefined}>
-          First Mate
-        </button>
         <button type="button" aria-label="New conversation" onClick={() => { setAssignment(null); selectJob(null); }}>
           New<span className="operations__desktop-label"> conversation</span>
         </button>
-        {pendingApprovalCount > 0 && <button type="button" onClick={() => setPage("Approvals")}>
-          Approvals (${pendingApprovalCount})
-        </button>}
-        <button type="button" onClick={() => setPage("Headquarters")}>Briefing</button>
-      </div>
+        <button type="button" onClick={() => setPage("Approvals")}>
+          {pendingApprovalCount > 0 ? `Approvals (${pendingApprovalCount})` : "Approvals"}
+        </button>
+        <button type="button" onClick={() => setPage("Headquarters", "briefing", "executive")}>Briefing</button>
+      </nav>
       <dialog ref={historyDrawer} className="operations__dialog operations__drawer" aria-labelledby="operations-history-title"
         onClose={() => setHistoryOpen(false)}>
         <form method="dialog"><button>Close history</button></form>
@@ -1339,7 +1340,7 @@ export default function Operations() {
               </details>
             </header>
             <Suspense fallback={<p role="status">Loading transcript…</p>}>
-            <JobTranscript api={api} key={jobId} job={selectedJob} host={selectedHost} jobId={jobId} mode={mode} copy={copy} selectJob={selectJob}
+            <JobTranscript api={api} key={jobId} refreshVersion={refreshVersion} job={selectedJob} host={selectedHost} jobId={jobId} mode={mode} copy={copy} selectJob={selectJob}
               promptPreview={sessions.get(selectedJob.sessionId)?.find((turn) => turn._id === jobId)?.prompt}
               proposal={selectedJob.studioTools && !selectedJob.missionId && <Suspense fallback={null}>
                 <ObjectiveProposal key={jobId} request={api} jobId={jobId} jobStatus={selectedJob.status}

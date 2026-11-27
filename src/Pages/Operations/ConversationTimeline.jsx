@@ -52,11 +52,13 @@ function Message({ item, copy }) {
   </article>;
 }
 
-export default function ConversationTimeline({ api, job, copy, proposal, promptPreview, visible }) {
+export default function ConversationTimeline({ api, job, copy, proposal, promptPreview, refreshVersion, visible }) {
   const [history, setHistory] = useState([]);
   const [current, setCurrent] = useState(null);
   const [cursor, setCursor] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [turnFailure, setTurnFailure] = useState("");
+  const [turnRetry, setTurnRetry] = useState(0);
   const [failure, setFailure] = useState("");
   const [reload, setReload] = useState(0);
   const [latest, setLatest] = useState(false);
@@ -69,10 +71,14 @@ export default function ConversationTimeline({ api, job, copy, proposal, promptP
   useEffect(() => {
     let active = true;
     api("/jobs/" + job._id + "?conversation=true&offset=" + Number.MAX_SAFE_INTEGER)
-      .then(turn => { if (active) setCurrent(turn); })
-      .catch(error => { if (active) setFailure(error.message); });
+      .then(turn => {
+        if (!active) return;
+        setCurrent(turn);
+        setTurnFailure("");
+      })
+      .catch(error => { if (active) setTurnFailure(error.message); });
     return () => { active = false; };
-  }, [api, job._id, job.instruction?.id, reload]);
+  }, [api, job._id, job.instruction?.id, refreshVersion, turnRetry]);
 
   useEffect(() => {
     let active = true;
@@ -177,6 +183,8 @@ export default function ConversationTimeline({ api, job, copy, proposal, promptP
             {loading ? "Loading earlier messages…" : "Load earlier messages"}
           </button>}
           {loading && !cursor && <p role="status">Loading conversation history…</p>}
+          {turnFailure && <p role="status">{turnFailure} <button type="button"
+            onClick={() => setTurnRetry(value => value + 1)}>Retry conversation sync</button></p>}
           {failure && <p role="status">{failure} <button type="button" onClick={() => {
             setFailure("");
             if (cursor) earlier();

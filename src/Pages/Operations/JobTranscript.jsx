@@ -45,7 +45,7 @@ function SessionTurns({ api, sessionId, jobId, selectJob }) {
   </details>;
 }
 
-export default function JobTranscript({ api, job, host, copy, jobId, mode, selectJob, promptPreview, proposal, children }) {
+export default function JobTranscript({ api, job, host, copy, jobId, refreshVersion, mode, selectJob, promptPreview, proposal, children }) {
   const answer = useMemo(() => job.events.filter((event) => event.view === "response").map((event) => event.text).join(""), [job.events]);
   const [exportProgress, setExportProgress] = useState(null);
   const [exportFailure, setExportFailure] = useState("");
@@ -144,7 +144,7 @@ export default function JobTranscript({ api, job, host, copy, jobId, mode, selec
 
   return <div className="operations__transcript-body">
     <ConversationTimeline api={api} job={job} copy={copy} promptPreview={promptPreview} proposal={proposal}
-      visible={mode !== "Execution"} />
+      refreshVersion={refreshVersion} visible={mode !== "Execution"} />
     {mode === "Execution" && <section className="operations__pane operations__execution-inspector" aria-label="Execution inspector" tabIndex={0}>      <h3>Execution inspector</h3>
       <details><summary>Copy or export</summary>
         <button type="button" onClick={() => copy(summary)}>Copy turn summary</button>

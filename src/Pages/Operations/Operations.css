@@ -523,6 +523,8 @@
   .operations__mobile-nav button { min-height: 44px; }
   .operations__mobile-nav small { display: block; color: var(--ops-muted); }
 
+  .operations__commandbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .operations__commandbar .operations-missions__summary { grid-column: 1 / -1; order: 1; }
   .operations__commandbar .operations__history-button { display: inline-block; }
   .operations__command-layout { grid-template-columns: minmax(0, 1fr); }
   .operations__command-layout > .operations__history { display: none; }

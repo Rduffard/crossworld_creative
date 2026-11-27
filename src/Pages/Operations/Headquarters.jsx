@@ -15,7 +15,7 @@ function Usage({ observation, resumesAt }) {
 }
 
 export default function Headquarters({ api, openJob, openObjectives, openWorkforce, openOffice, openProject, openFinance,
-  pendingGovernance, openGovernance, openCommand, openMission, openSchedules }) {
+  pendingGovernance, openGovernance, openCommand, openMission, openSchedules, focusBriefing }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [missions, setMissions] = useState(null);
@@ -24,6 +24,12 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [readLocally, setReadLocally] = useState([]);
   const attentionHeading = useRef(null);
+  const briefingHeading = useRef(null);
+  const briefingReady = !!data;
+
+  useEffect(() => {
+    if (focusBriefing && briefingReady) briefingHeading.current?.focus();
+  }, [focusBriefing, briefingReady]);
 
   useEffect(() => {
     let mounted = true;
@@ -107,7 +113,8 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
       </div>
     </section>
     {executiveService}
-    <ExecutiveBriefing data={data} missions={missions} missionError={missionError} pendingGovernance={pendingGovernance}
+    <ExecutiveBriefing api={api} data={data} missions={missions} missionError={missionError} pendingGovernance={pendingGovernance}
+      headingRef={briefingHeading}
       openJob={openJob} openCommand={openCommand} openMission={openMission}
       openGovernance={openGovernance} openSchedules={openSchedules} time={time} />
     <section className="operations__panel operations__briefing">

@@ -1,8 +1,11 @@
+import { useEffect, useState } from "react";
+import { deploymentRuns } from "./engineeringWorkflows";
 import { SubscriptionLink } from "./subscriptionUsage";
 import "./ExecutiveBriefing.css";
 
 const displayedMissions = 4;
 const displayedOutcomes = 3;
+const displayedDeployments = 3;
 const missionWeight = { blocked: 0, active: 1, paused: 2, authorized: 3, expired: 4 };
 
 function newestExecution(mission) {
@@ -13,21 +16,40 @@ function newestExecution(mission) {
 }
 
 export default function ExecutiveBriefing({
-  data, missions, missionError, pendingGovernance, openJob, openCommand, openMission, openGovernance, openSchedules, time,
+  api, data, missions, missionError, pendingGovernance, openJob, openCommand, openMission, openGovernance, openSchedules, time, headingRef,
 }) {
+  const [engineering, setEngineering] = useState(null);
+  const [engineeringError, setEngineeringError] = useState(false);
+  useEffect(() => {
+    let current = true;
+    api("/engineering").then(snapshot => {
+      if (current) setEngineering(snapshot);
+    }).catch(() => {
+      if (current) setEngineeringError(true);
+    });
+    return () => { current = false; };
+  }, [api]);
+
+  const deployments = (engineering?.repositories || []).flatMap(repo =>
+    deploymentRuns(repo).map(run => ({
+      ...run, repository: repo.name, defaultBranch: repo.default_branch,
+    })))
+    .filter(run => run.head_branch === run.defaultBranch)
+    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))
+    .slice(0, displayedDeployments);
   const current = (missions || []).filter(mission => Object.hasOwn(missionWeight, mission.status))
     .sort((a, b) => missionWeight[a.status] - missionWeight[b.status]);
   const missionDecisions = missionError ? [] : current.filter(mission =>
     mission.status === "active" && mission.awaitingApprovals?.length);
   const approvals = data.approvals.length;
-  const outcomes = data.recent.filter(job => job.status === "completed").slice(0, displayedOutcomes);
+  const outcomes = data.recent.filter(job => job.status === "completed" && !job.executiveTrigger).slice(0, displayedOutcomes);
   const next = data.next?.[0];
   const relay = data.workforce?.find(host => host.online && host.usage)
     || data.workforce?.find(host => host.usage);
 
   return <section className="operations__panel operations__briefing operations-executive" aria-labelledby="operations-executive-title">
     <header className="operations__briefing-title">
-      <h2 id="operations-executive-title">Executive briefing</h2>
+      <h2 id="operations-executive-title" ref={headingRef} tabIndex={-1}>Executive briefing</h2>
       {data.observedAt && <span>As of {time(data.observedAt)}</span>}
     </header>
     <div className="operations-executive__grid">
@@ -70,14 +92,32 @@ export default function ExecutiveBriefing({
                 ? <button type="button" className="operations__source" onClick={() => openMission(mission._id)}>{mission.title}</button>
                 : execution
                 ? <button type="button" className="operations__source" onClick={() => openJob(execution, "Execution")}>{mission.title}</button>
-                : <strong>{mission.title}</strong>}
+                : <button type="button" className="operations__source" onClick={() => openMission(mission._id)}>{mission.title}</button>}
               <small><strong>{mission.status}</strong>{detail && ` · ${detail}`}</small>
+              {mission.status === "blocked" && execution &&
+                <button type="button" className="operations__source" onClick={() => openJob(execution, "Conversation")}
+                  aria-label={`Open supporting conversation for ${mission.title}`}>Supporting conversation</button>}
             </li>;
           })}
         </ul>
         {!!current.length && <button type="button" className="operations__source" onClick={openCommand}>
           View missions in Command Center{current.length > displayedMissions ? ` (${current.length} open)` : ""}
         </button>}
+      </section>
+      <section>
+        <h3>Deployment workflows</h3>
+        {engineeringError && <p role="status">Deployment workflow data unavailable.</p>}
+        {!engineering && !engineeringError && <p role="status">Loading deployment workflows…</p>}
+        {engineering && (engineering.stale || engineering.degraded) && <p role="status">GitHub workflow data is stale or incomplete.</p>}
+        {engineering && deployments.length === 0 && <p>No deployment workflows in the latest GitHub snapshot.</p>}
+        <ul className="operations-executive__list">
+          {deployments.map(run => <li key={`${run.repository}/${run.id}`}>
+            <a className="operations__source" href={`https://github.com/${run.repository}/actions/runs/${run.id}`}
+              target="_blank" rel="noreferrer">{run.name}</a>
+            <small>{[run.repository, run.conclusion || run.status].filter(Boolean).join(" · ")}
+              {run.updated_at && <> · {time(run.updated_at)}</>}</small>
+          </li>)}
+        </ul>
       </section>
       <section>
         <h3>Recent completions</h3>

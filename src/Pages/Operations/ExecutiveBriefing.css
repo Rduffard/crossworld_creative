@@ -61,7 +61,9 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .operations-executive button.operations__source {
+  .operations-executive .operations__source {
     min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
 }
