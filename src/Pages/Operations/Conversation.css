@@ -170,13 +170,14 @@
 }
 .operations__timeline-message :is(img, video, canvas, model-viewer) { max-inline-size: 100%; }
 
-@media (max-width: 900px) {
+@media (max-width: 900px), (max-width: 1024px) and (orientation: landscape) and (pointer: coarse) {
   .operations--shell[data-conversation-expanded="true"],
   .operations--shell[data-keyboard="true"][data-workspace="Command Center"] {
     position: fixed;
     inset: var(--operations-viewport-top, 0px) 0 auto;
     width: 100%;
   }
+  .operations--shell[data-conversation-expanded="true"] .operations__transcript > header > button { min-height: 44px; }
   .operations--shell[data-keyboard="true"][data-conversation-expanded="true"] {
     grid-template-rows: minmax(0, 1fr);
     padding-block-start: 0;

@@ -88,7 +88,7 @@ function ExecutionElapsed({ startedAt, finishedAt, active }) {
   </small>;
 }
 const localPolicyOperations = ["read", "history", "ci", "localBranch", "localCommit"];
-const mobileConversationQuery = "(max-width: 900px)";
+const mobileConversationQuery = "(max-width: 900px), (max-width: 1024px) and (orientation: landscape) and (pointer: coarse)";
 const modes = ["Conversation", "Execution"];
 const sourcePages = {
   "workflow-job": "Workflow", "workflow-project": "Workflow", "workflow-objective": "Workflow", "workflow-employee": "Workflow",
