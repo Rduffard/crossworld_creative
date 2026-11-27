@@ -29,6 +29,12 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     if (saving) return;
     const controller = new AbortController();
     let timer;
+    const deadlineTimer = pendingPause && !pendingPause.expired ? setTimeout(() => {
+      controller.abort();
+      clearTimeout(timer);
+      setStatusError(previous => previous || "A fresh status could not be confirmed in time.");
+      setPendingPause({ ...pendingPause, expired: true });
+    }, Math.max(0, pendingPause.deadline - Date.now())) : undefined;
     async function refresh() {
       try {
         const result = await api("/executive-service", { signal: controller.signal });
@@ -36,27 +42,22 @@ export default function ExecutiveService({ api, openJob, openMission }) {
           throw new Error("The service status response is incomplete.");
         }
         if (!controller.signal.aborted) {
-          if (pendingPause && result.paused !== pendingPause.paused) {
-            if (Date.now() < pendingPause.deadline) {
-              setStatusError("");
-              return;
-            }
-            setUpdateError("The requested state was not confirmed. Showing the latest service status.");
+          const matchesRequest = !pendingPause || result.paused === pendingPause.paused;
+          if (!matchesRequest && !pendingPause.expired) {
+            setStatusError("");
+            return;
           }
           setService(result);
           setStatusError("");
-          setPendingPause(null);
+          if (matchesRequest) setPendingPause(null);
         }
       } catch (error) {
         if (!controller.signal.aborted) {
           setStatusError(error.message || "The status check failed.");
-          if (pendingPause && Date.now() >= pendingPause.deadline) setPendingPause(null);
         }
       } finally {
         if (!controller.signal.aborted) {
-          const interval = document.hidden ? backgroundRefreshMs : refreshMs;
-          const remaining = pendingPause ? pendingPause.deadline - Date.now() : interval;
-          timer = setTimeout(refresh, remaining > 0 ? Math.min(interval, remaining) : interval);
+          timer = setTimeout(refresh, document.hidden ? backgroundRefreshMs : refreshMs);
         }
       }
     }
@@ -64,6 +65,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     return () => {
       controller.abort();
       clearTimeout(timer);
+      clearTimeout(deadlineTimer);
     };
   }, [api, saving, pendingPause, refreshVersion]);
 
@@ -92,7 +94,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
   const hasRelayCounts = Number.isInteger(onlineRelays) && Number.isInteger(relayCount) &&
     onlineRelays >= 0 && onlineRelays <= relayCount;
   const hasHealthMetrics = lastCheck || nextCheck || hasRelayCounts;
-  const awaitingConfirmation = pendingPause !== null;
+  const awaitingConfirmation = !!pendingPause && !pendingPause.expired;
   const lastKnown = awaitingConfirmation || !!statusError;
   return <section className="operations__panel operations__briefing" aria-labelledby="operations-executive-service-title">
     <div className="operations__briefing-title">
@@ -100,9 +102,13 @@ export default function ExecutiveService({ api, openJob, openMission }) {
       {service && <strong role="status">{service.state}{lastKnown && " (last known)"}</strong>}
     </div>
     {!service && !statusError && <p role="status">Checking service status…</p>}
-    {lastKnown && <div>
+    {(pendingPause || statusError) && <div>
       {awaitingConfirmation && <p role="status">
         {pendingPause.paused ? "Pause request accepted." : "Resume request accepted."} Waiting for the updated service status.
+      </p>}
+      {pendingPause?.expired && <p role="alert">
+        {pendingPause.paused ? "Pause request accepted." : "Resume request accepted."} The requested state was not confirmed.
+        {!statusError && " Showing the latest service status."}
       </p>}
       {statusError && <p role="alert">Service status unavailable. {statusError}</p>}
       <button type="button" onClick={() => setRefreshVersion(value => value + 1)}>Refresh service status</button>
