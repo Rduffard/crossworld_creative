@@ -244,18 +244,50 @@ export default function Missions({ api, hosts, openJob, missionId, clearMission 
         {item.status === "active" && item.usageHeld && <p>Waiting for subscription capacity.</p>}
         {item.next && <p>{item.current ? "Selected step" : "Next step"} <strong>{titleFor(item, item.next)}</strong></p>}
         {item.execution && <button type="button" onClick={() => inspect(item.execution._id)}>Inspect {item.execution.status} execution</button>}
-        {item.awaitingApprovals?.map(key => <button type="button" key={key} disabled={busy || item.status !== "active"}
-          onClick={() => control(item, "approve", { step: key })}>Approve {titleFor(item, key)}</button>)}
+        {item.awaitingApprovals?.map(key => <div key={key}>
+          {item.approvalRequests?.[key] && <p>{item.approvalRequests[key].reason}</p>}
+          <button type="button" disabled={busy || item.status !== "active"}
+            onClick={() => control(item, "approve", { step: key })}>Approve {titleFor(item, key)}</button>
+        </div>)}
+        {item.coordinatorActorId && item.authorization && item.steps.some(step => step.key === item.completionStep && step.approval) &&
+          <details><summary>First Mate authority</summary>
+            <form key={item.executiveAuthority?.authorizedAt || "unconfigured"} onSubmit={event => {
+              event.preventDefault();
+              const data = new FormData(event.currentTarget);
+              const end = data.get("renewUntil");
+              control(item, "executive-authority", { authority: {
+                commission: data.has("commission"),
+                ...(data.has("commission") ? {
+                  browserVerification: data.has("browserVerification"), addDevelopmentRoute: data.has("addDevelopmentRoute"),
+                  objectiveIds: String(data.get("objectives")).split(/\s*,\s*/).map(id => id.trim()).filter(Boolean),
+                } : {}),
+                ...(end ? { renewUntil: new Date(end).toISOString() } : {}),
+              } });
+            }}>
+              <label><input type="checkbox" name="commission" defaultChecked={item.executiveAuthority?.commission} /> Allow commissioning</label>
+              {item.workspace === "development" && !item.authorization.routes.some(route => route.profile === "development") &&
+                <label><input type="checkbox" name="addDevelopmentRoute" /> Authorize restricted development edits</label>}
+              <label>Standalone objective IDs, separated by commas
+                <input name="objectives" defaultValue={item.executiveAuthority?.objectiveIds?.join(", ") || ""} />
+              </label>
+              <label><input type="checkbox" name="browserVerification" defaultChecked={item.executiveAuthority?.browserVerification} /> Allow public browser verification</label>
+              <label>Renewal ceiling <input name="renewUntil" type="datetime-local"
+                defaultValue={item.executiveAuthority?.renewUntil ? localTime(new Date(item.executiveAuthority.renewUntil)) : ""} /></label>
+              <button disabled={busy}>Save First Mate authority</button>
+              {item.executiveAuthority && <button type="button" disabled={busy}
+                onClick={() => control(item, "executive-authority", { authority: null })}>Revoke First Mate authority</button>}
+            </form>
+          </details>}
         <div className="operations-missions__controls">
           {item.status === "active" && <button type="button" disabled={busy} onClick={() => control(item, "pause")}>Pause mission</button>}
           {item.status === "paused" && <button type="button" disabled={busy} onClick={() => control(item, "resume")}>Resume mission</button>}
-          {item.status === "expired" && <form onSubmit={event => {
+          {["expired", "blocked"].includes(item.status) && +new Date(item.endsAt) <= Date.now() && <form onSubmit={event => {
             event.preventDefault();
             const renewal = new FormData(event.currentTarget).get("renewal");
-            control(item, "resume", { endsAt: new Date(renewal).toISOString() });
+            control(item, item.status === "blocked" ? "renew" : "resume", { endsAt: new Date(renewal).toISOString() });
           }}>
             <label>New window end<input name="renewal" type="datetime-local" required /></label>
-            <button disabled={busy}>Resume in new window</button>
+            <button disabled={busy}>Renew operating window</button>
           </form>}
           {["authorized", "active", "paused", "expired", "blocked"].includes(item.status) && <button type="button" disabled={busy} onClick={() => {
             if (window.confirm("Terminate this mission permanently? An execution already admitted can finish.")) control(item, "terminate");
