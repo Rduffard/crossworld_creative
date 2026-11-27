@@ -21,6 +21,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
   const [statusError, setStatusError] = useState("");
   const [updateError, setUpdateError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [pendingPause, setPendingPause] = useState(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
 
   useEffect(() => {
@@ -34,8 +35,10 @@ export default function ExecutiveService({ api, openJob, openMission }) {
           throw new Error("The service status response is incomplete.");
         }
         if (!controller.signal.aborted) {
+          if (pendingPause !== null && result.paused !== pendingPause) return;
           setService(result);
           setStatusError("");
+          setPendingPause(null);
         }
       } catch (error) {
         if (!controller.signal.aborted) setStatusError(error.message);
@@ -50,24 +53,17 @@ export default function ExecutiveService({ api, openJob, openMission }) {
       controller.abort();
       clearTimeout(timer);
     };
-  }, [api, saving, refreshVersion]);
+  }, [api, saving, pendingPause, refreshVersion]);
 
   async function changePause() {
     setSaving(true);
     setUpdateError("");
-    let changeSaved = false;
+    const paused = !service.paused;
     try {
-      await api("/executive-service", { method: "PATCH", body: { paused: !service.paused } });
-      changeSaved = true;
-      const result = await api("/executive-service");
-      if (!serviceStates.includes(result?.state) || typeof result.paused !== "boolean") {
-        throw new Error("The service status response is incomplete.");
-      }
-      setService(result);
-      setStatusError("");
+      await api("/executive-service", { method: "PATCH", body: { paused } });
+      setPendingPause(paused);
     } catch (error) {
-      if (changeSaved) setStatusError(error.message || "Refresh to confirm the service change.");
-      else setUpdateError(error.message);
+      setUpdateError(error.message);
     } finally {
       setSaving(false);
     }
@@ -84,13 +80,20 @@ export default function ExecutiveService({ api, openJob, openMission }) {
   const hasRelayCounts = Number.isInteger(onlineRelays) && Number.isInteger(relayCount) &&
     onlineRelays >= 0 && onlineRelays <= relayCount;
   const hasHealthMetrics = lastCheck || nextCheck || hasRelayCounts;
+  const awaitingConfirmation = pendingPause !== null;
+  const lastKnown = awaitingConfirmation || !!statusError;
   return <section className="operations__panel operations__briefing" aria-labelledby="operations-executive-service-title">
     <div className="operations__briefing-title">
       <h2 id="operations-executive-service-title">First Mate service</h2>
-      {service && <strong role="status">{service.state}{statusError && " (last known)"}</strong>}
+      {service && <strong role="status">{service.state}{lastKnown && " (last known)"}</strong>}
     </div>
     {!service && !statusError && <p role="status">Checking service status…</p>}
-    {statusError && <p role="alert">Service status unavailable. {statusError}</p>}
+    {lastKnown && <div>
+      {awaitingConfirmation
+        ? <p role="status">{pendingPause ? "Pause request accepted." : "Resume request accepted."} Waiting for the updated service status.</p>
+        : <p role="alert">Service status unavailable. {statusError}</p>}
+      <button type="button" onClick={() => setRefreshVersion(value => value + 1)}>Refresh service status</button>
+    </div>}
     {updateError && <p role="alert">Could not confirm the service update. {updateError}</p>}
     {service?.reason && <p>{service.reason}</p>}
     {(lastReview || nextReview) && <dl className="operations__counters">
@@ -100,8 +103,8 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     {service && <section className="operations__orchestration" aria-labelledby="operations-orchestration-title">
       <h3 id="operations-orchestration-title">Orchestration health</h3>
       <p role="status">
-        <strong>{healthStatus || "Unavailable"}{healthStatus && statusError && " (last known)"}</strong>
-        {!healthStatus && statusError && hasHealthMetrics && <>. Metrics shown are last known.</>}
+        <strong>{healthStatus || "Unavailable"}{healthStatus && lastKnown && " (last known)"}</strong>
+        {!healthStatus && lastKnown && hasHealthMetrics && <>. Metrics shown are last known.</>}
       </p>
       {typeof orchestration?.reason === "string" && orchestration.reason && <p>{orchestration.reason}</p>}
       {hasHealthMetrics && <dl className="operations__counters">
@@ -111,12 +114,11 @@ export default function ExecutiveService({ api, openJob, openMission }) {
       </dl>}
     </section>}
     <div className="operations__modes">
-      {service && <button type="button" onClick={changePause} disabled={saving || !!statusError}>
+      {service && <button type="button" onClick={changePause} disabled={saving || lastKnown}>
         {saving ? "Saving…" : service.paused ? "Resume First Mate" : "Pause First Mate"}
       </button>}
       {service?.decision?.kind === "mission" && <button type="button" onClick={() => openMission(service.decision.id)}>Open mission approval</button>}
       {service?.jobId && <button type="button" onClick={() => openJob(service.jobId, "Execution")}>View service execution</button>}
-      {statusError && <button type="button" onClick={() => setRefreshVersion(value => value + 1)}>Refresh service status</button>}
     </div>
   </section>;
 }
