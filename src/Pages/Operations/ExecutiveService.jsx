@@ -3,8 +3,9 @@ import { useEffect, useState } from "react";
 const refreshMs = 10000;
 const backgroundRefreshMs = 30000;
 const serviceStates = ["Working", "Standing By", "Awaiting Decision", "Paused"];
+const orchestrationStates = { healthy: "Healthy", degraded: "Degraded", stale: "Stale" };
 
-function ReviewTime({ label, value }) {
+function ServiceTime({ label, value }) {
   if (!value) return null;
   const date = new Date(value);
   if (Number.isNaN(+date)) return null;
@@ -65,6 +66,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     }
   }
 
+  const orchestration = service?.orchestration;
   return <section className="operations__panel operations__briefing" aria-labelledby="operations-executive-service-title">
     <div className="operations__briefing-title">
       <h2 id="operations-executive-service-title">First Mate service</h2>
@@ -75,9 +77,20 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     {updateError && <p role="alert">Could not confirm the service update. {updateError}</p>}
     {service?.reason && <p>{service.reason}</p>}
     {(service?.lastReviewAt || service?.nextReviewAt) && <dl className="operations__counters">
-      <ReviewTime label="Last review" value={service.lastReviewAt} />
-      <ReviewTime label="Next review" value={service.nextReviewAt} />
+      <ServiceTime label="Last review" value={service.lastReviewAt} />
+      <ServiceTime label="Next review" value={service.nextReviewAt} />
     </dl>}
+    {orchestration && <section aria-labelledby="operations-orchestration-title">
+      <h3 id="operations-orchestration-title">Orchestration health</h3>
+      <p role="status">{orchestrationStates[orchestration.status] || "Unknown"}{statusError && " (last known)"}</p>
+      {orchestration.reason && <p>{orchestration.reason}</p>}
+      <dl className="operations__counters">
+        <ServiceTime label="Last check" value={orchestration.finishedAt} />
+        <ServiceTime label="Next check" value={orchestration.nextSweepAt} />
+        {Number.isInteger(orchestration.onlineRelays) && Number.isInteger(orchestration.relayCount) &&
+          <div><dt>Relays online</dt><dd>{orchestration.onlineRelays} of {orchestration.relayCount}</dd></div>}
+      </dl>
+    </section>}
     <div className="operations__modes">
       {service && <button type="button" onClick={changePause} disabled={saving || !!statusError}>
         {saving ? "Saving…" : service.paused ? "Resume First Mate" : "Pause First Mate"}
