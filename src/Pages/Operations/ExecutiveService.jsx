@@ -5,10 +5,14 @@ const backgroundRefreshMs = 30000;
 const serviceStates = ["Working", "Standing By", "Awaiting Decision", "Paused"];
 const orchestrationStates = { healthy: "Healthy", degraded: "Degraded", stale: "Stale" };
 
-function ServiceTime({ label, value }) {
-  if (!value) return null;
+function serviceDate(value) {
+  if (typeof value !== "string" || !value.trim()) return null;
   const date = new Date(value);
-  if (Number.isNaN(+date)) return null;
+  return Number.isNaN(+date) ? null : date;
+}
+
+function ServiceTime({ label, value, date = serviceDate(value) }) {
+  if (!date) return null;
   return <div><dt>{label}</dt><dd><time dateTime={value}>{date.toLocaleString()}</time></dd></div>;
 }
 
@@ -67,6 +71,13 @@ export default function ExecutiveService({ api, openJob, openMission }) {
   }
 
   const orchestration = service?.orchestration;
+  const healthStatus = typeof orchestration?.status === "string" && Object.hasOwn(orchestrationStates, orchestration.status)
+    ? orchestrationStates[orchestration.status] : null;
+  const lastCheck = serviceDate(orchestration?.finishedAt);
+  const nextCheck = serviceDate(orchestration?.nextSweepAt);
+  const { onlineRelays, relayCount } = orchestration ?? {};
+  const hasRelayCounts = Number.isInteger(onlineRelays) && Number.isInteger(relayCount) &&
+    onlineRelays >= 0 && onlineRelays <= relayCount;
   return <section className="operations__panel operations__briefing" aria-labelledby="operations-executive-service-title">
     <div className="operations__briefing-title">
       <h2 id="operations-executive-service-title">First Mate service</h2>
@@ -80,16 +91,15 @@ export default function ExecutiveService({ api, openJob, openMission }) {
       <ServiceTime label="Last review" value={service.lastReviewAt} />
       <ServiceTime label="Next review" value={service.nextReviewAt} />
     </dl>}
-    {orchestration && <section aria-labelledby="operations-orchestration-title">
+    {service && <section className="operations__orchestration" aria-labelledby="operations-orchestration-title">
       <h3 id="operations-orchestration-title">Orchestration health</h3>
-      <p role="status">{orchestrationStates[orchestration.status] || "Unknown"}{statusError && " (last known)"}</p>
-      {orchestration.reason && <p>{orchestration.reason}</p>}
-      <dl className="operations__counters">
-        <ServiceTime label="Last check" value={orchestration.finishedAt} />
-        <ServiceTime label="Next check" value={orchestration.nextSweepAt} />
-        {Number.isInteger(orchestration.onlineRelays) && Number.isInteger(orchestration.relayCount) &&
-          <div><dt>Relays online</dt><dd>{orchestration.onlineRelays} of {orchestration.relayCount}</dd></div>}
-      </dl>
+      <p role="status"><strong>{healthStatus || "Orchestration health unavailable"}{healthStatus && statusError && " (last known)"}</strong></p>
+      {typeof orchestration?.reason === "string" && orchestration.reason && <p>{orchestration.reason}</p>}
+      {(lastCheck || nextCheck || hasRelayCounts) && <dl className="operations__counters">
+        <ServiceTime label="Last check" value={orchestration.finishedAt} date={lastCheck} />
+        <ServiceTime label="Next check" value={orchestration.nextSweepAt} date={nextCheck} />
+        {hasRelayCounts && <div><dt>Relays online</dt><dd>{onlineRelays} of {relayCount}</dd></div>}
+      </dl>}
     </section>}
     <div className="operations__modes">
       {service && <button type="button" onClick={changePause} disabled={saving || !!statusError}>
