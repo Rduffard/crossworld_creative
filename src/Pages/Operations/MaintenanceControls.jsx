@@ -5,6 +5,16 @@ export default function MaintenanceControls({ request }) {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [revision, setRevision] = useState(0);
+  const hasStatus = status !== null;
+
+  useEffect(() => {
+    const target = window.location.hash.slice(1);
+    if (hasStatus && ["maintenance-hold", "dispatch-pause"].includes(target)) {
+      const control = document.getElementById(target);
+      control?.scrollIntoView({ block: "center" });
+      control?.focus({ preventScroll: true });
+    }
+  }, [hasStatus]);
 
   useEffect(() => {
     let active = true;
@@ -67,8 +77,8 @@ export default function MaintenanceControls({ request }) {
           ? "Waiting for lease reconciliation" : status.active ? "Draining" : "Hold required"}</dd></div>
       </dl>
       {status.active
-        ? <button type="button" disabled={pending} onClick={() => change("/maintenance", { minutes: 0 })}>End maintenance hold</button>
-        : <form onSubmit={event => {
+        ? <button id="maintenance-hold" type="button" disabled={pending} onClick={() => change("/maintenance", { minutes: 0 })}>End maintenance hold</button>
+        : <form id="maintenance-hold" tabIndex={-1} onSubmit={event => {
           event.preventDefault();
           const minutes = Number(new FormData(event.currentTarget).get("minutes"));
           change("/maintenance", { minutes });
@@ -76,7 +86,7 @@ export default function MaintenanceControls({ request }) {
           <label>Hold duration in minutes <input name="minutes" type="number" min="1" max="60" defaultValue="15" required /></label>
           <button type="submit" disabled={pending}>Start maintenance hold</button>
         </form>}
-      <button type="button" disabled={pending} onClick={() => change("/dispatch", { paused: !status.paused })}>
+      <button id="dispatch-pause" type="button" disabled={pending} onClick={() => change("/dispatch", { paused: !status.paused })}>
         {status.paused ? "Clear dispatch pause" : "Pause future dispatch"}
       </button>
       {status.history?.length > 0 && <details>

@@ -71,7 +71,6 @@ export default function ExecutionApprovals({ api, openJob }) {
   }
 
   return <section aria-label="Execution approvals">
-    <RemoteLifecycle request={api} />
     {deliveryError && <p role="alert">Could not load deliverables awaiting acceptance. {deliveryError}</p>}
     {deliveries.length > 0 && <>
       <h3>Deliverables awaiting owner acceptance</h3>
@@ -127,5 +126,6 @@ export default function ExecutionApprovals({ api, openJob }) {
         </div>
       </fieldset>}
     </li>)}</ul>}
+    <RemoteLifecycle request={api} />
   </section>;
 }

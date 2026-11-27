@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 
 const short = value => value?.slice(0, 12) || "Unavailable";
+const infrastructure = "/operations?workspace=infrastructure";
 
 export default function RemoteLifecycle({ request }) {
   const [snapshot, setSnapshot] = useState(null);
   const [selection, setSelection] = useState({});
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [pollError, setPollError] = useState("");
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -14,10 +16,16 @@ export default function RemoteLifecycle({ request }) {
     let timer;
     async function poll() {
       try {
-        const result = await request("/supervisor");
-        if (live) setSnapshot(result);
+        const [result, maintenance] = await Promise.all([request("/supervisor"), request("/maintenance")]);
+        if (live) {
+          setSnapshot({ ...result, maintenance });
+          setPollError("");
+        }
       } catch (failure) {
-        if (live && failure.status !== 404) setError(failure.message);
+        if (live) {
+          setSnapshot(null);
+          setPollError(failure.status === 404 ? "Release-managed supervisor status unavailable." : failure.message);
+        }
       } finally {
         if (live) timer = setTimeout(poll, 5000);
       }
@@ -27,7 +35,7 @@ export default function RemoteLifecycle({ request }) {
   }, [request, revision]);
 
   async function authorize(device, operation, target) {
-    if (!target || !window.confirm("Authorize " + operation + " on " + device.label + " with release " + short(target) + "?")) return;
+    if (!target || !window.confirm("Authorize " + operation + " on " + device.label + " with release " + target + "?")) return;
     setPending(true);
     setError("");
     try {
@@ -49,15 +57,23 @@ export default function RemoteLifecycle({ request }) {
     finally { setPending(false); }
   }
 
+  const maintenance = snapshot?.maintenance;
+  const holdReady = maintenance?.active && Date.parse(maintenance.expiresAt) - Date.now() >= 300_000;
+  const canAuthorize = maintenance?.paused && holdReady;
   return <section className="operations__panel" aria-label="Remote worker lifecycle">
     <h3>Remote worker lifecycle</h3>
-    <p>Pause dispatch and start a maintenance hold before authorizing a worker change. The independent supervisor waits for the drain.</p>
+    {pollError && <p role="alert">{pollError}</p>}
+    {!snapshot && !pollError && <p role="status">Checking supervisor and maintenance status…</p>}
+    {maintenance && <p role="status">
+      <a href={infrastructure + "#dispatch-pause"}>Dispatch</a> {maintenance.paused ? "is paused." : "must be paused."}{" "}
+      <a href={infrastructure + "#maintenance-hold"}>Maintenance hold</a> {holdReady ? "has enough time." : "needs at least five minutes remaining."}{" "}
+      {canAuthorize && (maintenance.ready ? "The relay is drained." : "The supervisor will wait for active work to drain.")}
+    </p>}
     {error && <p role="alert">{error}</p>}
     {snapshot?.devices.length === 0 && <p>No release-managed supervisor has reported in.</p>}
-    {!snapshot && !error && <p>Release-managed supervisor status unavailable.</p>}
     {snapshot?.devices.map(device => {
       const target = selection[device._id];
-      const blocked = pending || !device.online || snapshot.requests.some(item => item.hostId === device._id &&
+      const blocked = pending || !canAuthorize || !device.online || snapshot.requests.some(item => item.hostId === device._id &&
         ["authorized", "running"].includes(item.status));
       return <section key={device._id}>
         <h4>{device.label}</h4>
