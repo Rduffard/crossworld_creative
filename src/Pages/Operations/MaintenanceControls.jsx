@@ -1,19 +1,21 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export default function MaintenanceControls({ request }) {
   const [status, setStatus] = useState(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [revision, setRevision] = useState(0);
+  const followedLink = useRef(false);
   const hasStatus = status !== null;
 
   useEffect(() => {
     const target = window.location.hash.slice(1);
-    if (hasStatus && ["maintenance-hold", "dispatch-pause"].includes(target)) {
-      const control = document.getElementById(target);
-      control?.scrollIntoView({ block: "center" });
-      control?.focus({ preventScroll: true });
-    }
+    if (!hasStatus || followedLink.current || !["maintenance-hold", "dispatch-pause"].includes(target)) return;
+    const control = document.getElementById(target);
+    if (!control) return;
+    followedLink.current = true;
+    control.scrollIntoView({ block: "center" });
+    control.focus({ preventScroll: true });
   }, [hasStatus]);
 
   useEffect(() => {

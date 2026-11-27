@@ -5,10 +5,12 @@ const infrastructure = "/operations?workspace=infrastructure";
 
 export default function RemoteLifecycle({ request }) {
   const [snapshot, setSnapshot] = useState(null);
+  const [maintenance, setMaintenance] = useState(null);
   const [selection, setSelection] = useState({});
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
   const [pollError, setPollError] = useState("");
+  const [maintenanceError, setMaintenanceError] = useState("");
   const [revision, setRevision] = useState(0);
 
   useEffect(() => {
@@ -16,16 +18,26 @@ export default function RemoteLifecycle({ request }) {
     let timer;
     async function poll() {
       try {
-        const [result, maintenance] = await Promise.all([request("/supervisor"), request("/maintenance")]);
-        if (live) {
-          setSnapshot({ ...result, maintenance });
-          setPollError("");
-        }
-      } catch (failure) {
-        if (live) {
-          setSnapshot(null);
-          setPollError(failure.status === 404 ? "Release-managed supervisor status unavailable." : failure.message);
-        }
+        await Promise.allSettled([
+          request("/supervisor").then(result => {
+            if (!live) return;
+            setSnapshot(result);
+            setPollError("");
+          }, failure => {
+            if (!live) return;
+            setSnapshot(null);
+            setPollError(failure.status === 404 ? "Release-managed supervisor status unavailable." : failure.message);
+          }),
+          request("/maintenance").then(result => {
+            if (!live) return;
+            setMaintenance(result);
+            setMaintenanceError("");
+          }, failure => {
+            if (!live) return;
+            setMaintenance(null);
+            setMaintenanceError(failure.status === 404 ? "Maintenance status unavailable." : failure.message);
+          }),
+        ]);
       } finally {
         if (live) timer = setTimeout(poll, 5000);
       }
@@ -57,18 +69,25 @@ export default function RemoteLifecycle({ request }) {
     finally { setPending(false); }
   }
 
-  const maintenance = snapshot?.maintenance;
   const holdReady = maintenance?.active && Date.parse(maintenance.expiresAt) - Date.now() >= 300_000;
   const canAuthorize = maintenance?.paused && holdReady;
   return <section className="operations__panel" aria-label="Remote worker lifecycle">
     <h3>Remote worker lifecycle</h3>
     {pollError && <p role="alert">{pollError}</p>}
-    {!snapshot && !pollError && <p role="status">Checking supervisor and maintenance status…</p>}
-    {maintenance && <p role="status">
-      <a href={infrastructure + "#dispatch-pause"}>Dispatch</a> {maintenance.paused ? "is paused." : "must be paused."}{" "}
-      <a href={infrastructure + "#maintenance-hold"}>Maintenance hold</a> {holdReady ? "has enough time." : "needs at least five minutes remaining."}{" "}
-      {canAuthorize && (maintenance.ready ? "The relay is drained." : "The supervisor will wait for active work to drain.")}
-    </p>}
+    {!snapshot && !pollError && <p role="status">Checking supervisor status…</p>}
+    {maintenanceError && <p role="alert">{maintenanceError}</p>}
+    {!maintenance && !maintenanceError && <p role="status">Checking maintenance status…</p>}
+    {maintenance && <dl>
+      <dt><a href={infrastructure + "#dispatch-pause"}>Dispatch</a></dt>
+      <dd>{maintenance.paused ? "Paused" : "Pause required"}</dd>
+      <dt><a href={infrastructure + "#maintenance-hold"}>Maintenance hold</a></dt>
+      <dd>{maintenance.active
+        ? <>Ends at <time dateTime={maintenance.expiresAt}>{new Date(maintenance.expiresAt).toLocaleString()}</time>.{" "}</>
+        : "Inactive. "}
+      {holdReady ? "At least five minutes remain." : "At least five minutes must remain."}</dd>
+      <dt>Drain status</dt>
+      <dd>{maintenance.ready ? "Drained" : maintenance.active ? "Waiting for active work to drain" : "Maintenance hold required"}</dd>
+    </dl>}
     {error && <p role="alert">{error}</p>}
     {snapshot?.devices.length === 0 && <p>No release-managed supervisor has reported in.</p>}
     {snapshot?.devices.map(device => {
