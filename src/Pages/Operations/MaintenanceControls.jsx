@@ -2,9 +2,15 @@ import { useEffect, useState } from "react";
 
 export default function MaintenanceControls({ request }) {
   const [status, setStatus] = useState(null);
+  const [dispatch, setDispatch] = useState(null);
+  const [holdError, setHoldError] = useState("");
+  const [dispatchError, setDispatchError] = useState("");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
   const [pending, setPending] = useState("");
-  const [refreshing, setRefreshing] = useState("");
+  const [refreshing, setRefreshing] = useState([]);
+  const refreshingHold = refreshing.includes("maintenance-hold");
+  const refreshingDispatch = refreshing.includes("dispatch-pause");
   const [revision, setRevision] = useState(0);
   useEffect(() => {
     function focusTarget() {
@@ -22,30 +28,33 @@ export default function MaintenanceControls({ request }) {
 
   useEffect(() => {
     let active = true;
-    let timer;
-    async function read() {
-      try {
-        const [maintenance, dispatch] = await Promise.all([
-          request("/maintenance"), request("/dispatch"),
-        ]);
-        if (active) {
-          setStatus({ ...maintenance, paused: dispatch.paused });
-          setError("");
-          setRefreshing("");
+    function poll(path, target, setValue, setFailure) {
+      let timer;
+      async function read() {
+        try {
+          const value = await request(path);
+          if (active) {
+            setValue(value);
+            setFailure("");
+          }
+        } catch (failure) {
+          if (active) setFailure(failure.message);
+        } finally {
+          if (active) {
+            setRefreshing(current => current.includes(target) ? current.filter(item => item !== target) : current);
+            timer = setTimeout(read, 5000);
+          }
         }
-      } catch (failure) {
-        if (active) {
-          setStatus(null);
-          setError(failure.message);
-        }
-      } finally {
-        if (active) timer = setTimeout(read, 5000);
       }
+      read();
+      return () => clearTimeout(timer);
     }
-    read();
+    const stopHold = poll("/maintenance", "maintenance-hold", setStatus, setHoldError);
+    const stopDispatch = poll("/dispatch", "dispatch-pause", setDispatch, setDispatchError);
     return () => {
       active = false;
-      clearTimeout(timer);
+      stopHold();
+      stopDispatch();
     };
   }, [request, revision]);
 
@@ -55,10 +64,11 @@ export default function MaintenanceControls({ request }) {
     if (group?.contains(document.activeElement)) group.focus({ preventScroll: true });
     setPending(target);
     setError("");
+    setNotice("");
     try {
       await request(path, { method: "PATCH", body });
-      setStatus(null);
-      setRefreshing(target);
+      setRefreshing(current => [...current, target]);
+      setNotice(target === "maintenance-hold" ? "Maintenance hold updated." : "Dispatch pause updated.");
       setRevision(value => value + 1);
     } catch (failure) {
       setError(failure.message);
@@ -70,13 +80,14 @@ export default function MaintenanceControls({ request }) {
   return <section aria-label="Maintenance controls">
     <h3>Maintenance</h3>
     {error && <p role="alert">{error}</p>}
+    <div role="status">{notice}</div>
     {status &&
       <dl className="operations__execution-summary">
         <div><dt>Maintenance hold</dt><dd>{status.active
           ? <>Until <time dateTime={status.expiresAt}>{new Date(status.expiresAt).toLocaleString()}</time></>
           : "Inactive"}</dd></div>
         <div><dt>New execution and media admission</dt><dd>{status.active ? "Held" : "Open"}</dd></div>
-        <div><dt>Dispatch</dt><dd>{status.paused ? "Paused by owner" : status.active ? "Held for maintenance" : "Open"}</dd></div>
+        <div><dt>Dispatch</dt><dd>{!dispatch || dispatchError ? "Status unavailable" : dispatch.paused ? "Paused by owner" : status.active ? "Held for maintenance" : "Open"}</dd></div>
         <div><dt>Active executions</dt><dd>{status.executions}</dd></div>
         {status.unconfirmedExecutions > 0 && <div><dt>Executions awaiting reconciliation</dt><dd>{status.unconfirmedExecutions}</dd></div>}
         <div><dt>Active media transfers</dt><dd>{status.mediaTransfers}</dd></div>
@@ -86,29 +97,31 @@ export default function MaintenanceControls({ request }) {
       </dl>}
     <div id="maintenance-hold" tabIndex={-1} role="group" aria-labelledby="maintenance-hold-label">
       <h4 id="maintenance-hold-label">Maintenance hold</h4>
-      {(!status || pending === "maintenance-hold") && <p role="status">
+      {holdError && <p role="alert">Maintenance hold status unavailable. {holdError}</p>}
+      {((!status && !holdError) || pending === "maintenance-hold" || refreshingHold) && <p role="status">
         {pending === "maintenance-hold" ? "Updating maintenance hold…"
-          : error ? "Maintenance hold status unavailable." : refreshing === "maintenance-hold" ? "Refreshing maintenance hold…" : "Checking maintenance hold…"}
+          : refreshingHold ? "Refreshing maintenance hold…" : "Checking maintenance hold…"}
       </p>}
       {status && (status.active
-        ? <button type="button" disabled={pending} onClick={() => change("/maintenance", { minutes: 0 })}>End maintenance hold</button>
+        ? <button type="button" disabled={Boolean(pending || holdError || refreshingHold)} onClick={() => change("/maintenance", { minutes: 0 })}>End maintenance hold</button>
         : <form onSubmit={event => {
           event.preventDefault();
           const minutes = Number(new FormData(event.currentTarget).get("minutes"));
           change("/maintenance", { minutes });
         }}>
           <label>Hold duration in minutes <input name="minutes" type="number" min="1" max="60" defaultValue="15" required /></label>
-          <button type="submit" disabled={pending}>Start maintenance hold</button>
+          <button type="submit" disabled={Boolean(pending || holdError || refreshingHold)}>Start maintenance hold</button>
         </form>)}
     </div>
     <div id="dispatch-pause" tabIndex={-1} role="group" aria-labelledby="dispatch-pause-label">
       <h4 id="dispatch-pause-label">Dispatch pause</h4>
-      {(!status || pending === "dispatch-pause") && <p role="status">
+      {dispatchError && <p role="alert">Dispatch pause status unavailable. {dispatchError}</p>}
+      {((!dispatch && !dispatchError) || pending === "dispatch-pause" || refreshingDispatch) && <p role="status">
         {pending === "dispatch-pause" ? "Updating dispatch pause…"
-          : error ? "Dispatch pause status unavailable." : refreshing === "dispatch-pause" ? "Refreshing dispatch pause…" : "Checking dispatch pause…"}
+          : refreshingDispatch ? "Refreshing dispatch pause…" : "Checking dispatch pause…"}
       </p>}
-      {status && <button type="button" disabled={pending} onClick={() => change("/dispatch", { paused: !status.paused })}>
-        {status.paused ? "Clear dispatch pause" : "Pause future dispatch"}
+      {dispatch && <button type="button" disabled={Boolean(pending || dispatchError || refreshingDispatch)} onClick={() => change("/dispatch", { paused: !dispatch.paused })}>
+        {dispatch.paused ? "Clear dispatch pause" : "Pause future dispatch"}
       </button>}
     </div>
       {status?.history?.length > 0 && <details>
