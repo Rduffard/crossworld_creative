@@ -78,28 +78,30 @@ export default function MaintenanceControls({ request }) {
   }
 
   const holdIsStale = Boolean(holdError || refreshingHold || pending === "maintenance-hold");
-  const holdValue = value => (
-    <>{holdIsStale && <small>Last known · </small>}{value}</>
-  );
   const dispatchIsStale = Boolean(dispatchError || refreshingDispatch || pending === "dispatch-pause");
+  const effectiveDispatch = !status || !dispatch || holdIsStale || dispatchIsStale
+    ? "Status unconfirmed"
+    : dispatch.paused ? "Paused by owner" : status.active ? "Held for maintenance" : "Open";
 
   return <section aria-label="Maintenance controls">
     <h3>Maintenance</h3>
     {error && <p role="alert">{error}</p>}
     <div role="status">{notice}</div>
-    {status &&
-      <dl className="operations__execution-summary">
-        <div><dt>Maintenance hold</dt><dd>{holdValue(status.active
+    {status && <>
+      {holdIsStale && <p id="maintenance-snapshot-status" role="status"><strong>Last known maintenance status</strong></p>}
+      <dl className="operations__execution-summary" aria-describedby={holdIsStale ? "maintenance-snapshot-status" : undefined}>
+        <div><dt>Maintenance hold</dt><dd>{status.active
           ? <>Until <time dateTime={status.expiresAt}>{new Date(status.expiresAt).toLocaleString()}</time></>
-          : "Inactive")}</dd></div>
-        <div><dt>New execution and media admission</dt><dd>{holdValue(status.active ? "Held" : "Open")}</dd></div>
-        <div><dt>Active executions</dt><dd>{holdValue(status.executions)}</dd></div>
-        {status.unconfirmedExecutions > 0 && <div><dt>Executions awaiting reconciliation</dt><dd>{holdValue(status.unconfirmedExecutions)}</dd></div>}
-        <div><dt>Active media transfers</dt><dd>{holdValue(status.mediaTransfers)}</dd></div>
-        <div><dt>Claims entering dispatch</dt><dd>{holdValue(status.claimAdmissions)}</dd></div>
-        <div><dt>Drain status</dt><dd>{holdValue(status.ready ? "Drained" : status.unconfirmedExecutions > 0
-          ? "Waiting for lease reconciliation" : status.active ? "Draining" : "Hold required")}</dd></div>
-      </dl>}
+          : "Inactive"}</dd></div>
+        <div><dt>New execution and media admission</dt><dd>{status.active ? "Held" : "Open"}</dd></div>
+        <div><dt>Active executions</dt><dd>{status.executions}</dd></div>
+        {status.unconfirmedExecutions > 0 && <div><dt>Executions awaiting reconciliation</dt><dd>{status.unconfirmedExecutions}</dd></div>}
+        <div><dt>Active media transfers</dt><dd>{status.mediaTransfers}</dd></div>
+        <div><dt>Claims entering dispatch</dt><dd>{status.claimAdmissions}</dd></div>
+        <div><dt>Drain status</dt><dd>{status.ready ? "Drained" : status.unconfirmedExecutions > 0
+          ? "Waiting for lease reconciliation" : status.active ? "Draining" : "Hold required"}</dd></div>
+      </dl>
+    </>}
     <div id="maintenance-hold" tabIndex={-1} role="group" aria-labelledby="maintenance-hold-label">
       <h4 id="maintenance-hold-label">Maintenance hold</h4>
       {holdError && <p role="alert">Maintenance hold status unavailable. {holdError}</p>}
@@ -121,6 +123,9 @@ export default function MaintenanceControls({ request }) {
     <div id="dispatch-pause" tabIndex={-1} role="group" aria-labelledby="dispatch-pause-label">
       <h4 id="dispatch-pause-label">Dispatch pause</h4>
       {dispatch && <p>{dispatchIsStale && <small>Last known · </small>}{dispatch.paused ? "Paused by owner" : "Unpaused by owner"}</p>}
+      <dl className="operations__execution-summary">
+        <div><dt>Effective dispatch</dt><dd>{effectiveDispatch}</dd></div>
+      </dl>
       {dispatchError && <p role="alert">Dispatch pause status unavailable. {dispatchError}</p>}
       {((!dispatch && !dispatchError) || pending === "dispatch-pause" || refreshingDispatch) && <p role="status">
         {pending === "dispatch-pause" ? "Updating dispatch pause…"
