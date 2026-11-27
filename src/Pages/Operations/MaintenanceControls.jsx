@@ -5,17 +5,26 @@ export default function MaintenanceControls({ request }) {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [revision, setRevision] = useState(0);
-  const followedLink = useRef(false);
+  const pendingLink = useRef(true);
   const hasStatus = status !== null;
 
   useEffect(() => {
-    const target = window.location.hash.slice(1);
-    if (!hasStatus || followedLink.current || !["maintenance-hold", "dispatch-pause"].includes(target)) return;
-    const control = document.getElementById(target);
-    if (!control) return;
-    followedLink.current = true;
-    control.scrollIntoView({ block: "center" });
-    control.focus({ preventScroll: true });
+    function focusTarget() {
+      const target = window.location.hash.slice(1);
+      if (!hasStatus || !pendingLink.current || !["maintenance-hold", "dispatch-pause"].includes(target)) return;
+      const control = document.getElementById(target);
+      if (!control) return;
+      pendingLink.current = false;
+      control.scrollIntoView({ block: "center" });
+      control.focus({ preventScroll: true });
+    }
+    function followLink() {
+      pendingLink.current = true;
+      focusTarget();
+    }
+    focusTarget();
+    window.addEventListener("hashchange", followLink);
+    return () => window.removeEventListener("hashchange", followLink);
   }, [hasStatus]);
 
   useEffect(() => {

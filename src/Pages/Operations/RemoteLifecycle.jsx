@@ -15,35 +15,28 @@ export default function RemoteLifecycle({ request }) {
 
   useEffect(() => {
     let live = true;
-    let timer;
-    async function poll() {
-      try {
-        await Promise.allSettled([
-          request("/supervisor").then(result => {
-            if (!live) return;
-            setSnapshot(result);
-            setPollError("");
-          }, failure => {
-            if (!live) return;
-            setSnapshot(null);
-            setPollError(failure.status === 404 ? "Release-managed supervisor status unavailable." : failure.message);
-          }),
-          request("/maintenance").then(result => {
-            if (!live) return;
-            setMaintenance(result);
-            setMaintenanceError("");
-          }, failure => {
-            if (!live) return;
-            setMaintenance(null);
-            setMaintenanceError(failure.status === 404 ? "Maintenance status unavailable." : failure.message);
-          }),
-        ]);
-      } finally {
-        if (live) timer = setTimeout(poll, 5000);
+    function startPolling(path, setValue, setFailure, unavailable) {
+      let timer;
+      async function poll() {
+        try {
+          const result = await request(path);
+          if (!live) return;
+          setValue(result);
+          setFailure("");
+        } catch (failure) {
+          if (!live) return;
+          setValue(null);
+          setFailure(failure.status === 404 ? unavailable : failure.message);
+        } finally {
+          if (live) timer = setTimeout(poll, 5000);
+        }
       }
+      poll();
+      return () => clearTimeout(timer);
     }
-    poll();
-    return () => { live = false; clearTimeout(timer); };
+    const stopSupervisor = startPolling("/supervisor", setSnapshot, setPollError, "Release-managed supervisor status unavailable.");
+    const stopMaintenance = startPolling("/maintenance", setMaintenance, setMaintenanceError, "Maintenance status unavailable.");
+    return () => { live = false; stopSupervisor(); stopMaintenance(); };
   }, [request, revision]);
 
   async function authorize(device, operation, target) {
@@ -77,16 +70,22 @@ export default function RemoteLifecycle({ request }) {
     {!snapshot && !pollError && <p role="status">Checking supervisor status…</p>}
     {maintenanceError && <p role="alert">{maintenanceError}</p>}
     {!maintenance && !maintenanceError && <p role="status">Checking maintenance status…</p>}
-    {maintenance && <dl>
-      <dt><a href={infrastructure + "#dispatch-pause"}>Dispatch</a></dt>
-      <dd>{maintenance.paused ? "Paused" : "Pause required"}</dd>
-      <dt><a href={infrastructure + "#maintenance-hold"}>Maintenance hold</a></dt>
-      <dd>{maintenance.active
-        ? <>Ends at <time dateTime={maintenance.expiresAt}>{new Date(maintenance.expiresAt).toLocaleString()}</time>.{" "}</>
-        : "Inactive. "}
-      {holdReady ? "At least five minutes remain." : "At least five minutes must remain."}</dd>
-      <dt>Drain status</dt>
-      <dd>{maintenance.ready ? "Drained" : maintenance.active ? "Waiting for active work to drain" : "Maintenance hold required"}</dd>
+    {maintenance && <dl className="operations__execution-summary">
+      <div>
+        <dt><a href={infrastructure + "#dispatch-pause"}>Dispatch</a></dt>
+        <dd>{maintenance.paused ? "Paused" : "Pause required"}</dd>
+      </div>
+      <div>
+        <dt><a href={infrastructure + "#maintenance-hold"}>Maintenance hold</a></dt>
+        <dd>{maintenance.active
+          ? <>Ends at <time dateTime={maintenance.expiresAt}>{new Date(maintenance.expiresAt).toLocaleString()}</time>.{" "}</>
+          : "Inactive. "}
+        {holdReady ? "At least five minutes remain." : "At least five minutes must remain."}</dd>
+      </div>
+      <div>
+        <dt>Drain status</dt>
+        <dd>{maintenance.ready ? "Drained" : maintenance.active ? "Waiting for active work to drain" : "Maintenance hold required"}</dd>
+      </div>
     </dl>}
     {error && <p role="alert">{error}</p>}
     {snapshot?.devices.length === 0 && <p>No release-managed supervisor has reported in.</p>}
