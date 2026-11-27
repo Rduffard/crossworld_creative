@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import RemoteLifecycle from "./RemoteLifecycle";
 
 export default function ExecutionApprovals({ api, openJob }) {
   const [approvals, setApprovals] = useState(null);
@@ -70,6 +71,7 @@ export default function ExecutionApprovals({ api, openJob }) {
   }
 
   return <section aria-label="Execution approvals">
+    <RemoteLifecycle request={api} />
     {deliveryError && <p role="alert">Could not load deliverables awaiting acceptance. {deliveryError}</p>}
     {deliveries.length > 0 && <>
       <h3>Deliverables awaiting owner acceptance</h3>
