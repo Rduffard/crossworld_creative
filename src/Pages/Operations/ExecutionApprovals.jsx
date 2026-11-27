@@ -5,6 +5,8 @@ export default function ExecutionApprovals({ api, openJob }) {
   const [error, setError] = useState("");
   const [candidates, setCandidates] = useState(null);
   const [candidateError, setCandidateError] = useState("");
+  const [deliveries, setDeliveries] = useState([]);
+  const [deliveryError, setDeliveryError] = useState("");
   const [decisionError, setDecisionError] = useState("");
   const [pending, setPending] = useState(false);
   const [reviewing, setReviewing] = useState(null);
@@ -20,12 +22,16 @@ export default function ExecutionApprovals({ api, openJob }) {
     let timer;
     async function refresh() {
       try {
-        const [snapshot, blueprint] = await Promise.allSettled([api("/headquarters"), api("/blueprints/pending-approvals")]);
+        const [snapshot, blueprint, autonomous] = await Promise.allSettled([
+          api("/headquarters"), api("/blueprints/pending-approvals"), api("/approvals/autonomous-deliveries"),
+        ]);
         if (!active) return;
         if (snapshot.status === "fulfilled") setApprovals(snapshot.value.approvals);
         setError(snapshot.status === "rejected" ? snapshot.reason.message : "");
         if (blueprint.status === "fulfilled") setCandidates(blueprint.value);
         setCandidateError(blueprint.status === "rejected" ? blueprint.reason.message : "");
+        if (autonomous.status === "fulfilled") setDeliveries(autonomous.value);
+        setDeliveryError(autonomous.status === "rejected" ? autonomous.reason.message : "");
       } finally {
         if (active) timer = setTimeout(refresh, 10000);
       }
@@ -64,6 +70,15 @@ export default function ExecutionApprovals({ api, openJob }) {
   }
 
   return <section aria-label="Execution approvals">
+    {deliveryError && <p role="alert">Could not load deliverables awaiting acceptance. {deliveryError}</p>}
+    {deliveries.length > 0 && <>
+      <h3>Deliverables awaiting owner acceptance</h3>
+      <ul className="operations__feed">{deliveries.map(delivery => <li key={delivery._id}>
+        <strong>{delivery.title}</strong>
+        <button type="button" onClick={() => openJob(delivery.autonomousDelivery.qaJobId)}>Inspect independent QA</button>
+        <a href={"/operations?workspace=objectives&source=objective&record=" + encodeURIComponent(delivery._id)}>Open acceptance criteria</a>
+      </li>)}</ul>
+    </>}
     <h3>Execution approvals</h3>
     {error && <p role="alert">{error}</p>}
     {!approvals && !error && <p role="status">Checking execution approvals…</p>}

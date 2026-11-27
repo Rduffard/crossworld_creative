@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 const refreshMs = 10000;
 const backgroundRefreshMs = 30000;
 const pauseConfirmationMs = 30000;
-const serviceStates = ["Working", "Standing By", "Awaiting Decision", "Paused"];
+const serviceStates = ["Working", "Standing By", "Awaiting Decision", "Paused", "Stopped"];
+const modes = [["run", "Run"], ["pause", "Pause"], ["stop", "Stop"]];
 const orchestrationStates = { healthy: "Healthy", degraded: "Degraded", stale: "Stale" };
 
 function serviceDate(value) {
@@ -43,7 +44,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
           throw new Error("The service status response is incomplete.");
         }
         if (!controller.signal.aborted) {
-          const matchesRequest = !pendingPause || result.paused === pendingPause.paused;
+          const matchesRequest = !pendingPause || result.mode === pendingPause.mode;
           if (!matchesRequest && !pendingPause.expired) {
             setStatusError("");
             return;
@@ -72,13 +73,17 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     };
   }, [api, saving, pendingPause, refreshVersion]);
 
-  async function changePause() {
+  async function changeMode(mode) {
     setSaving(true);
     setUpdateError("");
-    const paused = !service.paused;
     try {
-      await api("/executive-service", { method: "PATCH", body: { paused } });
-      setPendingPause({ paused, deadline: Date.now() + pauseConfirmationMs });
+      const result = await api("/executive-service", { method: "PATCH", body: { mode } });
+      if (result?.mode === mode && serviceStates.includes(result.state)) {
+        setService(result);
+        setPendingPause(null);
+      } else {
+        setPendingPause({ mode, deadline: Date.now() + pauseConfirmationMs });
+      }
     } catch (error) {
       setUpdateError(error.message);
     } finally {
@@ -101,16 +106,16 @@ export default function ExecutiveService({ api, openJob, openMission }) {
   const lastKnown = awaitingConfirmation || needsFreshStatus || !!statusError;
   return <section className="operations__panel operations__briefing" aria-labelledby="operations-executive-service-title">
     <div className="operations__briefing-title">
-      <h2 id="operations-executive-service-title">First Mate service</h2>
+      <h2 id="operations-executive-service-title">Autonomous operations</h2>
       {service && <strong role="status">{service.state}{lastKnown && " (last known)"}</strong>}
     </div>
     {!service && !statusError && <p role="status">Checking service status…</p>}
     {(pendingPause || statusError) && <div>
       {awaitingConfirmation && <p role="status">
-        {pendingPause.paused ? "Pause request accepted." : "Resume request accepted."} Waiting for the updated service status.
+        Waiting for BEDROCK to confirm the requested mode.
       </p>}
       {pendingPause?.expired && <p role="alert">
-        {pendingPause.paused ? "Pause request accepted." : "Resume request accepted."} The requested state was not confirmed.
+        BEDROCK did not confirm the requested mode.
         {!lastKnown && " Showing the latest service status."}
       </p>}
       {statusError && <p role="alert">Service status unavailable. {statusError}</p>}
@@ -136,9 +141,9 @@ export default function ExecutiveService({ api, openJob, openMission }) {
       </dl>}
     </section>}
     <div className="operations__modes">
-      {service && <button type="button" onClick={changePause} disabled={saving || lastKnown}>
-        {saving ? "Saving…" : service.paused ? "Resume First Mate" : "Pause First Mate"}
-      </button>}
+      {service && modes.map(([mode, label]) => <button key={mode} type="button"
+        onClick={() => changeMode(mode)} disabled={saving || lastKnown || service.mode === mode}
+        aria-pressed={service.mode === mode}>{label}</button>)}
       {service?.decision?.kind === "mission" && <button type="button" onClick={() => openMission(service.decision.id)}>Open mission approval</button>}
       {service?.jobId && <button type="button" onClick={() => openJob(service.jobId, "Execution")}>View service execution</button>}
     </div>
