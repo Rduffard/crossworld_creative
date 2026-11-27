@@ -23,6 +23,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
   const [updateError, setUpdateError] = useState("");
   const [saving, setSaving] = useState(false);
   const [pendingPause, setPendingPause] = useState(null);
+  const [needsFreshStatus, setNeedsFreshStatus] = useState(false);
   const [refreshVersion, setRefreshVersion] = useState(0);
 
   useEffect(() => {
@@ -32,7 +33,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     const deadlineTimer = pendingPause && !pendingPause.expired ? setTimeout(() => {
       controller.abort();
       clearTimeout(timer);
-      setStatusError(previous => previous || "A fresh status could not be confirmed in time.");
+      setNeedsFreshStatus(true);
       setPendingPause({ ...pendingPause, expired: true });
     }, Math.max(0, pendingPause.deadline - Date.now())) : undefined;
     async function refresh() {
@@ -49,6 +50,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
           }
           setService(result);
           setStatusError("");
+          setNeedsFreshStatus(false);
           if (matchesRequest) setPendingPause(null);
         }
       } catch (error) {
@@ -57,7 +59,8 @@ export default function ExecutiveService({ api, openJob, openMission }) {
         }
       } finally {
         if (!controller.signal.aborted) {
-          timer = setTimeout(refresh, document.hidden ? backgroundRefreshMs : refreshMs);
+          const confirming = pendingPause && !pendingPause.expired;
+          timer = setTimeout(refresh, !confirming && document.hidden ? backgroundRefreshMs : refreshMs);
         }
       }
     }
@@ -95,7 +98,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     onlineRelays >= 0 && onlineRelays <= relayCount;
   const hasHealthMetrics = lastCheck || nextCheck || hasRelayCounts;
   const awaitingConfirmation = !!pendingPause && !pendingPause.expired;
-  const lastKnown = awaitingConfirmation || !!statusError;
+  const lastKnown = awaitingConfirmation || needsFreshStatus || !!statusError;
   return <section className="operations__panel operations__briefing" aria-labelledby="operations-executive-service-title">
     <div className="operations__briefing-title">
       <h2 id="operations-executive-service-title">First Mate service</h2>
@@ -108,7 +111,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
       </p>}
       {pendingPause?.expired && <p role="alert">
         {pendingPause.paused ? "Pause request accepted." : "Resume request accepted."} The requested state was not confirmed.
-        {!statusError && " Showing the latest service status."}
+        {!lastKnown && " Showing the latest service status."}
       </p>}
       {statusError && <p role="alert">Service status unavailable. {statusError}</p>}
       <button type="button" onClick={() => setRefreshVersion(value => value + 1)}>Refresh service status</button>
