@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 const refreshMs = 10000;
 const backgroundRefreshMs = 30000;
+const pauseConfirmationMs = 30000;
 const serviceStates = ["Working", "Standing By", "Awaiting Decision", "Paused"];
 const orchestrationStates = { healthy: "Healthy", degraded: "Degraded", stale: "Stale" };
 
@@ -35,16 +36,27 @@ export default function ExecutiveService({ api, openJob, openMission }) {
           throw new Error("The service status response is incomplete.");
         }
         if (!controller.signal.aborted) {
-          if (pendingPause !== null && result.paused !== pendingPause) return;
+          if (pendingPause && result.paused !== pendingPause.paused) {
+            if (Date.now() < pendingPause.deadline) {
+              setStatusError("");
+              return;
+            }
+            setUpdateError("The requested state was not confirmed. Showing the latest service status.");
+          }
           setService(result);
           setStatusError("");
           setPendingPause(null);
         }
       } catch (error) {
-        if (!controller.signal.aborted) setStatusError(error.message);
+        if (!controller.signal.aborted) {
+          setStatusError(error.message || "The status check failed.");
+          if (pendingPause && Date.now() >= pendingPause.deadline) setPendingPause(null);
+        }
       } finally {
         if (!controller.signal.aborted) {
-          timer = setTimeout(refresh, document.hidden ? backgroundRefreshMs : refreshMs);
+          const interval = document.hidden ? backgroundRefreshMs : refreshMs;
+          const remaining = pendingPause ? pendingPause.deadline - Date.now() : interval;
+          timer = setTimeout(refresh, remaining > 0 ? Math.min(interval, remaining) : interval);
         }
       }
     }
@@ -61,7 +73,7 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     const paused = !service.paused;
     try {
       await api("/executive-service", { method: "PATCH", body: { paused } });
-      setPendingPause(paused);
+      setPendingPause({ paused, deadline: Date.now() + pauseConfirmationMs });
     } catch (error) {
       setUpdateError(error.message);
     } finally {
@@ -89,9 +101,10 @@ export default function ExecutiveService({ api, openJob, openMission }) {
     </div>
     {!service && !statusError && <p role="status">Checking service status…</p>}
     {lastKnown && <div>
-      {awaitingConfirmation
-        ? <p role="status">{pendingPause ? "Pause request accepted." : "Resume request accepted."} Waiting for the updated service status.</p>
-        : <p role="alert">Service status unavailable. {statusError}</p>}
+      {awaitingConfirmation && <p role="status">
+        {pendingPause.paused ? "Pause request accepted." : "Resume request accepted."} Waiting for the updated service status.
+      </p>}
+      {statusError && <p role="alert">Service status unavailable. {statusError}</p>}
       <button type="button" onClick={() => setRefreshVersion(value => value + 1)}>Refresh service status</button>
     </div>}
     {updateError && <p role="alert">Could not confirm the service update. {updateError}</p>}
