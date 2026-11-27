@@ -786,10 +786,13 @@ export default function Operations() {
       : { label: "Send follow-up", enabled: canContinue, run: () => submit(selectedJob) };
 
   const compactComposer = compact && !!jobId && mode === "Conversation";
+  const editorLabel = expanded ? "Collapse editor" : "Expand editor";
   const editorToggle = <button type="button" aria-expanded={expanded} aria-controls="operations-prompt"
-    onClick={() => setExpanded(!expanded)}>{expanded ? "Collapse editor" : "Expand editor"}</button>;
+    aria-label={editorLabel} onClick={() => setExpanded(!expanded)}>
+    {compactComposer ? (expanded ? "Collapse" : "Expand") : editorLabel}
+  </button>;
   const attachmentControls = <details className="operations__prompt-file">
-    <summary>Attachments{mediaAttachments.length ? ` (${mediaAttachments.length})` : ""}</summary>
+    <summary>{compactComposer ? "Attach" : "Attachments"}{mediaAttachments.length ? ` (${mediaAttachments.length})` : ""}</summary>
     <div className="operations__attachment-options">
       {mediaKey && <MediaComposer key={mediaKey} hostId={mediaHostId} api={api} attachments={mediaAttachments} disabled={editingLocked}
         onChange={(items) => setMediaDrafts((current) => ({ ...current, [mediaKey]: items }))}
