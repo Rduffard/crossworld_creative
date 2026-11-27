@@ -53,7 +53,7 @@ export default function Headquarters({ api, openJob, openObjectives, openWorkfor
     return () => { mounted = false; clearTimeout(timer); };
   }, [api]);
 
-  const executiveService = <ExecutiveService key="executive-service" api={api} openJob={openJob} />;
+  const executiveService = <ExecutiveService key="executive-service" api={api} openJob={openJob} openMission={openMission} />;
   if (!data) return <section className="operations__headquarters" aria-label="Headquarters">
     {executiveService}
     <p role={error ? "alert" : "status"}>{error || "Loading headquarters…"}</p>

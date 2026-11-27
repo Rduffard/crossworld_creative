@@ -11,7 +11,7 @@ function ReviewTime({ label, value }) {
   return <div><dt>{label}</dt><dd><time dateTime={value}>{date.toLocaleString()}</time></dd></div>;
 }
 
-export default function ExecutiveService({ api, openJob }) {
+export default function ExecutiveService({ api, openJob, openMission }) {
   const [service, setService] = useState(null);
   const [statusError, setStatusError] = useState("");
   const [updateError, setUpdateError] = useState("");
@@ -82,6 +82,7 @@ export default function ExecutiveService({ api, openJob }) {
       {service && <button type="button" onClick={changePause} disabled={saving || !!statusError}>
         {saving ? "Saving…" : service.paused ? "Resume First Mate" : "Pause First Mate"}
       </button>}
+      {service?.decision?.kind === "mission" && <button type="button" onClick={() => openMission(service.decision.id)}>Open mission approval</button>}
       {service?.jobId && <button type="button" onClick={() => openJob(service.jobId, "Execution")}>View service execution</button>}
       {statusError && <button type="button" onClick={() => setRefreshVersion(value => value + 1)}>Refresh service status</button>}
     </div>
