@@ -937,7 +937,9 @@ export default function Operations() {
       {compactComposer && <>{attachmentControls}{editorToggle}</>}
       {selectedJob?.profile === "full-access" && <small className="operations__composer-permission">Full Access follow-up</small>}
       {selectedJob?.status === "running" && <button type="button" disabled={!canSteer}
-        onClick={steer}>Steer current task</button>}
+        onClick={steer} aria-label={compactComposer ? "Steer current task" : undefined}>
+        {compactComposer ? "Steer" : "Steer current task"}
+      </button>}
       {scheduling ? <button type="button" onClick={() => selectJob(null)}>Return to conversation</button>
         : <button className="operations__send" disabled={!send.enabled}>{send.label}</button>}
     </div>

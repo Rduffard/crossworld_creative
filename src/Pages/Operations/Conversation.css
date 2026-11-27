@@ -193,6 +193,7 @@
   }
   .operations--shell[data-keyboard="true"] .operations__channel #operations-composer[data-compact="true"] {
     padding-bottom: .25rem;
+    max-height: min(58%, 24rem);
   }
   #operations-composer[data-compact="true"] .operations__editor { margin: 0; }
   #operations-composer[data-compact="true"] .operations__composer-heading label {
@@ -223,6 +224,7 @@
     min-width: 44px;
     padding: .25rem .35rem;
     font-size: .75rem;
+    white-space: nowrap;
   }
   #operations-composer[data-compact="true"] .operations__send { margin-inline-start: auto; }
   #operations-composer[data-compact="true"] .operations__prompt-file { margin: 0; }
